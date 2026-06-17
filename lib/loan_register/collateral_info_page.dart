@@ -1,8 +1,10 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_autocomplete_field.dart';
 import 'components/register_field_row.dart';
@@ -11,11 +13,10 @@ import 'components/register_text_field.dart';
 import 'components/save_next_bar.dart';
 import 'loan_info_page.dart';
 import 'models/loan_register_form.dart';
-import 'ocr_capture_page.dart';
 
 /// Step 2 of the loan-register wizard — ข้อมูลหลักประกัน (Collateral
-/// Information). Screen #2 on slide 7, including the ถ่ายรูปภาพ/OCR action that
-/// opens the camera capture screen.
+/// Information). Screen #2 on slide 7. The ถ่ายรูปภาพ/OCR action asks the native
+/// WebView host to capture the document (see [NativeCameraBridge]).
 class CollateralInfoPage extends StatefulWidget {
   const CollateralInfoPage({Key? key, this.form}) : super(key: key);
 
@@ -27,6 +28,20 @@ class CollateralInfoPage extends StatefulWidget {
 
 class _CollateralInfoPageState extends State<CollateralInfoPage> {
   late final LoanRegisterForm _form = widget.form ?? LoanRegisterForm.mock();
+
+  /// Mask type passed to the native host's `openCamera` handler.
+  static const String _kCaptureAction = 'collateral';
+
+  /// Decoded bytes of the captured document, cached for display.
+  Uint8List? _docBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_form.documentImageBase64.isNotEmpty) {
+      _docBytes = _tryDecode(_form.documentImageBase64);
+    }
+  }
 
   late final TextEditingController _chassis =
       TextEditingController(text: _form.chassisNumber);
@@ -194,7 +209,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
                 children: [
                   const RegisterSectionTitle('ข้อมูลหลักประกัน'),
                   const SizedBox(height: 8),
-                  _form.documentImagePath.isEmpty
+                  _form.documentImageBase64.isEmpty || _docBytes == null
                       ? _ocrButton()
                       : _uploadedDocCard(),
                   const SizedBox(height: 6),
@@ -327,8 +342,8 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              File(_form.documentImagePath),
+            child: Image.memory(
+              _docBytes!,
               width: 48,
               height: 48,
               fit: BoxFit.cover,
@@ -370,7 +385,10 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
               LoanRegisterStyles.primary, _viewDocument, showLabel: true),
           const SizedBox(width: 8),
           _docAction(Icons.delete_outline, 'ลบเอกสาร', LoanRegisterStyles.required,
-              () => setState(() => _form.documentImagePath = '')),
+              () => setState(() {
+                    _form.documentImageBase64 = '';
+                    _docBytes = null;
+                  })),
         ],
       ),
     );
@@ -388,7 +406,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
           children: [
             InteractiveViewer(
               maxScale: 4,
-              child: Center(child: Image.file(File(_form.documentImagePath))),
+              child: Center(child: Image.memory(_docBytes!)),
             ),
             Positioned(
               top: 0,
@@ -440,20 +458,50 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     );
   }
 
-  /// The ถ่ายรูปภาพ/OCR action → opens [OcrCapturePage]. On a successful
-  /// capture it stores the file path (shown as the uploaded card) ready for the
-  /// future OCR API call that will auto-fill the fields below.
+  /// Ask the native host to capture the document, then cache the bytes for
+  /// display and keep the base64 on the form for the future OCR API call.
+  Future<void> _captureDocument() async {
+    if (!NativeCameraBridge.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('การถ่ายรูปใช้ได้เฉพาะในแอปพลิเคชันเท่านั้น')),
+      );
+      return;
+    }
+    try {
+      final bytes = await NativeCameraBridge.captureDocument(_kCaptureAction);
+      if (!mounted || bytes == null) return; // null = cancelled / no image
+      setState(() {
+        _docBytes = bytes;
+        _form.documentImageBase64 = base64Encode(bytes);
+      });
+      // TODO: POST the image to the OCR API and auto-fill the fields below.
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ไม่สามารถถ่ายรูปเอกสารได้: $e')),
+      );
+    }
+  }
+
+  Uint8List? _tryDecode(String base64) {
+    try {
+      final comma = base64.indexOf(',');
+      final raw =
+          base64.startsWith('data:') && comma != -1 ? base64.substring(comma + 1) : base64;
+      return base64Decode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The ถ่ายรูปภาพ/OCR action → asks the native WebView host to open its
+  /// camera (see [NativeCameraBridge]). On a successful capture it stores the
+  /// returned base64 (shown as the uploaded card) ready for the future OCR API
+  /// call that will auto-fill the fields below.
   Widget _ocrButton() {
     return InkWell(
-      onTap: () async {
-        final path = await Navigator.of(context).push<String>(
-          MaterialPageRoute(builder: (_) => const OcrCapturePage()),
-        );
-        if (path != null && path.isNotEmpty) {
-          setState(() => _form.documentImagePath = path);
-          // TODO: send File(path) to the OCR API and auto-fill the fields.
-        }
-      },
+      onTap: _captureDocument,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: double.infinity,

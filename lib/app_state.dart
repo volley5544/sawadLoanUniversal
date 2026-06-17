@@ -34,6 +34,10 @@ class AppState extends ChangeNotifier {
 
   late SharedPreferences prefs;
 
+  /// Hashed Thai ID passed in by the native WebView host as a launch query
+  /// param (`?hashThaiId=...`). Used to fetch the customer profile on startup.
+  String hashThaiId = '';
+
   Future initializePersistedState() async {
     prefs = await SharedPreferences.getInstance();
     _safeInit(() {

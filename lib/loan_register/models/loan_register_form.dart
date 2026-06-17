@@ -29,9 +29,10 @@ class LoanRegisterForm {
   String workTenure;
 
   // ── Step 2: ข้อมูลหลักประกัน ─────────────────────────────────────────
-  /// Local file path of the captured collateral document (for the future OCR
-  /// API call). Empty when nothing has been captured yet.
-  String documentImagePath;
+  /// Base64 of the captured collateral document, returned by the native host's
+  /// camera (for the future OCR API call). Empty when nothing captured yet.
+  /// May be raw base64 or a `data:image/...;base64,` URL.
+  String documentImageBase64;
   String productGroup;
   String brand;
   String model;
@@ -78,7 +79,7 @@ class LoanRegisterForm {
     this.occupationGroup = '',
     this.monthlyIncome = '',
     this.workTenure = '',
-    this.documentImagePath = '',
+    this.documentImageBase64 = '',
     this.productGroup = '',
     this.brand = '',
     this.model = '',
@@ -172,7 +173,7 @@ class LoanRegisterForm {
       ..monthlyIncome = ''
       ..workTenure = ''
       // Step 2 (ข้อมูลหลักประกัน) starts empty — filled by OCR / by hand.
-      ..documentImagePath = ''
+      ..documentImageBase64 = ''
       ..productGroup = ''
       ..brand = ''
       ..model = ''

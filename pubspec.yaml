@@ -42,7 +42,11 @@ dependencies:
   google_fonts: ^6.2.1
   hexcolor: ^3.0.1
   flutter_svg: ^2.0.10+1
-  camera: ^0.11.0+2
+
+  # Web <-> native interop. The document/OCR camera is provided by the native
+  # host app (flutter_inappwebview); this package gives us the window/console
+  # bindings used by the camera bridge (lib/services/native_bridge_web.dart).
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
