@@ -31,7 +31,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
   late final LoanRegisterForm _form = widget.form ?? LoanRegisterForm.mock();
 
   /// Mask type passed to the native host's `openCamera` handler.
-  static const String _kCaptureAction = 'collateral';
+  static const String _kCaptureAction = 'idCard';
 
   /// Decoded bytes of the captured document, cached for display.
   Uint8List? _docBytes;
@@ -469,6 +469,9 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     }
     try {
       final bytes = await NativeCameraBridge.captureDocument(_kCaptureAction);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('รูป Output: $bytes')),
+      );
       if (!mounted || bytes == null) return; // null = cancelled / no image
       setState(() {
         _docBytes = bytes;
