@@ -9,6 +9,10 @@ import 'package:web/web.dart' as web;
 /// `addJavaScriptHandler(handlerName: 'openCamera', ...)`.
 const String _kHandlerName = 'openCamera';
 
+/// Name of the JavaScript handler the native host registers to close/pop the
+/// WebView page (`addJavaScriptHandler(handlerName: 'closeWebview', ...)`).
+const String _kCloseHandlerName = 'closeWebview';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -56,6 +60,17 @@ class NativeCameraBridge {
     if (base64 == null || base64.isEmpty) return null; // cancelled / no image
 
     return base64Decode(_stripDataUrl(base64));
+  }
+
+  /// Asks the native host to close/pop the WebView page (e.g. the user tapped
+  /// the back button on the root page). No-ops in a plain browser (no host).
+  static Future<void> closeWebview() async {
+    final host = _host;
+    if (host == null) return; // not inside the host -> nothing to close
+
+    await host
+        .callMethod<JSPromise>('callHandler'.toJS, _kCloseHandlerName.toJS)
+        .toDart;
   }
 }
 

@@ -16,4 +16,7 @@ class NativeCameraBridge {
       'WebView host).',
     );
   }
+
+  /// No-op off-web (there is no WebView host to close).
+  static Future<void> closeWebview() async {}
 }

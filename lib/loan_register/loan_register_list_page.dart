@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
+import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
 
 /// Loan-register entry/category page (รายการ) reached from the
@@ -27,6 +28,17 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
     context.push(AppRoutes.customerInfo);
   }
 
+  /// Back from the list page (the root of the web flow). If there's web history
+  /// to pop, pop it; otherwise ask the native WebView host to close its page
+  /// (the host runs `Navigator.of(context).pop()`). No-op in a plain browser.
+  void _onBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      NativeCameraBridge.closeWebview();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -34,7 +46,10 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: BackButton(color: LoanRegisterStyles.primary),
+        leading: BackButton(
+          color: LoanRegisterStyles.primary,
+          onPressed: _onBack,
+        ),
         centerTitle: true,
         title: Text(
           'รายการ',
