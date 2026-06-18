@@ -470,7 +470,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     try {
       final bytes = await NativeCameraBridge.captureDocument(_kCaptureAction);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('รูป Output: $bytes')),
+        SnackBar(content: Text('รูป Output: ${bytes!.length}')),
       );
       if (!mounted || bytes == null) return; // null = cancelled / no image
       setState(() {
