@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "prod": "sawad-loan-universal-prod",
+    "uat": "sawad-loan-universal-uat"
+  }
+}

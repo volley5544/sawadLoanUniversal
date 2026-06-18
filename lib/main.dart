@@ -1,12 +1,20 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'config/app_environment.dart';
 import 'loan_register/loan_register_list_page.dart';
 
 late AppState appState;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Which Firebase Hosting environment this build targets (set at build time
+  // via --dart-define=ENV=prod|uat; defaults to uat). See AppEnvironment.
+  if (kDebugMode) {
+    debugPrint('App environment: ${AppEnvironment.current.name}');
+  }
 
   appState = AppState();
   await appState.initializePersistedState();

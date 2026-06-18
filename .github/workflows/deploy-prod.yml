@@ -1,0 +1,41 @@
+name: Deploy PROD (Firebase Hosting)
+
+# Pushing to main ships the production web build to the
+# Sawad-Loan-Universal-Prod Firebase Hosting site.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.38.5
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web (prod)
+        run: flutter build web --release --pwa-strategy=none --dart-define=ENV=prod
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@13
+
+      - name: Deploy to Firebase Hosting (prod)
+        run: firebase deploy --only hosting -P prod --token "$FIREBASE_TOKEN" --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
