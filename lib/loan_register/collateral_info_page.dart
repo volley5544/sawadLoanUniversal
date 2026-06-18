@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../router/app_router.dart';
 import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_autocomplete_field.dart';
@@ -11,7 +13,6 @@ import 'components/register_field_row.dart';
 import 'components/register_step_indicator.dart';
 import 'components/register_text_field.dart';
 import 'components/save_next_bar.dart';
-import 'loan_info_page.dart';
 import 'models/loan_register_form.dart';
 
 /// Step 2 of the loan-register wizard — ข้อมูลหลักประกัน (Collateral
@@ -318,9 +319,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
             ),
             onNext: () {
               _save();
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => LoanInfoPage(form: _form),
-              ));
+              context.push(AppRoutes.loanInfo, extra: _form);
             },
           ),
         ],

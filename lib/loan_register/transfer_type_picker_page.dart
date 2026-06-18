@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'components/loan_register_styles.dart';
@@ -70,7 +71,7 @@ class _TransferTypePickerPageState extends State<TransferTypePickerPage> {
             padding: const EdgeInsets.fromLTRB(
                 LoanRegisterStyles.padding, 8, LoanRegisterStyles.padding, 8),
             child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(_selected),
+              onTap: () => context.pop(_selected),
               child: Container(
                 height: 52,
                 alignment: Alignment.center,

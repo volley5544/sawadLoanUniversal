@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../router/app_router.dart';
 import 'components/loan_register_styles.dart';
-import 'customer_info_page.dart';
 
 /// Loan-register entry/category page (รายการ) reached from the
 /// "สมัครสินเชื่อ" home menu. Lets the customer pick what they want to register
@@ -22,9 +23,8 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   _RegisterCategory _selected = _RegisterCategory.motorcycle;
 
   void _goToStep1() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CustomerInfoPage()),
-    );
+    // No form passed -> CustomerInfoPage seeds step 1 from AppState().customerDetail.
+    context.push(AppRoutes.customerInfo);
   }
 
   @override

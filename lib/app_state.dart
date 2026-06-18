@@ -38,6 +38,11 @@ class AppState extends ChangeNotifier {
   /// param (`?hashThaiId=...`). Used to fetch the customer profile on startup.
   String hashThaiId = '';
 
+  /// This web build's version stamp (from `--dart-define=WEB_VERSION`, set in
+  /// `main.dart` to `kWebVersion`). Lets us detect a stale cached web build —
+  /// see `config/app_environment.dart`.
+  String webVersion = '0';
+
   Future initializePersistedState() async {
     prefs = await SharedPreferences.getInstance();
     _safeInit(() {

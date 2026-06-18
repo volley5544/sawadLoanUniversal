@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../app_state.dart';
-import 'collateral_info_page.dart';
+import '../router/app_router.dart';
 import 'components/address_card.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_field_row.dart';
@@ -208,9 +209,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
             },
             onNext: () {
               _save();
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => CollateralInfoPage(form: _form),
-              ));
+              context.push(AppRoutes.collateralInfo, extra: _form);
             },
           ),
         ],

@@ -30,7 +30,9 @@ jobs:
         run: flutter pub get
 
       - name: Build web (uat)
-        run: flutter build web --release --pwa-strategy=none --dart-define=ENV=uat
+        # WEB_VERSION = monotonic CI run number, logged on boot to spot stale
+        # cached builds (see lib/config/app_environment.dart).
+        run: flutter build web --release --pwa-strategy=none --dart-define=ENV=uat --dart-define=WEB_VERSION=${{ github.run_number }}
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools@13

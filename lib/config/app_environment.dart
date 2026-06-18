@@ -19,6 +19,18 @@
 /// [AppEnvironment.current].
 library;
 
+/// Build-time web version stamp, set via `--dart-define=WEB_VERSION` (CI passes
+/// the GitHub Actions run number). Used to spot a **stale cached web build**:
+/// it's logged to the browser console on every startup and stored on
+/// `AppState.webVersion`, so you can see which build a client is actually
+/// running (the native WebView host can read it from the console too).
+///
+/// Defaults to `'0'` for local/dev builds where `WEB_VERSION` isn't passed.
+const String kWebVersion = String.fromEnvironment(
+  'WEB_VERSION',
+  defaultValue: '0',
+);
+
 enum AppEnvironment {
   prod(
     name: 'prod',

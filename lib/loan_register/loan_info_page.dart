@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../router/app_router.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_field_row.dart';
 import 'components/register_step_indicator.dart';
 import 'components/register_text_field.dart';
 import 'components/save_next_bar.dart';
-import 'installment_picker_page.dart';
 import 'models/loan_register_form.dart';
-import 'transfer_type_picker_page.dart';
 
 /// Step 3 of the loan-register wizard — ข้อมูลสินเชื่อ (Loan Information) and
 /// ข้อมูลการโอนเงิน (Transfer Information). Screen #3 on slide 7; opens the
@@ -142,16 +142,18 @@ class _LoanInfoPageState extends State<LoanInfoPage> {
   }
 
   void _pickInstallments() async {
-    final result = await Navigator.of(context).push<int>(MaterialPageRoute(
-      builder: (_) => InstallmentPickerPage(selected: _form.installments),
-    ));
+    final result = await context.push<int>(
+      AppRoutes.installmentPicker,
+      extra: _form.installments,
+    );
     if (result != null) setState(() => _form.installments = result);
   }
 
   void _pickTransferType() async {
-    final result = await Navigator.of(context).push<String>(MaterialPageRoute(
-      builder: (_) => TransferTypePickerPage(selected: _form.transferType),
-    ));
+    final result = await context.push<String>(
+      AppRoutes.transferTypePicker,
+      extra: _form.transferType,
+    );
     if (result != null) setState(() => _form.transferType = result);
   }
 }

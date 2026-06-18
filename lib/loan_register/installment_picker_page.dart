@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'components/loan_register_styles.dart';
@@ -64,8 +65,7 @@ class _InstallmentPickerPageState extends State<InstallmentPickerPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 LoanRegisterStyles.padding, 8, LoanRegisterStyles.padding, 8),
-            child: _ConfirmButton(
-                onTap: () => Navigator.of(context).pop(_selected)),
+            child: _ConfirmButton(onTap: () => context.pop(_selected)),
           ),
         ],
       ),

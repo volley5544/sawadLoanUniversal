@@ -54,6 +54,21 @@ Two separate Firebase projects, aliased in `.firebaserc` (`prod` / `uat`). The
 active environment is baked in at build time via `--dart-define=ENV=prod|uat`
 and read by `lib/config/app_environment.dart` (defaults to `uat` if unset).
 
+A second define, `--dart-define=WEB_VERSION=<n>`, stamps the build version
+(`kWebVersion`, defaults `'0'`). `main.dart` stores it on `AppState().webVersion`
+and on **every** boot (release included) `print`s two console lines: a
+human-readable `[SawadLoanUniversal] env=… webVersion=…`, and a machine-readable
+`SawadLoanUniversalWebVersion:<n>`. CI passes the GitHub Actions run number, so
+the version increments per deploy.
+
+The native WebView host (`LoanUniversalWebWidget` in the srisawad app) parses
+the `SawadLoanUniversalWebVersion:<n>` line and compares it to the latest
+version from its `appConfig` (`sawad_loan_universal_version` /
+`…_version_uat`); if the client is behind, it clears the WebView cache and
+reloads once — so a **stale cached build** auto-refreshes. Bump that appConfig
+value to match `WEB_VERSION` on each deploy, or the auto-reload never fires
+(and never set it higher than what's actually deployed).
+
 ```sh
 # build + deploy manually
 flutter build web --release --pwa-strategy=none --dart-define=ENV=uat
@@ -73,10 +88,21 @@ firebase deploy --only hosting -P prod
 
 ## App structure (lib/)
 
-- `main.dart` — `main()` builds the singleton `appState`, calls
-  `initializePersistedState()`, reads `Uri.base.queryParameters['hashThaiId']`
-  into `appState.hashThaiId`, then `runApp`. `MyApp.home` =
-  `LoanRegisterListPage`.
+- `main.dart` — `main()` calls `configureUrlStrategy()` (clean web URLs),
+  builds the singleton `appState`, calls `initializePersistedState()`, reads
+  `Uri.base.queryParameters['hashThaiId']` into `appState.hashThaiId`, then
+  `runApp`. `MyApp` is a `MaterialApp.router` driven by `appRouter`
+  (`router/app_router.dart`); the initial location `/` is `LoanRegisterListPage`.
+- `router/app_router.dart` — **go_router** config + `AppRoutes` path constants.
+  Each wizard page has its own URL (`/customerInfoPage`, `/collateralInfoPage`,
+  `/loanInfoPage`, `/installmentPicker`, `/transferTypePicker`). Navigate with
+  `context.push(AppRoutes.x, extra: form)`; pickers return their value via
+  `context.pop(value)`. The mutable `LoanRegisterForm` is passed page→page as
+  go_router `extra`; a fresh deep-link (no `extra`) falls back to the page's
+  `.mock()` seed. `router/url_strategy.dart` is a conditional import
+  (`usePathUrlStrategy()` on web, no-op off-web) — so URLs are
+  `/customerInfoPage`, not `/#/...`. Firebase Hosting rewrites all paths to
+  `index.html`, so deep links / refreshes resolve.
 - `app_state.dart` — `AppState`, a `ChangeNotifier` **singleton**
   (`AppState()` always returns the same instance; `AppState.reset()` for
   tests). Persists one `CustomerDetail` to `SharedPreferences` under the key
@@ -93,7 +119,8 @@ firebase deploy --only hosting -P prod
 
 A 5-step flow (step indicator shows 1–5). Each page takes an optional
 `LoanRegisterForm form`; if null it falls back to `.mock()` so any page can be
-opened standalone. The form object is passed page → page (mutable, in-memory).
+opened standalone (incl. via direct URL). The mutable form object is passed
+page → page as go_router `extra` (see `router/app_router.dart`).
 
 - `loan_register_list_page.dart` — entry: pick a product category
   (มอเตอร์ไซต์ / รายการเตรียมข้อมูล) → opens step 1. This is the app's home.
