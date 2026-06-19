@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'config/app_environment.dart';
 import 'router/app_router.dart';
 import 'router/url_strategy.dart';
+import 'services/native_bridge.dart';
 
 late AppState appState;
 
@@ -28,6 +31,12 @@ Future<void> main() async {
   print('SawadLoanUniversalWebVersion:$kWebVersion');
 
   await appState.initializePersistedState();
+
+  // If the native host recovered a document photo after the app was killed
+  // mid-capture, it pushes it in here; stash it for the collateral page.
+  NativeCameraBridge.listenForRecoveredCapture(
+    (bytes) => appState.setRecoveredDocImage(base64Encode(bytes)),
+  );
 
   // Launch param from the native WebView host, e.g.
   // https://.../?hashThaiId=abc123 — used to fetch the customer profile.

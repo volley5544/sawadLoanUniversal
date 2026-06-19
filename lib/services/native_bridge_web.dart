@@ -72,6 +72,30 @@ class NativeCameraBridge {
         .callMethod<JSPromise>('callHandler'.toJS, _kCloseHandlerName.toJS)
         .toDart;
   }
+
+  /// Listens for a document photo the native host **pushes** after recovering a
+  /// capture that was interrupted by the app being killed (the host dispatches
+  /// a `window` `onRecoveredCapture` event with `detail.dataBase64`). Decodes
+  /// the bytes and hands them to [onRecovered]. Call once at startup.
+  static void listenForRecoveredCapture(
+      void Function(Uint8List bytes) onRecovered) {
+    void handler(web.Event event) {
+      final detail = (event as web.CustomEvent).detail;
+      if (detail.isUndefinedOrNull) return;
+      final value =
+          (detail as JSObject).getProperty<JSAny?>('dataBase64'.toJS);
+      if (value.isUndefinedOrNull) return;
+      final base64 = (value as JSString).toDart;
+      if (base64.isEmpty) return;
+      try {
+        onRecovered(base64Decode(_stripDataUrl(base64)));
+      } catch (_) {
+        // Malformed payload -> ignore.
+      }
+    }
+
+    web.window.addEventListener('onRecoveredCapture', handler.toJS);
+  }
 }
 
 /// Accepts both raw base64 and `data:image/jpeg;base64,<...>` data URLs.

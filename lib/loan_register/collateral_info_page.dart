@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../app_state.dart';
 import '../router/app_router.dart';
 import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
@@ -42,6 +43,28 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     if (_form.documentImageBase64.isNotEmpty) {
       _docBytes = _tryDecode(_form.documentImageBase64);
     }
+    // Pick up a photo the native host recovered after a kill-during-capture.
+    _applyRecoveredDocImage();
+    AppState().addListener(_applyRecoveredDocImage);
+  }
+
+  /// If the native host pushed a recovered document photo (after the app was
+  /// killed mid-capture), apply it to the form/preview and clear the pending
+  /// slot. Safe to call repeatedly; no-op when there's nothing pending.
+  void _applyRecoveredDocImage() {
+    final recovered = AppState().pendingDocImageBase64;
+    if (recovered.isEmpty) return;
+    final bytes = _tryDecode(recovered);
+    if (bytes == null) {
+      AppState().clearRecoveredDocImage();
+      return;
+    }
+    AppState().clearRecoveredDocImage();
+    if (!mounted) return;
+    setState(() {
+      _docBytes = bytes;
+      _form.documentImageBase64 = recovered;
+    });
   }
 
   late final TextEditingController _chassis =
@@ -115,6 +138,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
 
   @override
   void dispose() {
+    AppState().removeListener(_applyRecoveredDocImage);
     _chassis.dispose();
     _engine.dispose();
     _registration.dispose();

@@ -43,6 +43,24 @@ class AppState extends ChangeNotifier {
   /// see `config/app_environment.dart`.
   String webVersion = '0';
 
+  /// A document photo recovered by the native host after the app was killed
+  /// mid-capture (pushed in via the `onRecoveredCapture` event — see
+  /// `services/native_bridge.dart`). Held here as base64 until the collateral
+  /// page mounts and consumes it.
+  String pendingDocImageBase64 = '';
+
+  /// Stores a recovered document photo and notifies listeners (so a mounted
+  /// collateral page picks it up immediately).
+  void setRecoveredDocImage(String base64) {
+    pendingDocImageBase64 = base64;
+    notifyListeners();
+  }
+
+  /// Clears the recovered photo once a page has consumed it.
+  void clearRecoveredDocImage() {
+    pendingDocImageBase64 = '';
+  }
+
   Future initializePersistedState() async {
     prefs = await SharedPreferences.getInstance();
     _safeInit(() {

@@ -19,4 +19,8 @@ class NativeCameraBridge {
 
   /// No-op off-web (there is no WebView host to close).
   static Future<void> closeWebview() async {}
+
+  /// No-op off-web (the native host can't push recovered captures here).
+  static void listenForRecoveredCapture(
+      void Function(Uint8List bytes) onRecovered) {}
 }
