@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
 import '../router/app_router.dart';
-import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_autocomplete_field.dart';
 import 'components/register_field_row.dart';
@@ -15,10 +14,11 @@ import 'components/register_step_indicator.dart';
 import 'components/register_text_field.dart';
 import 'components/save_next_bar.dart';
 import 'models/loan_register_form.dart';
+import 'ocr_capture_page.dart';
 
 /// Step 2 of the loan-register wizard — ข้อมูลหลักประกัน (Collateral
-/// Information). Screen #2 on slide 7. The ถ่ายรูปภาพ/OCR action asks the native
-/// WebView host to capture the document (see [NativeCameraBridge]).
+/// Information). Screen #2 on slide 7. The ถ่ายรูปภาพ/OCR action opens the
+/// in-app camera with a document mask (see [OcrCapturePage]).
 class CollateralInfoPage extends StatefulWidget {
   const CollateralInfoPage({Key? key, this.form}) : super(key: key);
 
@@ -30,9 +30,6 @@ class CollateralInfoPage extends StatefulWidget {
 
 class _CollateralInfoPageState extends State<CollateralInfoPage> {
   late final LoanRegisterForm _form = widget.form ?? LoanRegisterForm.mock();
-
-  /// Mask type passed to the native host's `openCamera` handler.
-  static const String _kCaptureAction = 'idCard';
 
   /// Decoded bytes of the captured document, cached for display.
   Uint8List? _docBytes;
@@ -481,33 +478,19 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     );
   }
 
-  /// Ask the native host to capture the document, then cache the bytes for
-  /// display and keep the base64 on the form for the future OCR API call.
+  /// Open the in-app camera capture screen (with the document mask), then cache
+  /// the returned bytes for display and keep the base64 on the form for the
+  /// future OCR API call.
   Future<void> _captureDocument() async {
-    if (!NativeCameraBridge.isSupported) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('การถ่ายรูปใช้ได้เฉพาะในแอปพลิเคชันเท่านั้น')),
-      );
-      return;
-    }
-    try {
-      final bytes = await NativeCameraBridge.captureDocument(_kCaptureAction);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('รูป Output: ${bytes!.length}')),
-      );
-      if (!mounted || bytes == null) return; // null = cancelled / no image
-      setState(() {
-        _docBytes = bytes;
-        _form.documentImageBase64 = base64Encode(bytes);
-      });
-      // TODO: POST the image to the OCR API and auto-fill the fields below.
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ไม่สามารถถ่ายรูปเอกสารได้: $e')),
-      );
-    }
+    final bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(builder: (_) => const OcrCapturePage()),
+    );
+    if (!mounted || bytes == null) return; // null = cancelled / no image
+    setState(() {
+      _docBytes = bytes;
+      _form.documentImageBase64 = base64Encode(bytes);
+    });
+    // TODO: POST the image to the OCR API and auto-fill the fields below.
   }
 
   Uint8List? _tryDecode(String base64) {
