@@ -62,6 +62,16 @@ class LoanRegisterForm {
   String accountType; // ประเภทบัญชี
   String accountNumber; // เลขบัญชี
 
+  // ── Step 4: เอกสารแนบ / ลงนาม + ยืนยันตัวตน NDID ─────────────────────
+  /// Whether the contract documents (เอกสารประกอบสัญญา) have been reviewed,
+  /// signed and the customer's identity verified through NDID. Gates the
+  /// step-4 "ถัดไป" and flips the contract-docs card to its verified state.
+  bool ndidVerified;
+
+  // ── Step 5: นัดหมายส่งเอกสาร ──────────────────────────────────────────
+  String appointmentBranch; // สาขานัดหมาย
+  String appointmentDateTime; // วันที่-เวลานัดหมาย (Buddhist dd/MM/yyyy HH:mm)
+
   LoanRegisterForm({
     this.firstName = '',
     this.lastName = '',
@@ -104,6 +114,9 @@ class LoanRegisterForm {
     this.accountName = '',
     this.accountType = '',
     this.accountNumber = '',
+    this.ndidVerified = false,
+    this.appointmentBranch = '',
+    this.appointmentDateTime = '',
   });
 
   /// Mock data matching slide 7 so the flow renders fully populated.

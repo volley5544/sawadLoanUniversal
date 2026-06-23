@@ -131,9 +131,7 @@ class _LoanInfoPageState extends State<LoanInfoPage> {
             ),
             onNext: () {
               _form.requestedAmount = _requested.text;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ไปยังขั้นตอนถัดไป')),
-              );
+              context.push(AppRoutes.documentAttach, extra: _form);
             },
           ),
         ],

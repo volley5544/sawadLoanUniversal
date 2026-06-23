@@ -1,11 +1,17 @@
 import 'package:go_router/go_router.dart';
 
+import '../loan_register/appointment_page.dart';
 import '../loan_register/collateral_info_page.dart';
 import '../loan_register/customer_info_page.dart';
+import '../loan_register/document_attach_page.dart';
+import '../loan_register/document_review_page.dart';
+import '../loan_register/documents_to_prepare_page.dart';
 import '../loan_register/installment_picker_page.dart';
 import '../loan_register/loan_info_page.dart';
 import '../loan_register/loan_register_list_page.dart';
 import '../loan_register/models/loan_register_form.dart';
+import '../loan_register/ndid_bank_select_page.dart';
+import '../loan_register/ndid_verify_page.dart';
 import '../loan_register/transfer_type_picker_page.dart';
 
 /// Route paths for the loan-register wizard. These map 1:1 to the browser URL
@@ -21,6 +27,14 @@ abstract final class AppRoutes {
   static const String loanInfo = '/loanInfoPage';
   static const String installmentPicker = '/installmentPicker';
   static const String transferTypePicker = '/transferTypePicker';
+  // Step 4: เอกสารแนบ + ลงนาม/ยืนยันตัวตน NDID (slide 8)
+  static const String documentAttach = '/documentAttachPage';
+  static const String documentReview = '/documentReviewPage';
+  static const String ndidBankSelect = '/ndidBankSelectPage';
+  static const String ndidVerify = '/ndidVerifyPage';
+  // Step 5: นัดหมายส่งเอกสาร (slide 9)
+  static const String appointment = '/appointmentPage';
+  static const String documentsToPrepare = '/documentsToPreparePage';
 }
 
 /// The app router.
@@ -63,6 +77,37 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => TransferTypePickerPage(
         selected: (state.extra as String?) ?? 'บัญชีลูกค้า',
       ),
+    ),
+    // ── Step 4: เอกสารแนบ + NDID (slide 8) ──────────────────────────
+    GoRoute(
+      path: AppRoutes.documentAttach,
+      builder: (context, state) =>
+          DocumentAttachPage(form: state.extra as LoanRegisterForm?),
+    ),
+    GoRoute(
+      path: AppRoutes.documentReview,
+      builder: (context, state) =>
+          DocumentReviewPage(form: state.extra as LoanRegisterForm?),
+    ),
+    GoRoute(
+      path: AppRoutes.ndidBankSelect,
+      builder: (context, state) => const NdidBankSelectPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.ndidVerify,
+      builder: (context, state) =>
+          NdidVerifyPage(form: state.extra as LoanRegisterForm?),
+    ),
+    // ── Step 5: นัดหมายส่งเอกสาร (slide 9) ──────────────────────────
+    GoRoute(
+      path: AppRoutes.appointment,
+      builder: (context, state) =>
+          AppointmentPage(form: state.extra as LoanRegisterForm?),
+    ),
+    GoRoute(
+      path: AppRoutes.documentsToPrepare,
+      builder: (context, state) =>
+          DocumentsToPreparePage(form: state.extra as LoanRegisterForm?),
     ),
   ],
 );
