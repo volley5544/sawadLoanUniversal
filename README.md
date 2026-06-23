@@ -40,13 +40,55 @@ step 1 of the wizard auto-fills.
 
 ## The wizard
 
-A 5-step loan-register flow under `lib/loan_register/`:
+A 5-step loan-register flow under `lib/loan_register/` (the step indicator
+shows 1–5):
 
 1. **ข้อมูลลูกค้า** — customer info (auto-filled from the profile)
 2. **ข้อมูลหลักประกัน** — collateral info (+ document/OCR capture)
-3. **ข้อมูลสินเชื่อ / ข้อมูลการโอนเงิน** — loan & transfer info
-4. **จำนวนงวด** — installment picker
-5. **ประเภทการโอน** — transfer-type picker
+3. **ข้อมูลสินเชื่อ / ข้อมูลการโอนเงิน** — loan & transfer info. Opens two
+   full-screen **sub-selectors**: **จำนวนงวด** (installment picker) and
+   **ประเภทการโอน** (transfer-type picker) — these are *not* separate wizard
+   steps, just pickers that pop their value back.
+4. **เอกสารแนบ** — document attachments, then **ลงนาม + ยืนยันตัวตนผ่าน NDID**
+   (sign + identity verification). See below.
+5. **นัดหมายส่งเอกสาร** — document-delivery appointment.
+
+### Step 4 — เอกสารแนบ + NDID (slides 8–9)
+
+Built from slide 8 ("ขั้นตอนที่ 3 ยืนยันตัวตนผ่าน NDID") and slide 9's first
+frame. The customer attaches documents, then reviews + signs the contract
+documents and verifies their identity via NDID:
+
+```
+document_attach_page  (Step 4: เอกสารแนบ)
+  └─ ตรวจสอบเอกสาร → document_review_page   (acknowledge + sign)
+       └─ ndid_bank_select_page             (pick the IDP bank)
+            └─ ndid_verify_page             (countdown → ยืนยันตัวตนสำเร็จ)
+```
+
+`ndid_verify_page` pops `true` back up the chain; that flips the contract-docs
+card on step 4 to its verified state (green check + ดาวน์โหลดเอกสาร) and unlocks
+the bottom **ถัดไป** → step 5. The NDID verified flag lives on
+`LoanRegisterForm.ndidVerified`.
+
+> The **bank's own app** screens (K+ PIN pad, NDID provider consent/terms) are
+> **third-party — not rebuilt here**. `ndid_verify_page` simulates that hop with
+> a "จำลองยืนยันตัวตนสำเร็จ" button; a real integration would receive the IDP
+> callback instead.
+
+### Step 5 — นัดหมายส่งเอกสาร (slide 9, left 3 frames)
+
+```
+appointment_page  (Step 5)
+  └─ "เพิ่ม สาขาและวันที่-เวลานัดหมาย" → documents_to_prepare_page
+       (เอกสารที่ต้องเตรียมวันนัดหมาย checklist)
+```
+
+`documents_to_prepare_page` returns a representative appointment
+(`{branch, dateTime}`) to the appointment list. The **branch map-search and
+date/time calendar** screens (slide 9, right frames) are **out of scope** and
+not built. Step 5's **ถัดไป** is the end of the (UI-only) flow — it shows a
+"บันทึกข้อมูลเรียบร้อย" SnackBar; no backend submit yet.
 
 ## Document / OCR capture (web ↔ native camera)
 

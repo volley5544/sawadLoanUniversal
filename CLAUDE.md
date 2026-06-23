@@ -12,9 +12,13 @@ code comments are English.
 
 ## Current state (read this first)
 
-- **No backend yet.** The wizard does not submit anywhere. The final "ถัดไป" on
-  step 3 just shows a `SnackBar` ("ไปยังขั้นตอนถัดไป"). "บันทึกเตรียมข้อมูล"
-  (save draft) buttons only show a confirmation `SnackBar` — nothing persists.
+- **No backend yet.** The wizard does not submit anywhere. It now runs all the
+  way through **step 5** (ข้อมูลลูกค้า → หลักประกัน → สินเชื่อ → เอกสารแนบ/NDID →
+  นัดหมายส่งเอกสาร); the final "ถัดไป" on step 5 just shows a `SnackBar`
+  ("บันทึกข้อมูลเรียบร้อย"). "บันทึกเตรียมข้อมูล" (save draft) buttons only show a
+  confirmation `SnackBar` — nothing persists. The NDID identity-verification hop
+  is **simulated** (a "จำลองยืนยันตัวตนสำเร็จ" button), since the bank's own app
+  screens are third-party.
 - **Mock data drives the UI.** `LoanRegisterForm.mock()` (matches "slide 7" of
   the design) seeds every field so screens render fully populated. Option lists
   (brands, models, provinces, installment counts, transfer types) are hardcoded
@@ -95,9 +99,12 @@ firebase deploy --only hosting -P prod
   (`router/app_router.dart`); the initial location `/` is `LoanRegisterListPage`.
 - `router/app_router.dart` — **go_router** config + `AppRoutes` path constants.
   Each wizard page has its own URL (`/customerInfoPage`, `/collateralInfoPage`,
-  `/loanInfoPage`, `/installmentPicker`, `/transferTypePicker`). Navigate with
-  `context.push(AppRoutes.x, extra: form)`; pickers return their value via
-  `context.pop(value)`. The mutable `LoanRegisterForm` is passed page→page as
+  `/loanInfoPage`, `/installmentPicker`, `/transferTypePicker`,
+  `/documentAttachPage`, `/documentReviewPage`, `/ndidBankSelectPage`,
+  `/ndidVerifyPage`, `/appointmentPage`, `/documentsToPreparePage`). Navigate
+  with `context.push(AppRoutes.x, extra: form)`; pickers and the NDID sub-flow
+  return their value via `context.pop(value)` (the NDID flow pops `true`/`false`
+  back up the chain so step 4 can flip to its verified state). The mutable `LoanRegisterForm` is passed page→page as
   go_router `extra`; a fresh deep-link (no `extra`) falls back to the page's
   `.mock()` seed. `router/url_strategy.dart` is a conditional import
   (`usePathUrlStrategy()` on web, no-op off-web) — so URLs are
@@ -135,15 +142,43 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   uploaded-doc card (`Image.memory`, view-in-`InteractiveViewer`, delete).
   Dropdowns + autocomplete fields for vehicle details.
 - `loan_info_page.dart` — **Step 3: ข้อมูลสินเชื่อ + ข้อมูลการโอนเงิน**. Mostly
-  read-only calculated rows; opens the installment picker (step 4) and transfer
-  type picker (step 5).
+  read-only calculated rows; opens the installment + transfer-type sub-selectors.
+  Its "ถัดไป" now pushes **step 4** (`documentAttach`, extra: form).
 - `installment_picker_page.dart` / `transfer_type_picker_page.dart` — full-screen
-  list selectors (steps 4 & 5); pop the chosen value back.
+  list **sub-selectors opened from step 3** (จำนวนงวด / ประเภทการโอน); pop the
+  chosen value back. These are *not* wizard steps (the step indicator's 4 & 5 are
+  the pages below).
+- `document_attach_page.dart` — **Step 4: เอกสารแนบ** (slide 8 frame 1 + slide 9
+  frame 1). Attach cards for บัตรประชาชน / เล่มทะเบียนรถ / เอกสารเพิ่มเติม (each
+  opens `OcrCapturePage`, shows view/delete), plus a เอกสารประกอบสัญญา section
+  whose ตรวจสอบเอกสาร row opens the NDID flow. On NDID success the card flips to
+  a signed state (green check + ดาวน์โหลดเอกสาร) and the bottom "ถัดไป" unlocks →
+  pushes step 5. Gated by `form.ndidVerified`.
+- `document_review_page.dart` — **ตรวจสอบเอกสาร** (slide 8 frame 2). Contract-doc
+  list + an acknowledge checkbox; the "ลงนามเอกสารและยืนยันตัวตน NDID" button
+  starts the NDID flow and, on success, pops `true` back to step 4.
+- `ndid_bank_select_page.dart` — **เลือกผู้ให้บริการ NDID** (slide 8 frames 3–4).
+  Registered vs not-registered bank grids; ย้อนกลับ / ถัดไป.
+- `ndid_verify_page.dart` — **ยืนยันตัวตน** countdown screen → **ยืนยันตัวตน
+  สำเร็จ** (slide 8 frame 5 + final frame). One page, two phases. The bank's own
+  app (K+ PIN pad, NDID consent) is **third-party — not rebuilt**; a
+  "จำลองยืนยันตัวตนสำเร็จ" button simulates the IDP callback. Pops `true`.
+- `appointment_page.dart` — **Step 5: นัดหมายส่งเอกสาร** (slide 9 frame 2). The
+  "เพิ่ม สาขาและวันที่-เวลานัดหมาย" card opens `documents_to_prepare_page`;
+  "รายการนัดหมาย" shows the chosen appointment. "ถัดไป" ends the (UI-only) flow
+  with a "บันทึกข้อมูลเรียบร้อย" SnackBar.
+- `documents_to_prepare_page.dart` — **เอกสารที่ต้องเตรียมวันนัดหมาย** checklist
+  (slide 9 frame 3). Its "ถัดไป" pops a representative `{branch, dateTime}` to the
+  appointment list. The branch **map-search** and **date/time calendar** screens
+  (slide 9's right frames) are **out of scope — not built**.
 - `models/loan_register_form.dart` — the in-memory wizard model. `mock()` =
   fully-populated demo data; `fromCustomerDetail()` = seed step 1 from a real
   customer. Helpers: `_formatPhone`, `_formatThaiId`, `_formatBuddhistDate`
   (adds 543 unless year > 2200, i.e. already B.E.), `_genderFromTitle`,
-  `_composeAddress`.
+  `_composeAddress`. Step-4/5 fields: `ndidVerified` (bool, gates step 4's
+  "ถัดไป"), `appointmentBranch`, `appointmentDateTime`. Attached document bytes
+  on step 4 are held in page state only (not on the form). When adding fields
+  here, also seed them in `mock()`.
 
 ### Web ↔ native bridge (`lib/services/`)
 

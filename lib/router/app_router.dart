@@ -65,8 +65,9 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) =>
           LoanInfoPage(form: state.extra as LoanRegisterForm?),
     ),
-    // Full-screen selectors (steps 4 & 5). Opened with the current value as
-    // `extra`; they pop the chosen value back to the caller via context.pop().
+    // Full-screen sub-selectors opened from step 3 (จำนวนงวด / ประเภทการโอน) —
+    // not wizard steps. Opened with the current value as `extra`; they pop the
+    // chosen value back to the caller via context.pop().
     GoRoute(
       path: AppRoutes.installmentPicker,
       builder: (context, state) =>
