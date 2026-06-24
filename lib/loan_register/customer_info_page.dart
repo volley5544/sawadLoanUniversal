@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
+import '../ndid/ndid_verify_page.dart';
 import 'collateral_info_page.dart';
 import 'components/address_card.dart';
 import 'components/loan_register_styles.dart';
@@ -84,6 +86,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _ndidVerifyCard(),
                   const RegisterSectionTitle('ข้อมูลลูกค้า'),
                   RegisterTextField(
                       label: 'ชื่อ',
@@ -213,6 +216,104 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
               ));
             },
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── NDID identity verification ─────────────────────────────────────
+  /// Opens the NDID verify flow with the current Thai ID, then reflects the
+  /// returned status onto the wizard form.
+  Future<void> _openNdidVerify() async {
+    // Persist any inline edits so the latest Thai ID / name is passed along.
+    _save();
+    final status = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => NdidVerifyPage(
+          thaiId: _thaiId.text,
+          fullName: '${_firstName.text} ${_lastName.text}'.trim(),
+        ),
+      ),
+    );
+    if (status != null) {
+      setState(() => _form.ndidStatus = status);
+    }
+  }
+
+  Widget _ndidVerifyCard() {
+    final verified = _form.ndidVerified;
+    final hasStatus = _form.ndidStatus.isNotEmpty;
+    final Color accent =
+        verified ? Colors.green : LoanRegisterStyles.primary;
+
+    String statusLabel() {
+      switch (_form.ndidStatus.toUpperCase()) {
+        case 'ACCEPTED':
+          return 'ยืนยันตัวตนสำเร็จ';
+        case 'REJECTED':
+          return 'ถูกปฏิเสธ';
+        case 'TIMEOUT':
+          return 'หมดเวลา';
+        case 'CANCELLED':
+          return 'ยกเลิกแล้ว';
+        case '':
+          return 'ยังไม่ได้ยืนยันตัวตน';
+        default:
+          return 'ยืนยันตัวตนไม่สำเร็จ';
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: verified ? const Color(0xFFEAF7EE) : LoanRegisterStyles.primarySoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withOpacity(.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            verified
+                ? Icons.verified_user
+                : (hasStatus ? Icons.gpp_maybe : Icons.badge_outlined),
+            color: accent,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('การยืนยันตัวตน NDID',
+                    style: LoanRegisterStyles.valueStyle().copyWith(fontSize: 15)),
+                const SizedBox(height: 2),
+                Text(statusLabel(),
+                    style: LoanRegisterStyles.labelStyle()
+                        .copyWith(color: verified ? Colors.green.shade700 : null)),
+              ],
+            ),
+          ),
+          if (!verified)
+            GestureDetector(
+              onTap: _openNdidVerify,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: LoanRegisterStyles.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  hasStatus ? 'ลองใหม่' : 'ยืนยันตัวตน',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

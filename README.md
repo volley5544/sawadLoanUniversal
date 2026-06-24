@@ -8,9 +8,10 @@ a separate **native Flutter app** via
 native host opens this web build in a WebView). The Android/iOS/desktop
 scaffolding still exists, but the **web build is what ships**.
 
-> Status: **UI-only** — no backend wiring yet. Screens render from mock data and
-> a customer profile the native host will provide. UI text/data is Thai; code
-> comments are English.
+> Status: **mostly UI-only** — the loan wizard renders from mock data and a
+> customer profile the native host will provide (no submit/draft backend yet).
+> The one live integration is the **NDID identity-verification** flow, which
+> calls the local NDID Node proxy. UI text/data is Thai; code comments are English.
 
 ## Build & run
 
@@ -38,6 +39,15 @@ https://<host>/?hashThaiId=<hash>
 fetch the customer profile by that hash and seed `AppState.customerDetail`, so
 step 1 of the wizard auto-fills.
 
+The host may also override the NDID proxy endpoints (see below):
+
+```
+https://<host>/?hashThaiId=<hash>&ndidBaseUrl=<url>&ndidCallbackUrl=<url>
+```
+
+`ndidBaseUrl` → `AppState.ndidBaseUrl` (default `http://localhost:7088`),
+`ndidCallbackUrl` → `AppState.ndidCallbackUrl` (empty ⇒ status is polled only).
+
 ## The wizard
 
 A 5-step loan-register flow under `lib/loan_register/`:
@@ -47,6 +57,33 @@ A 5-step loan-register flow under `lib/loan_register/`:
 3. **ข้อมูลสินเชื่อ / ข้อมูลการโอนเงิน** — loan & transfer info
 4. **จำนวนงวด** — installment picker
 5. **ประเภทการโอน** — transfer-type picker
+
+## NDID identity verification
+
+Step 1 (**ข้อมูลลูกค้า**) has a **การยืนยันตัวตน NDID** card that launches a full
+NDID/DAP identity-verification flow (`lib/ndid/ndid_verify_page.dart`). The
+result (`ACCEPTED`/`REJECTED`/…) is written back onto the wizard form
+(`LoanRegisterForm.ndidStatus`, `form.ndidVerified`).
+
+```dart
+// lib/services/ndid_service.dart  (RP role)
+final svc = NdidService(baseUrl: AppState().ndidBaseUrl);
+final idps   = await svc.listIdps(identifier: '<13-digit-id>');   // POST /idp/list
+final result = await svc.verify(identifier: '...', idpIdList: [...]); // POST /rp/verify
+final status = await svc.checkStatus(result.referenceId);         // GET  /rp/verify/{ref}
+await svc.close(result.referenceId);                              // POST /rp/verify/{ref}/close
+```
+
+- **It calls the local NDID Node proxy** (`server.js`, default
+  `http://localhost:7088`), *not* the DAP proxy directly — the node owns the RSA
+  token, so the app never signs or sends a token. See
+  `dap/NDID_Local_API.postman_collection.json` and
+  `dap/NDID_Proxy_Specification_V4.0.pdf`.
+- **Flow:** list IdPs for the citizen id → pick one → `verify` (returns
+  `reference_id` + `ndid_request_id`) → **poll** status every 4s until a terminal
+  state; a "ยกเลิกคำขอ" button closes a pending request. Override the endpoint at
+  launch with `?ndidBaseUrl=` / `?ndidCallbackUrl=` (see *Launch parameter*).
+- The proxy must allow CORS from the WebView origin (that's the node's concern).
 
 ## Document / OCR capture (web ↔ native camera)
 
@@ -97,13 +134,18 @@ The full handler example also lives in the doc comment of
 
 ```
 lib/
-  main.dart                     app entry; reads ?hashThaiId; home = list page
+  main.dart                     app entry; reads ?hashThaiId / ?ndidBaseUrl; home = list page
   app_state.dart                ChangeNotifier singleton; persists CustomerDetail
-  models/customer_detail.dart   plain-Dart API model (snake_case JSON)
+  models/
+    customer_detail.dart        plain-Dart API model (snake_case JSON)
+    ndid_models.dart            NDID/DAP models (IdP, verify result, status enum)
   services/
     native_bridge.dart          public entry (conditional import)
     native_bridge_web.dart      web impl (flutter_inappwebview callHandler)
     native_bridge_stub.dart     non-web stub (throws / isSupported=false)
+    ndid_service.dart           NDID/DAP REST client (http -> local node proxy)
+  ndid/
+    ndid_verify_page.dart       NDID identity-verification flow (4 stages)
   loan_register/
     *_page.dart                 the wizard steps & pickers
     models/loan_register_form.dart   in-memory wizard model (+ mock data)

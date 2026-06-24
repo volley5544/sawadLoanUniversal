@@ -38,6 +38,16 @@ class AppState extends ChangeNotifier {
   /// param (`?hashThaiId=...`). Used to fetch the customer profile on startup.
   String hashThaiId = '';
 
+  /// Base URL of the local NDID Node proxy (`server.js`) the app calls for the
+  /// identity-verification flow. Defaults to the Postman collection's
+  /// `localhost:7088`; the native host can override it at launch with
+  /// `?ndidBaseUrl=...` (read in `main.dart`). No trailing slash.
+  String ndidBaseUrl = 'http://localhost:7088';
+
+  /// Callback URL the host registers with DAP for status push (optional). When
+  /// empty the verify flow falls back to polling. Override with `?ndidCallbackUrl=`.
+  String ndidCallbackUrl = '';
+
   Future initializePersistedState() async {
     prefs = await SharedPreferences.getInstance();
     _safeInit(() {

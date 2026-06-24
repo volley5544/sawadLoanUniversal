@@ -21,9 +21,18 @@ Future<void> main() async {
 
   // Launch param from the native WebView host, e.g.
   // https://.../#/?hashThaiId=abc123 — used to fetch the customer profile.
-  appState.hashThaiId = Uri.base.queryParameters['hashThaiId'] ?? '';
+  final params = Uri.base.queryParameters;
+  appState.hashThaiId = params['hashThaiId'] ?? '';
   // TODO: if hashThaiId is set, call the profile API and
   // appState.setCustomerDetailFromJson(...) before/while the UI loads.
+
+  // NDID identity-verification proxy endpoints (overridable by the host so the
+  // same web build can point at localhost / staging / prod NDID nodes).
+  final ndidBaseUrl = params['ndidBaseUrl']?.trim();
+  if (ndidBaseUrl != null && ndidBaseUrl.isNotEmpty) {
+    appState.ndidBaseUrl = ndidBaseUrl.replaceAll(RegExp(r'/+$'), '');
+  }
+  appState.ndidCallbackUrl = params['ndidCallbackUrl']?.trim() ?? '';
 
   runApp(const MyApp());
 }

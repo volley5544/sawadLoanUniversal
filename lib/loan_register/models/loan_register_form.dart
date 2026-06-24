@@ -28,6 +28,17 @@ class LoanRegisterForm {
   String monthlyIncome;
   String workTenure;
 
+  // ── NDID identity verification (step 1 gate) ────────────────────────
+  /// Reference id of the last NDID verification request (empty = not started).
+  String ndidReferenceId;
+
+  /// Raw UPPERCASE status of the NDID request, e.g. `ACCEPTED`, `REJECTED`,
+  /// `PENDING`. Empty until a request is made.
+  String ndidStatus;
+
+  /// True once the customer's identity has been verified via NDID.
+  bool get ndidVerified => ndidStatus.toUpperCase() == 'ACCEPTED';
+
   // ── Step 2: ข้อมูลหลักประกัน ─────────────────────────────────────────
   /// Base64 of the captured collateral document, returned by the native host's
   /// camera (for the future OCR API call). Empty when nothing captured yet.
@@ -79,6 +90,8 @@ class LoanRegisterForm {
     this.occupationGroup = '',
     this.monthlyIncome = '',
     this.workTenure = '',
+    this.ndidReferenceId = '',
+    this.ndidStatus = '',
     this.documentImageBase64 = '',
     this.productGroup = '',
     this.brand = '',

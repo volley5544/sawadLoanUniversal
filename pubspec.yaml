@@ -48,6 +48,10 @@ dependencies:
   # bindings used by the camera bridge (lib/services/native_bridge_web.dart).
   web: ^1.1.0
 
+  # NDID/DAP identity-verification REST calls (lib/services/ndid_service.dart).
+  # Talks to the local NDID Node proxy (localhost:7088) which owns the token.
+  http: ^1.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

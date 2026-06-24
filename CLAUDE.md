@@ -118,6 +118,34 @@ opened standalone. The form object is passed page → page (mutable, in-memory).
   (adds 543 unless year > 2200, i.e. already B.E.), `_genderFromTitle`,
   `_composeAddress`.
 
+### NDID identity verification (`lib/ndid/`, `lib/services/ndid_service.dart`)
+
+The customer can verify their identity through **NDID/DAP** before continuing
+the loan flow. Entry point: a "การยืนยันตัวตน NDID" card at the top of step 1
+(`customer_info_page.dart`) → opens `NdidVerifyPage`, which pops back the final
+UPPERCASE status (`ACCEPTED`/`REJECTED`/…) onto `LoanRegisterForm.ndidStatus`
+(`form.ndidVerified` == status `ACCEPTED`).
+
+- **What it calls.** `NdidService` (uses `http`) talks to the **local NDID Node
+  proxy** (`server.js`, default `http://localhost:7088`), NOT the DAP proxy
+  directly — the node owns the RSA token, so the app never signs/sends a token.
+  Endpoints used (RP role, from `dap/NDID_Local_API.postman_collection.json`):
+  `POST /idp/list`, `POST /rp/verify`, `GET /rp/verify/{ref}`,
+  `POST /rp/verify/{ref}/close`, `GET /ndid/callback/{ref}`.
+- **Flow** (`NdidVerifyPage`, 4 stages): list IdPs for the citizen id → pick one
+  → `verify` (gets `reference_id` + `ndid_request_id`) → **poll** `checkStatus`
+  every 4s until a terminal status; "ยกเลิกคำขอ" calls `close`. namespace is
+  always `citizen_id`; the 13-digit identifier is the Thai ID stripped of dashes.
+- **Config (overridable by the host at launch, read in `main.dart`):**
+  `?ndidBaseUrl=` → `appState.ndidBaseUrl` (default `localhost:7088`),
+  `?ndidCallbackUrl=` → `appState.ndidCallbackUrl` (empty ⇒ poll-only; when set,
+  it's sent as DAP's status-push `callback_url`).
+- **Models:** `lib/models/ndid_models.dart` — `NdidIdp`, `NdidVerifyResult`,
+  `NdidVerificationStatus` (+ `NdidStatus` enum with `isTerminal`/`isSuccess`),
+  all with the same defensive `_as*` coercion as `CustomerDetail`.
+- Spec/contract reference: `dap/NDID_Proxy_Specification_V4.0.pdf` and the
+  Postman collection/environment under `dap/`.
+
 ### Web ↔ native bridge (`lib/services/`)
 
 - `native_bridge.dart` exports `NativeCameraBridge` via a conditional import:
@@ -163,7 +191,7 @@ opened standalone. The form object is passed page → page (mutable, in-memory).
 
 `shared_preferences` (persist `CustomerDetail`), `google_fonts` (NotoSansThai),
 `hexcolor`, `flutter_svg`, `web` (window/console bindings for the native
-bridge). The `camera` plugin was **removed** — the host owns the camera. SDK
+bridge), `http` (NDID/DAP REST calls in `ndid_service.dart`). The `camera` plugin was **removed** — the host owns the camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
 `colorScheme: .fromSeed(...)`, `mainAxisAlignment: .center`); needs a recent
 toolchain (built on Flutter 3.38 / Dart 3.10).
