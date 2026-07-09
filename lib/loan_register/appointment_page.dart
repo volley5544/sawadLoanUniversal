@@ -58,15 +58,15 @@ class _AppointmentPageState extends State<AppointmentPage> {
                   _MenuCard(
                     icon: Icons.event_outlined,
                     title: 'เพิ่ม สาขาและวันที่-เวลานัดหมาย',
-                    subtitle: _hasAppointment
-                        ? '${_form.appointmentBranch} • ${_form.appointmentDateTime}'
-                        : null,
                     onTap: _addAppointment,
                   ),
                   const SizedBox(height: 12),
                   _MenuCard(
                     icon: Icons.list_alt_outlined,
                     title: 'รายการนัดหมาย',
+                    subtitle: _hasAppointment
+                        ? '${_form.appointmentBranch} • ${_form.appointmentDateTime}'
+                        : null,
                     trailing: Icon(Icons.edit_outlined,
                         size: 20, color: LoanRegisterStyles.label),
                     onTap: () {
@@ -77,11 +77,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
                         );
                         return;
                       }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'นัดหมาย: ${_form.appointmentBranch} ${_form.appointmentDateTime}')),
-                      );
+                      _addAppointment(); // edit the existing appointment
                     },
                   ),
                   const SizedBox(height: 16),
