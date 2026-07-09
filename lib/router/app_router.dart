@@ -1,6 +1,8 @@
 import 'package:go_router/go_router.dart';
 
+import '../loan_register/appointment_datetime_page.dart';
 import '../loan_register/appointment_page.dart';
+import '../loan_register/branch_select_page.dart';
 import '../loan_register/collateral_info_page.dart';
 import '../loan_register/customer_info_page.dart';
 import '../loan_register/document_attach_page.dart';
@@ -35,6 +37,8 @@ abstract final class AppRoutes {
   // Step 5: นัดหมายส่งเอกสาร (slide 9)
   static const String appointment = '/appointmentPage';
   static const String documentsToPrepare = '/documentsToPreparePage';
+  static const String branchSelect = '/branchSelectPage';
+  static const String appointmentDateTime = '/appointmentDateTimePage';
 }
 
 /// The app router.
@@ -109,6 +113,18 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.documentsToPrepare,
       builder: (context, state) =>
           DocumentsToPreparePage(form: state.extra as LoanRegisterForm?),
+    ),
+    // Branch + date/time pickers for the appointment. The branch list is the
+    // web fallback — inside the native host the branch comes from the native
+    // map via the `openBranchPicker` bridge handler instead.
+    GoRoute(
+      path: AppRoutes.branchSelect,
+      builder: (context, state) => const BranchSelectPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.appointmentDateTime,
+      builder: (context, state) =>
+          AppointmentDateTimePage(branchName: state.extra as String?),
     ),
   ],
 );

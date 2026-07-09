@@ -13,6 +13,11 @@ const String _kHandlerName = 'openCamera';
 /// WebView page (`addJavaScriptHandler(handlerName: 'closeWebview', ...)`).
 const String _kCloseHandlerName = 'closeWebview';
 
+/// Name of the JavaScript handler the native host registers to open its
+/// branch-picker map (`addJavaScriptHandler(handlerName: 'openBranchPicker',
+/// ...)`).
+const String _kBranchPickerHandlerName = 'openBranchPicker';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -60,6 +65,37 @@ class NativeCameraBridge {
     if (base64 == null || base64.isEmpty) return null; // cancelled / no image
 
     return base64Decode(_stripDataUrl(base64));
+  }
+
+  /// Asks the native host to open its branch-picker map (นัดหมาย branch
+  /// selection) and resolves with the chosen branch.
+  ///
+  /// The host returns a **JSON string** like
+  /// `{"branchName":"สุขุมวิท 101/1","address":"...","phone":"...",
+  ///   "lat":"13.69","lng":"100.61"}`. Returning `null`/`''` means the user
+  /// cancelled (resolves with `null`). Throws if the bridge is unavailable or
+  /// the JSON can't be parsed.
+  static Future<Map<String, dynamic>?> pickBranch() async {
+    final host = _host;
+    if (host == null) {
+      throw UnsupportedError(
+        'Not running inside the flutter_inappwebview host '
+        '(window.flutter_inappwebview is undefined).',
+      );
+    }
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kBranchPickerHandlerName.toJS,
+        )
+        .toDart;
+
+    final json = result.isUndefinedOrNull ? null : (result as JSString).toDart;
+    if (json == null || json.isEmpty) return null; // cancelled
+
+    final decoded = jsonDecode(json);
+    return decoded is Map<String, dynamic> ? decoded : null;
   }
 
   /// Asks the native host to close/pop the WebView page (e.g. the user tapped

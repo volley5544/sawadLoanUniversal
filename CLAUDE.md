@@ -168,9 +168,18 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   "รายการนัดหมาย" shows the chosen appointment. "ถัดไป" ends the (UI-only) flow
   with a "บันทึกข้อมูลเรียบร้อย" SnackBar.
 - `documents_to_prepare_page.dart` — **เอกสารที่ต้องเตรียมวันนัดหมาย** checklist
-  (slide 9 frame 3). Its "ถัดไป" pops a representative `{branch, dateTime}` to the
-  appointment list. The branch **map-search** and **date/time calendar** screens
-  (slide 9's right frames) are **out of scope — not built**.
+  (slide 9 frame 3). Its "ถัดไป" runs the branch → date/time picking flow, then
+  pops the chosen `{branch, dateTime}` to the appointment list. **Branch pick is
+  native-first:** inside the host it calls `NativeCameraBridge.pickBranch()`
+  (`openBranchPicker` JS handler — the host's Google-Maps branch page owns GPS/
+  nearby search and returns the chosen branch as JSON); in a plain browser it
+  falls back to `branch_select_page.dart`.
+- `branch_select_page.dart` — **ค้นหาสาขา** web fallback (slide 9 search frame):
+  searchable mock-branch list + นัดหมาย button; pops the branch map (same shape
+  as the bridge JSON). Only used when `NativeCameraBridge.isSupported` is false.
+- `appointment_datetime_page.dart` — **วันที่-เวลา นัดหมาย** (slide 9 calendar
+  frame): `CalendarDatePicker` + mock time slots (some ไม่ว่าง) + summary bar;
+  บันทึกข้อมูล pops a Buddhist-era `dd/MM/yyyy HH:mm น.` string.
 - `models/loan_register_form.dart` — the in-memory wizard model. `mock()` =
   fully-populated demo data; `fromCustomerDetail()` = seed step 1 from a real
   customer. Helpers: `_formatPhone`, `_formatThaiId`, `_formatBuddhistDate`
@@ -199,6 +208,11 @@ page → page as go_router `extra` (see `router/app_router.dart`).
 - Compress the photo natively (≈1280px / JPEG ~80) before base64 so the bridge
   stays fast. The full handler code lives in the doc comment of
   `native_bridge.dart`.
+- **`openBranchPicker` handler:** `pickBranch()` asks the host to open its
+  branch-picker map (step-5 appointment). The host pushes a selection-mode map
+  page and returns the chosen branch as a **JSON string** (`branchName`,
+  `address`, `phone`, `lat`, `lng`); `null`/`''` = cancelled. Handler snippet
+  also in `native_bridge.dart`'s doc comment.
 
 ### Reusable components (`lib/loan_register/components/`)
 

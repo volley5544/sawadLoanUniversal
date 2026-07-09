@@ -37,6 +37,34 @@
 /// `action` is the mask type (e.g. `collateral`, `idcard`). Because the handler
 /// is bidirectional, requests/responses are inherently correlated — no manual
 /// id matching needed.
+///
+/// ## `openBranchPicker` — appointment branch selection (step 5)
+///
+/// The branch map (nearby search, GPS, Google Maps) also lives on the native
+/// side. The web asks the host to open its branch-picker map; the host pushes
+/// a selection-mode map page and **returns the chosen branch as a JSON
+/// string**:
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'openBranchPicker',
+///   callback: (args) async {
+///     final branch = await Navigator.push<BranchDetail>(
+///         context, MaterialPageRoute(builder: (_) => BranchPickerPage()));
+///     if (branch == null) return null; // user cancelled
+///     return jsonEncode({
+///       'branchName': branch.branchName,
+///       'address': branch.brnachAddress,
+///       'phone': branch.mobilePhoneNumber,
+///       'lat': branch.latitude,
+///       'lng': branch.longtitude,
+///     });
+///   },
+/// );
+/// ```
+///
+/// Returning `null`/`''` = cancelled (resolves with `null`). In a plain
+/// browser (no host) the web falls back to its own searchable branch list.
 library;
 
 export 'native_bridge_stub.dart'

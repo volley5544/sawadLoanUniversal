@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../router/app_router.dart';
+import '../services/native_bridge.dart';
 import 'components/loan_register_styles.dart';
 import 'models/loan_register_form.dart';
 
@@ -9,9 +11,11 @@ import 'models/loan_register_form.dart';
 /// bring on the appointment day (third frame on slide 9).
 ///
 /// Reached from the "เพิ่ม สาขาและวันที่-เวลานัดหมาย" card on
-/// [AppointmentPage]. ถัดไป continues to the branch (map) + date/time pickers —
-/// those screens (slide 9, right frames) are out of scope here, so this returns
-/// a representative appointment back to the appointment list.
+/// [AppointmentPage]. ถัดไป continues to the branch picker — inside the native
+/// host that's the **native map page** (`openBranchPicker` bridge handler:
+/// GPS + nearby search live there); in a plain browser it falls back to the
+/// web [BranchSelectPage] list — then the [AppointmentDateTimePage]. The
+/// chosen `{branch, dateTime}` pops back to the appointment list.
 class DocumentsToPreparePage extends StatelessWidget {
   const DocumentsToPreparePage({Key? key, this.form}) : super(key: key);
 
@@ -87,12 +91,43 @@ class DocumentsToPreparePage extends StatelessWidget {
     );
   }
 
-  /// Returns a representative appointment to the list. The branch (map) and
-  /// date/time pickers (slide 9 right frames) are out of scope.
-  void _next(BuildContext context) {
+  /// Branch picker → date/time picker → pop `{branch, dateTime}` back to the
+  /// appointment list. Backing out of either picker stays on this checklist.
+  Future<void> _next(BuildContext context) async {
+    String? branchName;
+    if (NativeCameraBridge.isSupported) {
+      // Inside the native host: the branch is picked on the native map page.
+      try {
+        final branch = await NativeCameraBridge.pickBranch();
+        branchName = branch?['branchName']?.toString();
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ไม่สามารถเปิดหน้าค้นหาสาขาได้')),
+          );
+        }
+        return;
+      }
+    } else {
+      // Plain browser (dev): fall back to the web branch list.
+      if (!context.mounted) return;
+      final branch = await context
+          .push<Map<String, dynamic>>(AppRoutes.branchSelect);
+      branchName = branch?['branchName']?.toString();
+    }
+    if (branchName == null || branchName.isEmpty) return; // cancelled
+
+    if (!context.mounted) return;
+    final dateTime = await context.push<String>(
+      AppRoutes.appointmentDateTime,
+      extra: branchName,
+    );
+    if (dateTime == null || dateTime.isEmpty) return; // backed out
+
+    if (!context.mounted) return;
     context.pop(<String, String>{
-      'branch': 'สาขาสุขุมวิท 101/1',
-      'dateTime': '25/04/2569 10:00 น.',
+      'branch': 'สาขา$branchName',
+      'dateTime': dateTime,
     });
   }
 }
