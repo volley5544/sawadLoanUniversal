@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -26,6 +27,13 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
   String? _error;
   Uint8List? _captured;
 
+  /// Re-entry guard for the shutter (also dims it while capturing).
+  bool _busy = false;
+
+  /// getUserMedia can hang forever in some WebViews — never leave the spinner
+  /// up without a way out.
+  static const Duration _initTimeout = Duration(seconds: 10);
+
   @override
   void initState() {
     super.initState();
@@ -33,8 +41,14 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
   }
 
   Future<void> _initCamera() async {
+    // Retry path: drop any half-initialized controller first.
+    final old = _controller;
+    _controller = null;
+    await old?.dispose();
+
+    CameraController? controller;
     try {
-      final cameras = await availableCameras();
+      final cameras = await availableCameras().timeout(_initTimeout);
       if (cameras.isEmpty) {
         throw CameraException('no_camera', 'No camera available');
       }
@@ -42,24 +56,36 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
-      final controller = CameraController(
+      controller = CameraController(
         back,
         ResolutionPreset.high,
         enableAudio: false,
       );
-      await controller.initialize();
-      if (!mounted) return;
+      await controller.initialize().timeout(_initTimeout);
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
       setState(() {
         _controller = controller;
         _isLoading = false;
       });
     } catch (_) {
+      await controller?.dispose();
       if (!mounted) return;
       setState(() {
         _error = 'ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้อง';
         _isLoading = false;
       });
     }
+  }
+
+  void _retryInit() {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _initCamera();
   }
 
   @override
@@ -70,13 +96,37 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
 
   Future<void> _takePicture() async {
     final c = _controller;
-    if (c == null || !c.value.isInitialized || c.value.isTakingPicture) return;
+    if (c == null || !c.value.isInitialized || _busy) return;
+    setState(() => _busy = true);
     try {
       final image = await c.takePicture();
       final bytes = await image.readAsBytes();
+      // Pause the live stream while the still is shown: the video element
+      // stops compositing (on web an active platform view can stall Flutter's
+      // frame updates — the "photo only appears after another tap" bug) and
+      // the stream stays warm for an instant ถ่ายใหม่.
+      try {
+        await c.pausePreview();
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _captured = bytes);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ถ่ายรูปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// ถ่ายใหม่ — resume the (paused, still-live) stream and go back to the
+  /// viewfinder.
+  Future<void> _retake() async {
+    try {
+      await _controller?.resumePreview();
     } catch (_) {}
+    if (mounted) setState(() => _captured = null);
   }
 
   @override
@@ -86,12 +136,20 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: Colors.white))
+                child: CircularProgressIndicator(color: Colors.white),
+              )
             : _error != null
-                ? _errorView()
-                : _captured != null
-                    ? _previewView()
-                    : _cameraView(),
+            ? _errorView()
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Keep the camera mounted (Offstage) while the still is
+                  // shown: tearing down and remounting the web video
+                  // element brings the preview back frozen.
+                  Offstage(offstage: _captured != null, child: _cameraView()),
+                  if (_captured != null) _previewView(),
+                ],
+              ),
       ),
     );
   }
@@ -103,8 +161,11 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_photography_outlined,
-                color: Colors.white54, size: 64),
+            const Icon(
+              Icons.no_photography_outlined,
+              color: Colors.white54,
+              size: 64,
+            ),
             const SizedBox(height: 16),
             Text(
               _error!,
@@ -112,11 +173,27 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
               style: GoogleFonts.notoSansThai(color: Colors.white),
             ),
             const SizedBox(height: 20),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('ปิด',
-                  style: GoogleFonts.notoSansThai(
-                      color: LoanRegisterStyles.primary)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'ปิด',
+                    style: GoogleFonts.notoSansThai(color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                TextButton(
+                  onPressed: _retryInit,
+                  child: Text(
+                    'ลองใหม่',
+                    style: GoogleFonts.notoSansThai(
+                      color: LoanRegisterStyles.primary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -143,8 +220,7 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
             fit: StackFit.expand,
             children: [
               CameraPreview(_controller!),
-              CustomPaint(
-                  size: Size.infinite, painter: _DocumentMaskPainter()),
+              CustomPaint(size: Size.infinite, painter: _DocumentMaskPainter()),
             ],
           ),
         ),
@@ -156,8 +232,10 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
             children: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text('Cancel',
-                    style: GoogleFonts.notoSansThai(color: Colors.white)),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.notoSansThai(color: Colors.white),
+                ),
               ),
               _shutter(),
               const SizedBox(width: 64), // balances the Cancel button
@@ -169,62 +247,66 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
   }
 
   Widget _previewView() {
-    return Column(
-      children: [
-        Expanded(
-          child: Center(
-            child: Image.memory(_captured!, fit: BoxFit.contain),
+    return Container(
+      color: Colors.black,
+      child: Column(
+        children: [
+          Expanded(
+            child: Center(child: Image.memory(_captured!, fit: BoxFit.contain)),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _actionButton(
-                icon: Icons.refresh,
-                label: 'ถ่ายใหม่',
-                background: Colors.white24,
-                onTap: () => setState(() => _captured = null),
-              ),
-              _actionButton(
-                icon: Icons.check,
-                label: 'ใช้รูปนี้',
-                background: LoanRegisterStyles.primary,
-                onTap: () => Navigator.of(context).pop(_captured),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _actionButton(
+                  icon: Icons.refresh,
+                  label: 'ถ่ายใหม่',
+                  background: Colors.white24,
+                  onTap: _retake,
+                ),
+                _actionButton(
+                  icon: Icons.check,
+                  label: 'ใช้รูปนี้',
+                  background: LoanRegisterStyles.primary,
+                  onTap: () => Navigator.of(context).pop(_captured),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _shutter() {
     return GestureDetector(
       onTap: _takePicture,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'PHOTO',
-            style: GoogleFonts.notoSansThai(
-              color: LoanRegisterStyles.primary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+      child: Opacity(
+        opacity: _busy ? 0.4 : 1,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'PHOTO',
+              style: GoogleFonts.notoSansThai(
+                color: LoanRegisterStyles.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(color: Colors.white54, width: 4),
+            const SizedBox(height: 6),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: Colors.white54, width: 4),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -243,7 +325,10 @@ class _OcrCapturePageState extends State<OcrCapturePage> {
           Container(
             width: 60,
             height: 60,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: background),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: background,
+            ),
             child: Icon(icon, color: Colors.white, size: 28),
           ),
           const SizedBox(height: 8),
