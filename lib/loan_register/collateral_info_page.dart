@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
 import '../router/app_router.dart';
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_autocomplete_field.dart';
 import 'components/register_field_row.dart';
@@ -212,6 +213,7 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),

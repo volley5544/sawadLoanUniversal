@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
 import '../services/native_bridge.dart';
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 
 /// Loan-register entry/category page (รายการ) reached from the
@@ -44,6 +45,7 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(

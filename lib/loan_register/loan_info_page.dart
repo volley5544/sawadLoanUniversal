@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_field_row.dart';
 import 'components/register_step_indicator.dart';
@@ -38,6 +39,7 @@ class _LoanInfoPageState extends State<LoanInfoPage> {
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),

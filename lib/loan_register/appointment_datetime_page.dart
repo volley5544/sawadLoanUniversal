@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 
 /// วันที่-เวลา นัดหมาย — appointment date + time-slot picker (slide 9,
@@ -54,6 +55,7 @@ class _AppointmentDateTimePageState extends State<AppointmentDateTimePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),

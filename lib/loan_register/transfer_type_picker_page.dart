@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 
 /// Full-screen selector for ประเภทการโอน (transfer type) — screen #5 on
@@ -33,6 +34,7 @@ class _TransferTypePickerPageState extends State<TransferTypePickerPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),

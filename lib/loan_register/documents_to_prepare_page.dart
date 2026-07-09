@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
 import '../services/native_bridge.dart';
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'models/loan_register_form.dart';
 
@@ -33,6 +34,7 @@ class DocumentsToPreparePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),

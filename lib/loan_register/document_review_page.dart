@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
+import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'models/loan_register_form.dart';
 
@@ -38,6 +39,7 @@ class _DocumentReviewPageState extends State<DocumentReviewPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        actions: const [EnvVersionTag()],
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),
