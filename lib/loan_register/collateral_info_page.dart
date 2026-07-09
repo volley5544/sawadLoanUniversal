@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
 import '../router/app_router.dart';
+import '../services/native_bridge.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_autocomplete_field.dart';
@@ -480,17 +481,35 @@ class _CollateralInfoPageState extends State<CollateralInfoPage> {
     );
   }
 
-  /// Open the in-app camera capture screen (with the document mask), then cache
-  /// the returned bytes for display and keep the base64 on the form for the
-  /// future OCR API call.
+  /// Capture the collateral document photo, then cache the returned bytes for
+  /// display and keep the base64 on the form for the future OCR API call.
+  ///
+  /// Inside the native host the photo comes from the **host camera**
+  /// (`openCamera` bridge — see [NativeCameraBridge]); in a plain browser it
+  /// falls back to the in-web [OcrCapturePage] (document mask).
   Future<void> _captureDocument() async {
-    final bytes = await Navigator.of(context).push<Uint8List>(
-      MaterialPageRoute(builder: (_) => const OcrCapturePage()),
-    );
+    Uint8List? bytes;
+    if (NativeCameraBridge.isSupported) {
+      try {
+        bytes = await NativeCameraBridge.captureDocument('camera_collateral');
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ไม่สามารถเปิดกล้องได้')),
+          );
+        }
+        return;
+      }
+    } else {
+      bytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => const OcrCapturePage()),
+      );
+    }
     if (!mounted || bytes == null) return; // null = cancelled / no image
+    final captured = bytes;
     setState(() {
-      _docBytes = bytes;
-      _form.documentImageBase64 = base64Encode(bytes);
+      _docBytes = captured;
+      _form.documentImageBase64 = base64Encode(captured);
     });
     // TODO: POST the image to the OCR API and auto-fill the fields below.
   }

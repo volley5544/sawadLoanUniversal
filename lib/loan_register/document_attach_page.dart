@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
+import '../services/native_bridge.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import 'components/register_field_row.dart';
@@ -66,7 +67,8 @@ class _DocumentAttachPageState extends State<DocumentAttachPage> {
                   _AttachDocCard(
                     title: 'บัตรประชาชน',
                     bytes: _idCardBytes,
-                    onAttach: () => _attach((b) => _idCardBytes = b),
+                    onAttach: () =>
+                        _attach('idcard', (b) => _idCardBytes = b),
                     onDelete: () => setState(() => _idCardBytes = null),
                     onView: () => _viewDocument(_idCardBytes!),
                   ),
@@ -74,7 +76,8 @@ class _DocumentAttachPageState extends State<DocumentAttachPage> {
                   _AttachDocCard(
                     title: 'เล่มทะเบียนรถ',
                     bytes: _vehicleRegBytes,
-                    onAttach: () => _attach((b) => _vehicleRegBytes = b),
+                    onAttach: () => _attach(
+                        'vehicle_registration', (b) => _vehicleRegBytes = b),
                     onDelete: () => setState(() => _vehicleRegBytes = null),
                     onView: () => _viewDocument(_vehicleRegBytes!),
                   ),
@@ -85,7 +88,8 @@ class _DocumentAttachPageState extends State<DocumentAttachPage> {
                   _AttachDocCard(
                     title: 'เอกสารเพิ่มเติม',
                     bytes: _extraBytes,
-                    onAttach: () => _attach((b) => _extraBytes = b),
+                    onAttach: () =>
+                        _attach('document', (b) => _extraBytes = b),
                     onDelete: () => setState(() => _extraBytes = null),
                     onView: () => _viewDocument(_extraBytes!),
                   ),
@@ -180,13 +184,32 @@ class _DocumentAttachPageState extends State<DocumentAttachPage> {
     );
   }
 
-  /// Open the in-app camera and store the captured bytes in the given slot.
-  Future<void> _attach(ValueChanged<Uint8List> assign) async {
-    final bytes = await Navigator.of(context).push<Uint8List>(
-      MaterialPageRoute(builder: (_) => const OcrCapturePage()),
-    );
-    if (!mounted || bytes == null) return;
-    setState(() => assign(bytes));
+  /// Capture a document photo and store the bytes in the given slot.
+  ///
+  /// Inside the native host the photo comes from the **host camera**
+  /// (`openCamera` bridge, [action] = mask type — see [NativeCameraBridge]);
+  /// in a plain browser it falls back to the in-web [OcrCapturePage].
+  Future<void> _attach(String action, ValueChanged<Uint8List> assign) async {
+    Uint8List? bytes;
+    if (NativeCameraBridge.isSupported) {
+      try {
+        bytes = await NativeCameraBridge.captureDocument(action);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ไม่สามารถเปิดกล้องได้')),
+          );
+        }
+        return;
+      }
+    } else {
+      bytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => const OcrCapturePage()),
+      );
+    }
+    if (!mounted || bytes == null) return; // null = cancelled / no image
+    final captured = bytes;
+    setState(() => assign(captured));
   }
 
   /// Open the contract-document review + NDID sign flow; flip to the verified

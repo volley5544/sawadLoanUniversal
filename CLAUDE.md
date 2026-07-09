@@ -137,8 +137,9 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   Editable name/phone/Thai-ID; bottom-sheet pickers for gender/nationality/
   occupation; date pickers; address cards + radio choice.
 - `collateral_info_page.dart` — **Step 2: ข้อมูลหลักประกัน**. The ถ่ายรูปภาพ/OCR
-  button calls `NativeCameraBridge.captureDocument('camera_collateral')`; the
-  returned base64 is stored on `form.documentImageBase64` and shown as an
+  button calls `NativeCameraBridge.captureDocument('camera_collateral')`
+  (falling back to the in-web `OcrCapturePage` camera mask in a plain browser);
+  the returned base64 is stored on `form.documentImageBase64` and shown as an
   uploaded-doc card (`Image.memory`, view-in-`InteractiveViewer`, delete).
   Dropdowns + autocomplete fields for vehicle details.
 - `loan_info_page.dart` — **Step 3: ข้อมูลสินเชื่อ + ข้อมูลการโอนเงิน**. Mostly
@@ -150,7 +151,9 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   the pages below).
 - `document_attach_page.dart` — **Step 4: เอกสารแนบ** (slide 8 frame 1 + slide 9
   frame 1). Attach cards for บัตรประชาชน / เล่มทะเบียนรถ / เอกสารเพิ่มเติม (each
-  opens `OcrCapturePage`, shows view/delete), plus a เอกสารประกอบสัญญา section
+  captures via the `openCamera` bridge — actions `idcard` /
+  `vehicle_registration` / `document` — falling back to `OcrCapturePage` in a
+  plain browser; shows view/delete), plus a เอกสารประกอบสัญญา section
   whose ตรวจสอบเอกสาร row opens the NDID flow. On NDID success the card flips to
   a signed state (green check + ดาวน์โหลดเอกสาร) and the bottom "ถัดไป" unlocks →
   pushes step 5. Gated by `form.ndidVerified`.
