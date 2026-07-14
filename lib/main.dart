@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'config/app_environment.dart';
 import 'router/app_router.dart';
 import 'router/url_strategy.dart';
 import 'services/native_bridge.dart';
+import 'services/user_api.dart';
 
 late AppState appState;
 
@@ -38,14 +40,43 @@ Future<void> main() async {
     (bytes) => appState.setRecoveredDocImage(base64Encode(bytes)),
   );
 
-  // Launch param from the native WebView host, e.g.
-  // https://.../?hashThaiId=abc123 — used to fetch the customer profile.
-  // (Path URL strategy is on, so the query is before any path, not after a #.)
+  // Launch params from the native WebView host, e.g.
+  // https://.../?hashThaiId=abc123&token=eyJ... — hashThaiId keys the profile
+  // + address lookups; token is the Firebase auth token the address endpoint
+  // needs. (Path URL strategy is on, so the query is before any path.)
   appState.hashThaiId = Uri.base.queryParameters['hashThaiId'] ?? '';
-  // TODO: if hashThaiId is set, call the profile API and
-  // appState.setCustomerDetailFromJson(...) before/while the UI loads.
+  appState.authToken = Uri.base.queryParameters['token'] ?? '';
+
+  // Fetch the customer profile + address book in the background so step 1
+  // auto-fills. Deliberately not awaited: the UI boots on persisted/mock data
+  // and re-seeds when the fetch lands (AppState notifies its listeners).
+  unawaited(_loadCustomerProfile());
 
   runApp(const MyApp());
+}
+
+/// Loads the customer profile (`/user/detail`) and address book
+/// (`/profile/address`) for the launch `hashThaiId`. Each failure is logged
+/// and swallowed — the UI keeps its persisted/mock data.
+Future<void> _loadCustomerProfile() async {
+  final hash = appState.hashThaiId;
+  if (hash.isEmpty) return;
+
+  try {
+    final detail = await UserApi.fetchUserDetail(hash);
+    appState.update(() => appState.customerDetail = detail);
+  } catch (e) {
+    // ignore: avoid_print — intentional: surface in the WebView console.
+    print('[SawadLoanUniversal] user/detail fetch failed: $e');
+  }
+
+  try {
+    appState.customerAddressBook =
+        await UserApi.fetchAddressBook(hash, token: appState.authToken);
+  } catch (e) {
+    // ignore: avoid_print
+    print('[SawadLoanUniversal] profile/address fetch failed: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {

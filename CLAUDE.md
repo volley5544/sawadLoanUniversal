@@ -27,10 +27,17 @@ code comments are English.
   the design) seeds every field so screens render fully populated. Option lists
   (brands, models, provinces, installment counts, transfer types) are hardcoded
   `const` lists in the pages, not fetched.
-- **Startup param:** the native host launches the web URL with
-  `?hashThaiId=<...>`; `main.dart` reads it into `appState.hashThaiId`. The
-  intended flow (TODO) is: fetch the customer profile by that hash, then
-  `appState.setCustomerDetailFromJson(...)` so step 1 auto-fills.
+- **Startup params:** the native host launches the web URL with
+  `?hashThaiId=<...>&token=<firebase-jwt>` (both appended by the host's
+  สมัครสินเชื่อ button / RouteGenerator). `main.dart` reads them into
+  `appState.hashThaiId` / `appState.authToken`, then fires an **un-awaited**
+  `_loadCustomerProfile()`: `UserApi.fetchUserDetail(hash)` →
+  `appState.customerDetail` (persists + notifies) and
+  `UserApi.fetchAddressBook(hash, token: …)` → `appState.customerAddressBook`
+  (in-memory). Step 1 auto-fills from these; if the fetch lands while step 1
+  is already open, the page re-seeds via an AppState listener (only when it
+  owns its form, i.e. opened without `extra`). Fetch failures log to console
+  and the UI keeps persisted/mock data.
 - **OCR/camera is delegated to the native host** (the web build has no camera).
   Tapping ถ่ายรูปภาพ/OCR calls `NativeCameraBridge` which asks the host to open
   its camera; the host returns the photo as base64. There is a `TODO` in
@@ -203,6 +210,31 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   "ถัดไป"), `appointmentBranch`, `appointmentDateTime`. Attached document bytes
   on step 4 are held in page state only (not on the form). When adding fields
   here, also seed them in `mock()`.
+
+### Mobile API client (`lib/services/user_api.dart`)
+
+`UserApi` — client for the srisawad **mobile API** (`api_data/api1.md`,
+untracked): `fetchUserDetail(hash)` (`GET /user/detail?hash_thai_id=…`, payload
+under `results` with its own `code`/`message` — non-200 code throws) and
+`fetchAddressBook(hash, token: …)` (`GET /profile/address/{hash}`, needs the
+`Authorization: Bearer` token from the `?token=` launch param). Base URL +
+`x-srisawad` header are per-environment on `AppEnvironment`
+(prod `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
+uat `https://dev.swpfin.com:7076`, no header). Errors throw
+`UserApiException`. Models: `models/customer_detail.dart` (profile) and
+`models/customer_address.dart` (`AddressInfo` ×4 + `data_date`;
+`AddressInfo.oneLine` renders the display string used on step 1 — id_card →
+idCardAddress, current → currentAddress, other → workAddress).
+
+### API transport (`lib/services/api_transport.dart`)
+
+`sendApiRequest(method, url, headers, body)` — shared GET/POST plumbing for
+`NdidApi` + `UserApi`: inside the native host every request goes through the
+host's `httpRequest` JS bridge handler (native HTTP, no CORS; the host
+allowlists the NDID gateway + mobile API bases), in a plain browser it falls
+back to package:http (works only for CORS-enabled endpoints — the mobile API
+sends `access-control-allow-origin: *`, the NDID gateway does not). Network
+failures throw `ApiTransportException`.
 
 ### NDID API client (`lib/services/ndid_api.dart`)
 

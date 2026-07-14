@@ -1,10 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../config/app_environment.dart';
-import 'native_bridge.dart';
+import 'api_transport.dart';
 
 /// Client for the **NDID local-node API** (the `localhost:7088` wrapper in
 /// `ndid_doc/NDID_Local_API.postman_collection.json`; it fronts the NDID
@@ -110,11 +107,9 @@ class NdidApi {
   }
 
   // ── HTTP plumbing ──────────────────────────────────────────────────
-  //
-  // Inside the native host, requests go through the host's `httpRequest`
-  // bridge handler (native HTTP — no CORS; the NDID gateway sends no
-  // Access-Control headers, so a direct browser fetch is blocked). In a
-  // plain browser (dev with a CORS-enabled node) plain `http` is used.
+  // Requests go through [sendApiRequest] (host bridge inside the WebView —
+  // the NDID gateway sends no CORS headers, so a direct browser fetch is
+  // blocked; plain `http` only in a plain browser).
 
   static Future<dynamic> _post(String path, Map<String, dynamic> body) =>
       _request('POST', path, body: jsonEncode(body));
@@ -123,49 +118,19 @@ class NdidApi {
 
   static Future<dynamic> _request(String method, String path,
       {String? body}) async {
-    final what = '$method $path';
-    final int statusCode;
-    final String bodyText;
-    if (NativeCameraBridge.isSupported) {
-      final Map<String, dynamic>? res;
-      try {
-        res = await NativeCameraBridge.sendHttpRequest(
-          method: method,
-          url: _uri(path).toString(),
-          headers: _headers(json: body != null),
-          body: body,
-        ).timeout(_timeout);
-      } on TimeoutException {
-        throw NdidApiException('NDID API timeout: $what');
-      } catch (e) {
-        throw NdidApiException('NDID bridge error: $e');
-      }
-      if (res == null) {
-        throw NdidApiException(
-            'Host app is outdated (no httpRequest bridge handler)');
-      }
-      statusCode = (res['status'] as num?)?.toInt() ?? 0;
-      if (statusCode == 0) {
-        throw NdidApiException('NDID API unreachable: ${res['error']}');
-      }
-      bodyText = (res['body'] ?? '').toString();
-    } else {
-      final http.Response res;
-      try {
-        res = body != null
-            ? await http
-                .post(_uri(path), headers: _headers(json: true), body: body)
-                .timeout(_timeout)
-            : await http.get(_uri(path), headers: _headers()).timeout(_timeout);
-      } on TimeoutException {
-        throw NdidApiException('NDID API timeout: $what');
-      } catch (e) {
-        throw NdidApiException('NDID API unreachable: $e');
-      }
-      statusCode = res.statusCode;
-      bodyText = utf8.decode(res.bodyBytes);
+    final ApiHttpResult res;
+    try {
+      res = await sendApiRequest(
+        method,
+        _uri(path),
+        headers: _headers(json: body != null),
+        body: body,
+        timeout: _timeout,
+      );
+    } on ApiTransportException catch (e) {
+      throw NdidApiException('NDID API ${e.message}');
     }
-    return _decode(statusCode, bodyText);
+    return _decode(res.statusCode, res.body);
   }
 
   static dynamic _decode(int statusCode, String bodyText) {

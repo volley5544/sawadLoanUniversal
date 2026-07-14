@@ -1,3 +1,4 @@
+import '../../models/customer_address.dart';
 import '../../models/customer_detail.dart';
 
 /// In-memory holder for the loan-register (สมัครสินเชื่อ) wizard.
@@ -173,8 +174,15 @@ class LoanRegisterForm {
   /// renders. Fields the customer record doesn't provide (gender's exact value,
   /// ID-card issue/expiry dates, occupation) are left blank for the user to
   /// fill.
-  factory LoanRegisterForm.fromCustomerDetail(CustomerDetail c) {
+  factory LoanRegisterForm.fromCustomerDetail(
+    CustomerDetail c, {
+    CustomerAddressBook? addresses,
+  }) {
+    // The address API (when loaded) gives the authoritative per-type
+    // addresses; the profile's own single address is the fallback.
     final address = _composeAddress(c);
+    String pick(AddressInfo? a) =>
+        (a != null && !a.isEmpty) ? a.oneLine : address;
     return LoanRegisterForm.mock()
       ..firstName = c.firstName.trim()
       ..lastName = c.lastName.trim()
@@ -185,9 +193,9 @@ class LoanRegisterForm {
       ..nationality = 'ไทย'
       ..cardIssueDate = ''
       ..cardExpiryDate = ''
-      ..idCardAddress = address
-      ..workAddress = address
-      ..currentAddress = address
+      ..idCardAddress = pick(addresses?.idCardAddress)
+      ..workAddress = pick(addresses?.otherAddress)
+      ..currentAddress = pick(addresses?.currentAddress)
       ..occupationGroup = ''
       ..monthlyIncome = ''
       ..workTenure = ''

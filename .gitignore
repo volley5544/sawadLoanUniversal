@@ -49,3 +49,6 @@ app.*.map.json
 
 # NDID API docs / Postman collection (internal spec — do not commit)
 ndid_doc/
+
+# Mobile API docs with real example data/tokens (do not commit)
+api_data/

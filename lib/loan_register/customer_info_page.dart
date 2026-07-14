@@ -27,29 +27,68 @@ class CustomerInfoPage extends StatefulWidget {
 }
 
 class _CustomerInfoPageState extends State<CustomerInfoPage> {
-  late final LoanRegisterForm _form;
+  late LoanRegisterForm _form;
 
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
   late final TextEditingController _phone;
   late final TextEditingController _thaiId;
 
+  /// Last profile/address instances this page seeded from, so the AppState
+  /// listener only re-seeds when they actually change (the startup fetch can
+  /// land after this page is already open).
+  Object? _seenDetail;
+  Object? _seenAddressBook;
+
   @override
   void initState() {
     super.initState();
     // When opened from the menu (no form passed), auto-fill from the parsed
-    // CustomerDetail held in the global AppState.
-    _form = widget.form ??
-        LoanRegisterForm.fromCustomerDetail(AppState().customerDetail);
+    // CustomerDetail (+ address book) held in the global AppState.
+    _seenDetail = AppState().customerDetail;
+    _seenAddressBook = AppState().customerAddressBook;
+    _form = widget.form ?? _seedForm();
 
     _firstName = TextEditingController(text: _form.firstName);
     _lastName = TextEditingController(text: _form.lastName);
     _phone = TextEditingController(text: _form.phone);
     _thaiId = TextEditingController(text: _form.thaiId);
+
+    // Re-seed if the startup profile fetch finishes while this page is open
+    // (only when the page owns its form — a form passed in stays untouched).
+    if (widget.form == null) {
+      AppState().addListener(_onAppStateChanged);
+    }
+  }
+
+  LoanRegisterForm _seedForm() => LoanRegisterForm.fromCustomerDetail(
+        AppState().customerDetail,
+        addresses: AppState().customerAddressBook,
+      );
+
+  void _onAppStateChanged() {
+    final state = AppState();
+    if (identical(state.customerDetail, _seenDetail) &&
+        identical(state.customerAddressBook, _seenAddressBook)) {
+      return; // unrelated notification (e.g. recovered capture)
+    }
+    _seenDetail = state.customerDetail;
+    _seenAddressBook = state.customerAddressBook;
+    if (!mounted) return;
+    setState(() {
+      _form = _seedForm();
+      _firstName.text = _form.firstName;
+      _lastName.text = _form.lastName;
+      _phone.text = _form.phone;
+      _thaiId.text = _form.thaiId;
+    });
   }
 
   @override
   void dispose() {
+    if (widget.form == null) {
+      AppState().removeListener(_onAppStateChanged);
+    }
     _firstName.dispose();
     _lastName.dispose();
     _phone.dispose();

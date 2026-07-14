@@ -58,15 +58,21 @@ enum AppEnvironment {
   prod(
     name: 'prod',
     firebaseProjectAlias: 'prod',
+    mobileApiBase: 'https://mobile-api.swpfin.com',
+    srisawadHeader: 'x1',
   ),
   uat(
     name: 'uat',
     firebaseProjectAlias: 'uat',
+    mobileApiBase: 'https://dev.swpfin.com:7076',
+    srisawadHeader: '', // UAT doesn't require the x-srisawad header
   );
 
   const AppEnvironment({
     required this.name,
     required this.firebaseProjectAlias,
+    required this.mobileApiBase,
+    required this.srisawadHeader,
   });
 
   /// Short identifier, e.g. `prod` / `uat`.
@@ -74,6 +80,15 @@ enum AppEnvironment {
 
   /// Alias used in `.firebaserc` (`firebase deploy -P <alias>`).
   final String firebaseProjectAlias;
+
+  /// Base URL of the srisawad **mobile API** (customer profile + addresses —
+  /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing
+  /// slash.
+  final String mobileApiBase;
+
+  /// Value for the `x-srisawad` request header the mobile API expects; empty
+  /// means "don't send the header" (UAT).
+  final String srisawadHeader;
 
   /// The `ENV` value baked in at build time. Empty for local runs.
   static const String _raw = String.fromEnvironment('ENV');

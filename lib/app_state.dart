@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/customer_address.dart';
 import 'models/customer_detail.dart';
 
 /// Global, app-wide state. Singleton — `AppState()` always returns the same
@@ -37,6 +38,21 @@ class AppState extends ChangeNotifier {
   /// Hashed Thai ID passed in by the native WebView host as a launch query
   /// param (`?hashThaiId=...`). Used to fetch the customer profile on startup.
   String hashThaiId = '';
+
+  /// Firebase auth token passed in by the native WebView host as a launch
+  /// query param (`?token=...`, appended by the สมัครสินเชื่อ button). Sent as
+  /// `Authorization: Bearer` on the mobile API's address endpoint.
+  String authToken = '';
+
+  /// Customer address book fetched on startup (`UserApi.fetchAddressBook`).
+  /// Null until loaded (or when the fetch failed). In-memory only — refetched
+  /// each launch.
+  CustomerAddressBook? _customerAddressBook;
+  CustomerAddressBook? get customerAddressBook => _customerAddressBook;
+  set customerAddressBook(CustomerAddressBook? value) {
+    _customerAddressBook = value;
+    notifyListeners();
+  }
 
   /// This web build's version stamp (from `--dart-define=WEB_VERSION`, set in
   /// `main.dart` to `kWebVersion`). Lets us detect a stale cached web build —
