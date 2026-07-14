@@ -20,7 +20,7 @@ code comments are English.
   hop is **real inside the native host, simulated in a plain browser**: when
   `NativeCameraBridge.isSupported` the NDID pages call the NDID local-node API
   (`lib/services/ndid_api.dart`, base URL `--dart-define=NDID_API_BASE`,
-  default `http://localhost:7088`) — list IdPs → `POST /rp/verify` → poll
+  default `https://dev.swpfin.com/dap`) — list IdPs → `POST /rp/verify` → poll
   status; otherwise the mock bank grid + "จำลองยืนยันตัวตนสำเร็จ" button remain
   (the bank's own app screens are third-party either way).
 - **Mock data drives the UI.** `LoanRegisterForm.mock()` (matches "slide 7" of
@@ -218,8 +218,8 @@ node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
 web build can't keep it secret from clients anyway). Base URL: `kNdidApiBase` in
 `app_environment.dart` (`--dart-define=NDID_API_BASE`, default
-`http://localhost:7088` — for a real device build it must point at a
-device-reachable host, and being an `http:` URL it needs the WebView to allow
+`https://dev.swpfin.com/dap`; point it at `http://localhost:7088` to hit a
+locally-run node — an `http:` URL additionally needs the WebView to allow
 mixed content when the app is served over `https:`).
 
 ### Web ↔ native bridge (`lib/services/`)

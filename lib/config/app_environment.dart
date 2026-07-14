@@ -31,21 +31,19 @@ const String kWebVersion = String.fromEnvironment(
   defaultValue: '0',
 );
 
-/// Base URL of the **NDID local-node API** (the `localhost:7088` wrapper from
-/// the NDID Postman collection). Override at build time:
+/// Base URL of the **NDID local-node API** (the node wrapper from the NDID
+/// Postman collection, hosted on the dev gateway). Override at build time:
 ///
 /// ```sh
-/// flutter build web ... --dart-define=NDID_API_BASE=https://ndid-node.example.com
+/// flutter build web ... --dart-define=NDID_API_BASE=http://localhost:7088
 /// ```
 ///
-/// The default only works when the node runs on the same machine as the
-/// browser — for a real mobile device the build must point at a
-/// device-reachable host. Used by `lib/services/ndid_api.dart`, and only when
-/// running inside the native host (plain-browser builds keep the simulated
-/// NDID flow).
+/// Used by `lib/services/ndid_api.dart`, and only when running inside the
+/// native host (plain-browser builds keep the simulated NDID flow). No
+/// trailing slash — paths are appended as `/idp/list`, `/rp/verify`, ….
 const String kNdidApiBase = String.fromEnvironment(
   'NDID_API_BASE',
-  defaultValue: 'http://localhost:7088',
+  defaultValue: 'https://dev.swpfin.com/dap',
 );
 
 /// API key for the NDID local-node API, sent as an `X-API-Key` header on
