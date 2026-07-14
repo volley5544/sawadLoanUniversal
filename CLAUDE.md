@@ -16,9 +16,13 @@ code comments are English.
   way through **step 5** (ข้อมูลลูกค้า → หลักประกัน → สินเชื่อ → เอกสารแนบ/NDID →
   นัดหมายส่งเอกสาร); the final "ถัดไป" on step 5 just shows a `SnackBar`
   ("บันทึกข้อมูลเรียบร้อย"). "บันทึกเตรียมข้อมูล" (save draft) buttons only show a
-  confirmation `SnackBar` — nothing persists. The NDID identity-verification hop
-  is **simulated** (a "จำลองยืนยันตัวตนสำเร็จ" button), since the bank's own app
-  screens are third-party.
+  confirmation `SnackBar` — nothing persists. The NDID identity-verification
+  hop is **real inside the native host, simulated in a plain browser**: when
+  `NativeCameraBridge.isSupported` the NDID pages call the NDID local-node API
+  (`lib/services/ndid_api.dart`, base URL `--dart-define=NDID_API_BASE`,
+  default `http://localhost:7088`) — list IdPs → `POST /rp/verify` → poll
+  status; otherwise the mock bank grid + "จำลองยืนยันตัวตนสำเร็จ" button remain
+  (the bank's own app screens are third-party either way).
 - **Mock data drives the UI.** `LoanRegisterForm.mock()` (matches "slide 7" of
   the design) seeds every field so screens render fully populated. Option lists
   (brands, models, provinces, installment counts, transfer types) are hardcoded
@@ -161,10 +165,18 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   list + an acknowledge checkbox; the "ลงนามเอกสารและยืนยันตัวตน NDID" button
   starts the NDID flow and, on success, pops `true` back to step 4.
 - `ndid_bank_select_page.dart` — **เลือกผู้ให้บริการ NDID** (slide 8 frames 3–4).
-  Registered vs not-registered bank grids; ย้อนกลับ / ถัดไป.
+  Registered vs not-registered bank grids; ย้อนกลับ / ถัดไป. Inside the host the
+  grids come from `NdidApi.listIdps()` (with the form's Thai ID → registered;
+  full list minus those → not registered) with loading/retry states; a plain
+  browser keeps the hardcoded mock banks. The picked IdP node id is stored on
+  `form.ndidIdpId` and passed to the verify page.
 - `ndid_verify_page.dart` — **ยืนยันตัวตน** countdown screen → **ยืนยันตัวตน
   สำเร็จ** (slide 8 frame 5 + final frame). One page, two phases. The bank's own
-  app (K+ PIN pad, NDID consent) is **third-party — not rebuilt**; a
+  app (K+ PIN pad, NDID consent) is **third-party — not rebuilt**. Inside the
+  host it creates the real request (`NdidApi.createVerifyRequest`, 1 h
+  `request_timeout` matching the countdown) and polls every 3 s; `ACCEPTED` →
+  success phase, `REJECTED`/`TIMEOUT`/`CANCELLED` → error + ลองใหม่; ยกเลิก
+  best-effort closes the request. In a plain browser a
   "จำลองยืนยันตัวตนสำเร็จ" button simulates the IDP callback. Pops `true`.
 - `appointment_page.dart` — **Step 5: นัดหมายส่งเอกสาร** (slide 9 frame 2). The
   "เพิ่ม สาขาและวันที่-เวลานัดหมาย" card opens `documents_to_prepare_page`;
@@ -191,6 +203,22 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   "ถัดไป"), `appointmentBranch`, `appointmentDateTime`. Attached document bytes
   on step 4 are held in page state only (not on the form). When adding fields
   here, also seed them in `mock()`.
+
+### NDID API client (`lib/services/ndid_api.dart`)
+
+`NdidApi` — static `http` client for the **NDID local-node API** (the
+`localhost:7088` wrapper; Postman collection + proxy spec live in the
+untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
+`listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
+mode 2 / min_ial 1.1 / min_aal 1 / "Authen Only"), `getVerifyStatus()`
+(`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
+TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
+`NdidApiException` (parses the node's `{status, message}` error body). The
+node manages its own NDID token — no auth header. Base URL: `kNdidApiBase` in
+`app_environment.dart` (`--dart-define=NDID_API_BASE`, default
+`http://localhost:7088` — for a real device build it must point at a
+device-reachable host, and being an `http:` URL it needs the WebView to allow
+mixed content when the app is served over `https:`).
 
 ### Web ↔ native bridge (`lib/services/`)
 
@@ -242,7 +270,7 @@ page → page as go_router `extra` (see `router/app_router.dart`).
 
 `shared_preferences` (persist `CustomerDetail`), `google_fonts` (NotoSansThai),
 `hexcolor`, `flutter_svg`, `web` (window/console bindings for the native
-bridge). The `camera` plugin was **removed** — the host owns the camera. SDK
+bridge), `http` (NDID local-node API client). The `camera` plugin was **removed** — the host owns the camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
 `colorScheme: .fromSeed(...)`, `mainAxisAlignment: .center`); needs a recent
 toolchain (built on Flutter 3.38 / Dart 3.10).

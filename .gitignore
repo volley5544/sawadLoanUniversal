@@ -46,3 +46,6 @@ app.*.map.json
 
 # Firebase Hosting deploy cache (regenerated on each `firebase deploy`)
 .firebase/
+
+# NDID API docs / Postman collection (internal spec — do not commit)
+ndid_doc/

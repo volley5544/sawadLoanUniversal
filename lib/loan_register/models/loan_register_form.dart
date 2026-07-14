@@ -68,6 +68,12 @@ class LoanRegisterForm {
   /// step-4 "ถัดไป" and flips the contract-docs card to its verified state.
   bool ndidVerified;
 
+  /// NDID node id of the IdP (bank) picked on [NdidBankSelectPage] — consumed
+  /// by [NdidVerifyPage] to create the real verification request when running
+  /// inside the native host. Transient selection state, so not seeded in
+  /// [mock()]. Null in the plain-browser (simulated) flow.
+  String? ndidIdpId;
+
   // ── Step 5: นัดหมายส่งเอกสาร ──────────────────────────────────────────
   String appointmentBranch; // สาขานัดหมาย
   String appointmentDateTime; // วันที่-เวลานัดหมาย (Buddhist dd/MM/yyyy HH:mm)

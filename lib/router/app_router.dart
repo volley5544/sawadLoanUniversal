@@ -96,7 +96,8 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.ndidBankSelect,
-      builder: (context, state) => const NdidBankSelectPage(),
+      builder: (context, state) =>
+          NdidBankSelectPage(form: state.extra as LoanRegisterForm?),
     ),
     GoRoute(
       path: AppRoutes.ndidVerify,
