@@ -213,7 +213,13 @@ untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
 mode 2 / min_ial 1.1 / min_aal 1 / "Authen Only"), `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
-`NdidApiException` (parses the node's `{status, message}` error body). The
+`NdidApiException` (parses the node's `{status, message}` error body).
+**Transport:** the gateway sends no CORS headers (and 401s preflights), so a
+browser fetch is blocked — inside the host every request goes through the
+host's `httpRequest` JS bridge handler (native HTTP, allowlisted to the NDID
+gateway; contract in `native_bridge.dart`'s doc comment, implementation in the
+srisawad app's `loan_universal_web_widget.dart`); plain `http` is only the
+plain-browser/dev fallback. The
 node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
 web build can't keep it secret from clients anyway). Base URL: `kNdidApiBase` in

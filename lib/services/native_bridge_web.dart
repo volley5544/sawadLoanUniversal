@@ -18,6 +18,13 @@ const String _kCloseHandlerName = 'closeWebview';
 /// ...)`).
 const String _kBranchPickerHandlerName = 'openBranchPicker';
 
+/// Name of the JavaScript handler the native host registers to perform an
+/// HTTP request natively on our behalf
+/// (`addJavaScriptHandler(handlerName: 'httpRequest', ...)`). Used to reach
+/// the NDID gateway, whose responses lack CORS headers so a direct browser
+/// fetch is blocked. The host allowlists which URLs it will call.
+const String _kHttpRequestHandlerName = 'httpRequest';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -93,6 +100,49 @@ class NativeCameraBridge {
 
     final json = result.isUndefinedOrNull ? null : (result as JSString).toDart;
     if (json == null || json.isEmpty) return null; // cancelled
+
+    final decoded = jsonDecode(json);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  /// Asks the native host to perform an HTTP request natively (no CORS) and
+  /// resolves with `{'status': int, 'body': String?, 'error': String?}`.
+  /// `status == 0` means the request never reached the server (network error
+  /// or URL rejected by the host's allowlist — see `error`).
+  ///
+  /// Returns `null` if the host doesn't implement the handler (old host app
+  /// build). Throws if the bridge is unavailable.
+  static Future<Map<String, dynamic>?> sendHttpRequest({
+    required String method,
+    required String url,
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    final host = _host;
+    if (host == null) {
+      throw UnsupportedError(
+        'Not running inside the flutter_inappwebview host '
+        '(window.flutter_inappwebview is undefined).',
+      );
+    }
+
+    final payload = jsonEncode({
+      'method': method,
+      'url': url,
+      if (headers != null) 'headers': headers,
+      if (body != null) 'body': body,
+    });
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kHttpRequestHandlerName.toJS,
+          payload.toJS,
+        )
+        .toDart;
+
+    final json = result.isUndefinedOrNull ? null : (result as JSString).toDart;
+    if (json == null || json.isEmpty) return null; // handler missing/no reply
 
     final decoded = jsonDecode(json);
     return decoded is Map<String, dynamic> ? decoded : null;

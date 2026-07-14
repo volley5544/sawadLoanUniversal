@@ -65,6 +65,33 @@
 ///
 /// Returning `null`/`''` = cancelled (resolves with `null`). In a plain
 /// browser (no host) the web falls back to its own searchable branch list.
+///
+/// ## `httpRequest` — CORS-free HTTP proxy (NDID API)
+///
+/// The NDID gateway (`kNdidApiBase`) sends no CORS headers and 401s browser
+/// preflights, so the web can't fetch it directly. Inside the host, `NdidApi`
+/// sends every request through this handler instead; the host performs it
+/// with native HTTP and returns the result. The single argument and the
+/// return value are **JSON strings**:
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'httpRequest',
+///   callback: (args) async {
+///     final req = jsonDecode(args.first as String) as Map<String, dynamic>;
+///     // req: {method: 'GET'|'POST', url, headers: {..}?, body: String?}
+///     // SECURITY: only proxy allowlisted URL prefixes (the NDID gateway).
+///     if (!allowedPrefixes.any('${req['url']}'.startsWith)) {
+///       return jsonEncode({'status': 0, 'error': 'URL not allowed'});
+///     }
+///     final res = await doNativeHttp(req); // http.get/post + timeout
+///     return jsonEncode({'status': res.statusCode, 'body': res.body});
+///     // network failure -> {'status': 0, 'error': '...'}
+///   },
+/// );
+/// ```
+///
+/// (Implemented in the srisawad host's `loan_universal_web_widget.dart`.)
 library;
 
 export 'native_bridge_stub.dart'
