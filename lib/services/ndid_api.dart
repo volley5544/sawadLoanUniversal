@@ -16,9 +16,9 @@ import '../config/app_environment.dart';
 ///   3. `GET  /rp/verify/{referenceId}` — poll the request status
 ///   4. `POST /rp/verify/{referenceId}/close` — cancel (best effort)
 ///
-/// The node manages the NDID token itself (its `/token` endpoint), so no auth
-/// header is sent. Base URL comes from [kNdidApiBase]
-/// (`--dart-define=NDID_API_BASE`).
+/// The node manages the NDID token itself (its `/token` endpoint); client
+/// auth is an `X-API-Key` header ([kNdidApiKey]). Base URL comes from
+/// [kNdidApiBase] (`--dart-define=NDID_API_BASE`).
 class NdidApi {
   NdidApi._();
 
@@ -26,6 +26,11 @@ class NdidApi {
   static const String citizenIdNamespace = 'citizen_id';
 
   static Uri _uri(String path) => Uri.parse('$kNdidApiBase$path');
+
+  static Map<String, String> _headers({bool json = false}) => {
+        if (json) 'Content-Type': 'application/json',
+        if (kNdidApiKey.isNotEmpty) 'X-API-Key': kNdidApiKey,
+      };
 
   /// List identity providers. With [identifier] set (13-digit Thai ID) the
   /// node returns only the IdPs the citizen has onboarded with; without it,
@@ -110,8 +115,7 @@ class NdidApi {
     try {
       res = await http
           .post(_uri(path),
-              headers: const {'Content-Type': 'application/json'},
-              body: jsonEncode(body))
+              headers: _headers(json: true), body: jsonEncode(body))
           .timeout(_timeout);
     } on TimeoutException {
       throw NdidApiException('NDID API timeout: POST $path');
@@ -124,7 +128,7 @@ class NdidApi {
   static Future<dynamic> _get(String path) async {
     final http.Response res;
     try {
-      res = await http.get(_uri(path)).timeout(_timeout);
+      res = await http.get(_uri(path), headers: _headers()).timeout(_timeout);
     } on TimeoutException {
       throw NdidApiException('NDID API timeout: GET $path');
     } catch (e) {

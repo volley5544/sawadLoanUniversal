@@ -214,7 +214,9 @@ mode 2 / min_ial 1.1 / min_aal 1 / "Authen Only"), `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body). The
-node manages its own NDID token — no auth header. Base URL: `kNdidApiBase` in
+node manages its own NDID token; client auth is an `X-API-Key` header
+(`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
+web build can't keep it secret from clients anyway). Base URL: `kNdidApiBase` in
 `app_environment.dart` (`--dart-define=NDID_API_BASE`, default
 `http://localhost:7088` — for a real device build it must point at a
 device-reachable host, and being an `http:` URL it needs the WebView to allow

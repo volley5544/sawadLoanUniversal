@@ -48,6 +48,14 @@ const String kNdidApiBase = String.fromEnvironment(
   defaultValue: 'http://localhost:7088',
 );
 
+/// API key for the NDID local-node API, sent as an `X-API-Key` header on
+/// every request (the node's collection-level auth). Overridable per build
+/// with `--dart-define=NDID_API_KEY=...`; empty disables the header.
+const String kNdidApiKey = String.fromEnvironment(
+  'NDID_API_KEY',
+  defaultValue: 'ndid_Gl_dI1z8JCeHebNbnyzICvpCep3KHLYY1oeDHjfNTXI',
+);
+
 enum AppEnvironment {
   prod(
     name: 'prod',
