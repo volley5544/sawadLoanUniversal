@@ -34,10 +34,14 @@ code comments are English.
   `_loadCustomerProfile()`: `UserApi.fetchUserDetail(hash)` →
   `appState.customerDetail` (persists + notifies) and
   `UserApi.fetchAddressBook(hash, token: …)` → `appState.customerAddressBook`
-  (in-memory). Step 1 auto-fills from these; if the fetch lands while step 1
-  is already open, the page re-seeds via an AppState listener (only when it
-  owns its form, i.e. opened without `extra`). Fetch failures log to console
-  and the UI keeps persisted/mock data.
+  (in-memory). While the fetch is in flight `AppState.profileLoading` is true
+  (set/cleared around `_loadCustomerProfile`, only when a `hashThaiId` exists)
+  and step 1 shows a blocking spinner overlay ("กำลังโหลดข้อมูลลูกค้า...") so
+  the user can't edit fields the fetch is about to overwrite. Step 1
+  auto-fills from these; if the fetch lands while step 1 is already open, the
+  page re-seeds via an AppState listener (only when it owns its form, i.e.
+  opened without `extra`). Fetch failures log to console and the UI keeps
+  persisted/mock data.
 - **OCR/camera is delegated to the native host** (the web build has no camera).
   Tapping ถ่ายรูปภาพ/OCR calls `NativeCameraBridge` which asks the host to open
   its camera; the host returns the photo as base64. There is a `TODO` in
@@ -146,7 +150,11 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   menu (no form), seeds from `LoanRegisterForm.fromCustomerDetail(AppState().customerDetail)`
   — i.e. the persisted customer auto-fills step 1; steps 2–3 keep mock data.
   Editable name/phone/Thai-ID; bottom-sheet pickers for gender/nationality/
-  occupation; date pickers; address cards + radio choice.
+  occupation; date pickers; address cards + radio choice. While
+  `AppState.profileLoading` is true (and the page owns its form) a
+  semi-opaque loading overlay covers the page — it blocks input so the
+  startup fetch can't overwrite half-typed edits, and disappears when the
+  fetch lands (same listener that re-seeds the fields).
 - `collateral_info_page.dart` — **Step 2: ข้อมูลหลักประกัน**. The ถ่ายรูปภาพ/OCR
   button calls `NativeCameraBridge.captureDocument('camera_collateral')`
   (falling back to the in-web `OcrCapturePage` camera mask in a plain browser);
@@ -204,7 +212,11 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   บันทึกข้อมูล pops a Buddhist-era `dd/MM/yyyy HH:mm น.` string.
 - `models/loan_register_form.dart` — the in-memory wizard model. `mock()` =
   fully-populated demo data; `fromCustomerDetail()` = seed step 1 from a real
-  customer. Helpers: `_formatPhone`, `_formatThaiId`, `_formatBuddhistDate`
+  customer. Address seeding: the address-book API is **authoritative per
+  address type** — a loaded-but-empty block renders blank (`''`, the
+  `AddressCard` shows no placeholder text); the profile's single composed
+  address is only the fallback when the address book is missing entirely
+  (fetch failed / still loading). Helpers: `_formatPhone`, `_formatThaiId`, `_formatBuddhistDate`
   (adds 543 unless year > 2200, i.e. already B.E.), `_genderFromTitle`,
   `_composeAddress`. Step-4/5 fields: `ndidVerified` (bool, gates step 4's
   "ถัดไป"), `appointmentBranch`, `appointmentDateTime`. Attached document bytes

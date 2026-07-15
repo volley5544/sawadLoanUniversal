@@ -26,17 +26,26 @@ flutter build web --release --pwa-strategy=none
 - Build web with **`--pwa-strategy=none`** so the Flutter service worker doesn't
   serve a stale build inside the WebView.
 
-## Launch parameter
+## Launch parameters
 
-The native host launches the web URL with a hashed Thai ID:
+The native host launches the web URL with a hashed Thai ID and a Firebase auth
+token:
 
 ```
-https://<host>/?hashThaiId=<hash>
+https://<host>/?hashThaiId=<hash>&token=<firebase-jwt>
 ```
 
-`main.dart` reads it into `AppState.hashThaiId`. The intended (TODO) flow is to
-fetch the customer profile by that hash and seed `AppState.customerDetail`, so
-step 1 of the wizard auto-fills.
+`main.dart` reads them into `AppState.hashThaiId` / `AppState.authToken`, then
+fires a background fetch of the customer profile (`/user/detail`) and address
+book (`/profile/address`) so step 1 of the wizard auto-fills. While that fetch
+is in flight, `AppState.profileLoading` is `true` and step 1 shows a blocking
+loading overlay ("กำลังโหลดข้อมูลลูกค้า...") — so the user knows data is
+loading and can't type into fields the fetch is about to overwrite.
+
+Address cards on step 1 treat the address API as **authoritative per address
+type**: if the address book loaded but a block is empty, the card shows
+**blank** (no data invented). The profile's single address is only a stopgap
+when the address book is missing entirely (fetch failed or still loading).
 
 ## The wizard
 
