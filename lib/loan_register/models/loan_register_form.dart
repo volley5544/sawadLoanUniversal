@@ -178,11 +178,15 @@ class LoanRegisterForm {
     CustomerDetail c, {
     CustomerAddressBook? addresses,
   }) {
-    // The address API (when loaded) gives the authoritative per-type
-    // addresses; the profile's own single address is the fallback.
+    // The address API (when loaded) is authoritative per address type: an
+    // empty block means the customer has no such address — show blank. The
+    // profile's own single address is only the stopgap while the address book
+    // is missing entirely (fetch failed or still loading).
     final address = _composeAddress(c);
-    String pick(AddressInfo? a) =>
-        (a != null && !a.isEmpty) ? a.oneLine : address;
+    String pick(AddressInfo? a) {
+      if (a == null) return address;
+      return a.isEmpty ? '' : a.oneLine;
+    }
     return LoanRegisterForm.mock()
       ..firstName = c.firstName.trim()
       ..lastName = c.lastName.trim()
