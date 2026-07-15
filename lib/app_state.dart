@@ -44,6 +44,17 @@ class AppState extends ChangeNotifier {
   /// `Authorization: Bearer` on the mobile API's address endpoint.
   String authToken = '';
 
+  /// True while the startup profile + address fetch (`_loadCustomerProfile`
+  /// in `main.dart`) is in flight. Step 1 shows a loading overlay while set so
+  /// the user knows the auto-fill data is still on its way.
+  bool _profileLoading = false;
+  bool get profileLoading => _profileLoading;
+  set profileLoading(bool value) {
+    if (_profileLoading == value) return;
+    _profileLoading = value;
+    notifyListeners();
+  }
+
   /// Customer address book fetched on startup (`UserApi.fetchAddressBook`).
   /// Null until loaded (or when the fetch failed). In-memory only — refetched
   /// each launch.

@@ -39,6 +39,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
   /// land after this page is already open).
   Object? _seenDetail;
   Object? _seenAddressBook;
+  bool _seenLoading = false;
 
   @override
   void initState() {
@@ -47,6 +48,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
     // CustomerDetail (+ address book) held in the global AppState.
     _seenDetail = AppState().customerDetail;
     _seenAddressBook = AppState().customerAddressBook;
+    _seenLoading = AppState().profileLoading;
     _form = widget.form ?? _seedForm();
 
     _firstName = TextEditingController(text: _form.firstName);
@@ -62,19 +64,27 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
   }
 
   LoanRegisterForm _seedForm() => LoanRegisterForm.fromCustomerDetail(
-        AppState().customerDetail,
-        addresses: AppState().customerAddressBook,
-      );
+    AppState().customerDetail,
+    addresses: AppState().customerAddressBook,
+  );
 
   void _onAppStateChanged() {
     final state = AppState();
-    if (identical(state.customerDetail, _seenDetail) &&
-        identical(state.customerAddressBook, _seenAddressBook)) {
+    final seedChanged =
+        !identical(state.customerDetail, _seenDetail) ||
+        !identical(state.customerAddressBook, _seenAddressBook);
+    if (!seedChanged && state.profileLoading == _seenLoading) {
       return; // unrelated notification (e.g. recovered capture)
+    }
+    _seenLoading = state.profileLoading;
+    if (!mounted) return;
+    if (!seedChanged) {
+      // Only the loading flag flipped — show/hide the overlay.
+      setState(() {});
+      return;
     }
     _seenDetail = state.customerDetail;
     _seenAddressBook = state.customerAddressBook;
-    if (!mounted) return;
     setState(() {
       _form = _seedForm();
       _firstName.text = _form.firstName;
@@ -83,6 +93,11 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
       _thaiId.text = _form.thaiId;
     });
   }
+
+  /// Show the loading overlay while the startup profile/address fetch is in
+  /// flight — only when this page owns its form (a form passed in via `extra`
+  /// is never re-seeded, so there is nothing to wait for).
+  bool get _profileLoading => widget.form == null && AppState().profileLoading;
 
   @override
   void dispose() {
@@ -114,156 +129,206 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
         elevation: 0,
         leading: BackButton(color: LoanRegisterStyles.primary),
         centerTitle: true,
-        title: Text('ข้อมูลลูกค้า', style: LoanRegisterStyles.appBarTitleStyle()),
+        title: Text(
+          'ข้อมูลลูกค้า',
+          style: LoanRegisterStyles.appBarTitleStyle(),
+        ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          const RegisterStepIndicator(currentStep: 1),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: LoanRegisterStyles.padding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const RegisterSectionTitle('ข้อมูลลูกค้า'),
-                  RegisterTextField(
-                      label: 'ชื่อ',
-                      controller: _firstName,
-                      hint: 'กรุณากรอกชื่อ'),
-                  RegisterTextField(
-                      label: 'นามสกุล',
-                      controller: _lastName,
-                      hint: 'กรุณากรอกนามสกุล'),
-                  RegisterTextField(
-                    label: 'เบอร์โทรศัพท์',
-                    controller: _phone,
-                    hint: 'กรุณากรอกเบอร์โทรศัพท์',
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
+          Column(
+            children: [
+              const RegisterStepIndicator(currentStep: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: LoanRegisterStyles.padding,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const RegisterSectionTitle('ข้อมูลลูกค้า'),
+                      RegisterTextField(
+                        label: 'ชื่อ',
+                        controller: _firstName,
+                        hint: 'กรุณากรอกชื่อ',
+                      ),
+                      RegisterTextField(
+                        label: 'นามสกุล',
+                        controller: _lastName,
+                        hint: 'กรุณากรอกนามสกุล',
+                      ),
+                      RegisterTextField(
+                        label: 'เบอร์โทรศัพท์',
+                        controller: _phone,
+                        hint: 'กรุณากรอกเบอร์โทรศัพท์',
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
+                        ],
+                      ),
+                      RegisterFieldRow(
+                        label: 'วัน เดือน ปีเกิด (พ.ศ.)',
+                        value: _form.birthDate,
+                        placeholder: 'กรุณาเลือกวัน เดือน ปีเกิด (พ.ศ.)',
+                        trailing: _calendarIcon(),
+                        onTap: () => _pickDate((d) => _form.birthDate = d),
+                      ),
+                      RegisterTextField(
+                        label: 'หมายเลขบัตรประชาชน',
+                        controller: _thaiId,
+                        hint: 'กรุณากรอกหมายเลขบัตรประชาชน',
+                        keyboardType: TextInputType.number,
+                      ),
+                      RegisterFieldRow(
+                        label: 'เพศ',
+                        value: _form.gender,
+                        placeholder: 'กรุณาเลือกเพศ',
+                        onTap: () => _pickOption(
+                          'เพศ',
+                          ['ชาย', 'หญิง'],
+                          _form.gender,
+                          (v) => _form.gender = v,
+                        ),
+                      ),
+                      RegisterFieldRow(
+                        label: 'สัญชาติ',
+                        value: _form.nationality,
+                        placeholder: 'กรุณาเลือกสัญชาติ',
+                        onTap: () => _pickOption(
+                          'สัญชาติ',
+                          ['ไทย', 'อื่นๆ'],
+                          _form.nationality,
+                          (v) => _form.nationality = v,
+                        ),
+                      ),
+                      RegisterFieldRow(
+                        label: 'วันออกบัตร',
+                        value: _form.cardIssueDate,
+                        placeholder: 'กรุณาเลือกวันออกบัตร',
+                        trailing: _calendarIcon(),
+                        onTap: () => _pickDate((d) => _form.cardIssueDate = d),
+                      ),
+                      RegisterFieldRow(
+                        label: 'วันหมดอายุบัตร',
+                        value: _form.cardExpiryDate,
+                        placeholder: 'กรุณาเลือกวันหมดอายุบัตร',
+                        trailing: _calendarIcon(),
+                        onTap: () => _pickDate((d) => _form.cardExpiryDate = d),
+                      ),
+
+                      // ── ข้อมูลที่อยู่ ───────────────────────────────
+                      const RegisterSectionTitle('ข้อมูลที่อยู่'),
+                      const SizedBox(height: 6),
+                      AddressCard(
+                        title: 'ที่อยู่ตามบัตรประชาชน',
+                        address: _form.idCardAddress,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 10),
+                      AddressCard(
+                        title: 'ที่อยู่ที่ทำงาน',
+                        address: _form.workAddress,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 10),
+                      _addressChoiceCard(),
+
+                      // ── ข้อมูลอาชีพ ─────────────────────────────────
+                      const RegisterSectionTitle('ข้อมูลอาชีพ'),
+                      RegisterFieldRow(
+                        label: 'กลุ่มอาชีพ',
+                        value: _form.occupationGroup,
+                        placeholder: 'กรุณาเลือกกลุ่มอาชีพ',
+                        onTap: () => _pickOption(
+                          'กลุ่มอาชีพ',
+                          [
+                            'พนักงานบริษัท',
+                            'ข้าราชการ',
+                            'ธุรกิจส่วนตัว',
+                            'อื่นๆ',
+                          ],
+                          _form.occupationGroup,
+                          (v) => _form.occupationGroup = v,
+                        ),
+                      ),
+                      RegisterFieldRow(
+                        label: 'รายได้ต่อเดือน',
+                        value: _form.monthlyIncome,
+                        placeholder: 'กรุณาเลือกรายได้ต่อเดือน',
+                        onTap: () => _pickOption(
+                          'รายได้ต่อเดือน',
+                          [
+                            'ต่ำกว่า 15,000',
+                            '15,000 - 30,000',
+                            'มากกว่า 30,000',
+                          ],
+                          _form.monthlyIncome,
+                          (v) => _form.monthlyIncome = v,
+                        ),
+                      ),
+                      RegisterFieldRow(
+                        label: 'อายุงาน',
+                        value: _form.workTenure,
+                        placeholder: 'กรุณาเลือกอายุงาน',
+                        showDivider: false,
+                        onTap: () => _pickOption(
+                          'อายุงาน',
+                          ['น้อยกว่า 1 ปี', '1 - 3 ปี', 'มากกว่า 3 ปี'],
+                          _form.workTenure,
+                          (v) => _form.workTenure = v,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                     ],
                   ),
-                  RegisterFieldRow(
-                    label: 'วัน เดือน ปีเกิด (พ.ศ.)',
-                    value: _form.birthDate,
-                    placeholder: 'กรุณาเลือกวัน เดือน ปีเกิด (พ.ศ.)',
-                    trailing: _calendarIcon(),
-                    onTap: () => _pickDate((d) => _form.birthDate = d),
-                  ),
-                  RegisterTextField(
-                    label: 'หมายเลขบัตรประชาชน',
-                    controller: _thaiId,
-                    hint: 'กรุณากรอกหมายเลขบัตรประชาชน',
-                    keyboardType: TextInputType.number,
-                  ),
-                  RegisterFieldRow(
-                    label: 'เพศ',
-                    value: _form.gender,
-                    placeholder: 'กรุณาเลือกเพศ',
-                    onTap: () => _pickOption('เพศ', ['ชาย', 'หญิง'],
-                        _form.gender, (v) => _form.gender = v),
-                  ),
-                  RegisterFieldRow(
-                    label: 'สัญชาติ',
-                    value: _form.nationality,
-                    placeholder: 'กรุณาเลือกสัญชาติ',
-                    onTap: () => _pickOption('สัญชาติ', ['ไทย', 'อื่นๆ'],
-                        _form.nationality, (v) => _form.nationality = v),
-                  ),
-                  RegisterFieldRow(
-                    label: 'วันออกบัตร',
-                    value: _form.cardIssueDate,
-                    placeholder: 'กรุณาเลือกวันออกบัตร',
-                    trailing: _calendarIcon(),
-                    onTap: () => _pickDate((d) => _form.cardIssueDate = d),
-                  ),
-                  RegisterFieldRow(
-                    label: 'วันหมดอายุบัตร',
-                    value: _form.cardExpiryDate,
-                    placeholder: 'กรุณาเลือกวันหมดอายุบัตร',
-                    trailing: _calendarIcon(),
-                    onTap: () => _pickDate((d) => _form.cardExpiryDate = d),
-                  ),
-
-                  // ── ข้อมูลที่อยู่ ───────────────────────────────
-                  const RegisterSectionTitle('ข้อมูลที่อยู่'),
-                  const SizedBox(height: 6),
-                  AddressCard(
-                    title: 'ที่อยู่ตามบัตรประชาชน',
-                    address: _form.idCardAddress,
-                    onTap: () {},
-                  ),
-                  const SizedBox(height: 10),
-                  AddressCard(
-                    title: 'ที่อยู่ที่ทำงาน',
-                    address: _form.workAddress,
-                    onTap: () {},
-                  ),
-                  const SizedBox(height: 10),
-                  _addressChoiceCard(),
-
-                  // ── ข้อมูลอาชีพ ─────────────────────────────────
-                  const RegisterSectionTitle('ข้อมูลอาชีพ'),
-                  RegisterFieldRow(
-                    label: 'กลุ่มอาชีพ',
-                    value: _form.occupationGroup,
-                    placeholder: 'กรุณาเลือกกลุ่มอาชีพ',
-                    onTap: () => _pickOption(
-                        'กลุ่มอาชีพ',
-                        ['พนักงานบริษัท', 'ข้าราชการ', 'ธุรกิจส่วนตัว', 'อื่นๆ'],
-                        _form.occupationGroup,
-                        (v) => _form.occupationGroup = v),
-                  ),
-                  RegisterFieldRow(
-                    label: 'รายได้ต่อเดือน',
-                    value: _form.monthlyIncome,
-                    placeholder: 'กรุณาเลือกรายได้ต่อเดือน',
-                    onTap: () => _pickOption(
-                        'รายได้ต่อเดือน',
-                        ['ต่ำกว่า 15,000', '15,000 - 30,000', 'มากกว่า 30,000'],
-                        _form.monthlyIncome,
-                        (v) => _form.monthlyIncome = v),
-                  ),
-                  RegisterFieldRow(
-                    label: 'อายุงาน',
-                    value: _form.workTenure,
-                    placeholder: 'กรุณาเลือกอายุงาน',
-                    showDivider: false,
-                    onTap: () => _pickOption(
-                        'อายุงาน',
-                        ['น้อยกว่า 1 ปี', '1 - 3 ปี', 'มากกว่า 3 ปี'],
-                        _form.workTenure,
-                        (v) => _form.workTenure = v),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                ),
               ),
-            ),
+              SaveNextBar(
+                onSaveDraft: () {
+                  _save();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('บันทึกข้อมูลร่างแล้ว')),
+                  );
+                },
+                onNext: () {
+                  _save();
+                  context.push(AppRoutes.collateralInfo, extra: _form);
+                },
+              ),
+            ],
           ),
-          SaveNextBar(
-            onSaveDraft: () {
-              _save();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('บันทึกข้อมูลร่างแล้ว')),
-              );
-            },
-            onNext: () {
-              _save();
-              context.push(AppRoutes.collateralInfo, extra: _form);
-            },
-          ),
+          if (_profileLoading) Positioned.fill(child: _loadingOverlay()),
         ],
       ),
     );
   }
 
+  /// Semi-opaque overlay shown while the startup profile/address fetch is in
+  /// flight, so the user knows the auto-fill data is loading (and can't edit
+  /// fields that are about to be overwritten by the fetched profile).
+  Widget _loadingOverlay() => Container(
+    color: Colors.white.withValues(alpha: 0.75),
+    alignment: Alignment.center,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: LoanRegisterStyles.primary),
+        const SizedBox(height: 16),
+        Text(
+          'กำลังโหลดข้อมูลลูกค้า...',
+          style: LoanRegisterStyles.valueStyle(),
+        ),
+      ],
+    ),
+  );
+
   Widget _addressChoiceCard() {
     Widget tile(AddressChoice choice, String label) => AddressRadioTile(
-          label: label,
-          selected: _form.addressChoice == choice,
-          onTap: () => setState(() => _form.addressChoice = choice),
-        );
+      label: label,
+      selected: _form.addressChoice == choice,
+      onTap: () => setState(() => _form.addressChoice = choice),
+    );
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -289,13 +354,20 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
     );
   }
 
-  Widget _calendarIcon() => Icon(Icons.calendar_month_outlined,
-      color: LoanRegisterStyles.label, size: 22);
+  Widget _calendarIcon() => Icon(
+    Icons.calendar_month_outlined,
+    color: LoanRegisterStyles.label,
+    size: 22,
+  );
 
   // ── Selector / date helpers (mock) ─────────────────────────────────
 
-  void _pickOption(String title, List<String> options, String current,
-      ValueChanged<String> onPick) async {
+  void _pickOption(
+    String title,
+    List<String> options,
+    String current,
+    ValueChanged<String> onPick,
+  ) async {
     final result = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
@@ -310,13 +382,15 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
               padding: const EdgeInsets.all(16),
               child: Text(title, style: LoanRegisterStyles.appBarTitleStyle()),
             ),
-            ...options.map((o) => ListTile(
-                  title: Text(o, style: LoanRegisterStyles.valueStyle()),
-                  trailing: o == current
-                      ? Icon(Icons.check, color: LoanRegisterStyles.primary)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(o),
-                )),
+            ...options.map(
+              (o) => ListTile(
+                title: Text(o, style: LoanRegisterStyles.valueStyle()),
+                trailing: o == current
+                    ? Icon(Icons.check, color: LoanRegisterStyles.primary)
+                    : null,
+                onTap: () => Navigator.of(context).pop(o),
+              ),
+            ),
             const SizedBox(height: 8),
           ],
         ),

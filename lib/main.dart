@@ -25,8 +25,10 @@ Future<void> main() async {
   appState = AppState();
   appState.webVersion = kWebVersion;
   // ignore: avoid_print — intentional: must reach console.log in release too.
-  print('[SawadLoanUniversal] env=${AppEnvironment.current.name} '
-      'webVersion=$kWebVersion');
+  print(
+    '[SawadLoanUniversal] env=${AppEnvironment.current.name} '
+    'webVersion=$kWebVersion',
+  );
   // Machine-readable token parsed by the native WebView host to detect a stale
   // cached build (LoanUniversalWebWidget._kVersionToken). Keep this exact text.
   // ignore: avoid_print
@@ -62,20 +64,27 @@ Future<void> _loadCustomerProfile() async {
   final hash = appState.hashThaiId;
   if (hash.isEmpty) return;
 
+  appState.profileLoading = true;
   try {
-    final detail = await UserApi.fetchUserDetail(hash);
-    appState.update(() => appState.customerDetail = detail);
-  } catch (e) {
-    // ignore: avoid_print — intentional: surface in the WebView console.
-    print('[SawadLoanUniversal] user/detail fetch failed: $e');
-  }
+    try {
+      final detail = await UserApi.fetchUserDetail(hash);
+      appState.update(() => appState.customerDetail = detail);
+    } catch (e) {
+      // ignore: avoid_print — intentional: surface in the WebView console.
+      print('[SawadLoanUniversal] user/detail fetch failed: $e');
+    }
 
-  try {
-    appState.customerAddressBook =
-        await UserApi.fetchAddressBook(hash, token: appState.authToken);
-  } catch (e) {
-    // ignore: avoid_print
-    print('[SawadLoanUniversal] profile/address fetch failed: $e');
+    try {
+      appState.customerAddressBook = await UserApi.fetchAddressBook(
+        hash,
+        token: appState.authToken,
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print('[SawadLoanUniversal] profile/address fetch failed: $e');
+    }
+  } finally {
+    appState.profileLoading = false;
   }
 }
 
@@ -87,9 +96,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'Sawad Loan',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
       routerConfig: appRouter,
     );
   }
