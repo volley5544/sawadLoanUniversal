@@ -145,7 +145,8 @@ opened standalone (incl. via direct URL). The mutable form object is passed
 page → page as go_router `extra` (see `router/app_router.dart`).
 
 - `loan_register_list_page.dart` — entry: pick a product category
-  (มอเตอร์ไซต์ / รายการเตรียมข้อมูล) → opens step 1. This is the app's home.
+  (มอเตอร์ไซต์ / รายการเตรียมข้อมูล) → opens step 1, or **สมัครสินเชื่อ P-Loan**
+  → opens the standalone P-Loan form (see below). This is the app's home.
 - `customer_info_page.dart` — **Step 1: ข้อมูลลูกค้า**. When opened from the
   menu (no form), seeds from `LoanRegisterForm.fromCustomerDetail(AppState().customerDetail)`
   — i.e. the persisted customer auto-fills step 1; steps 2–3 keep mock data.
@@ -222,6 +223,34 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   "ถัดไป"), `appointmentBranch`, `appointmentDateTime`. Attached document bytes
   on step 4 are held in page state only (not on the form). When adding fields
   here, also seed them in `mock()`.
+
+### P-Loan registration form (`lib/p_loan/`)
+
+A **standalone** data-entry form — *not* part of the 5-step wizard — reached from
+the third home-menu card (**สมัครสินเชื่อ P-Loan**, go_router route
+`/pLoanFormPage`, `AppRoutes.pLoanForm`). Its fields map **1:1** to the legacy
+P-Loan submission API `regmast_ploan.php` (originally a PHP `curl` call; the
+source `p-loan-api-call.php` is kept **untracked** at the repo root for
+reference).
+
+- `p_loan_form_page.dart` — 34 scalar fields grouped into sections (ข้อมูลรายการ
+  / ลูกค้า / สินเชื่อ / การโอนเงิน / GPS / ความยินยอม), each an editable
+  `RegisterTextField` **seeded with sample values** so the page renders fully
+  populated (same mock convention as the wizard). Plus 12 **image-attachment
+  groups** (`documentImage`, `cardIdImage`, `carImage`, …) captured via
+  `NativeCameraBridge.captureDocument(<groupKey>)`, shown as removable thumbnails.
+  Bottom bar (`SaveNextBar`): **ดู Payload** previews the exact fields + file
+  counts in a dialog; **ส่งข้อมูล** submits.
+- `services/p_loan_api_service.dart` — `PLoanApiService`: builds the
+  `multipart/form-data` POST mirroring the PHP — scalar values as form fields,
+  each image group sent as repeated `key[]` file parts
+  (`http.MultipartFile.fromBytes`). Base URL defaults to
+  `http://10.1.112.74/API/loan/regmast_ploan.php` (overridable); typed
+  `PLoanApiException`, 60 s timeout, JSON-or-text decode.
+- **Reachability caveat:** the endpoint is internal **HTTP** on a private IP, so
+  a live submit only works where the WebView/host can reach `10.1.112.74` (and
+  mixed content is allowed). Use **ดู Payload** to verify the field mapping
+  anywhere; images only capture inside the native host (`isSupported`).
 
 ### Mobile API client (`lib/services/user_api.dart`)
 
@@ -322,7 +351,8 @@ mixed content when the app is served over `https:`).
 
 `shared_preferences` (persist `CustomerDetail`), `google_fonts` (NotoSansThai),
 `hexcolor`, `flutter_svg`, `web` (window/console bindings for the native
-bridge), `http` (NDID local-node API client). The `camera` plugin was **removed** — the host owns the camera. SDK
+bridge), `http` (NDID local-node API client + P-Loan `regmast_ploan.php`
+client). The `camera` plugin was **removed** — the host owns the camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
 `colorScheme: .fromSeed(...)`, `mainAxisAlignment: .center`); needs a recent
 toolchain (built on Flutter 3.38 / Dart 3.10).

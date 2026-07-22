@@ -99,6 +99,19 @@ date/time calendar** screens (slide 9, right frames) are **out of scope** and
 not built. Step 5's **ถัดไป** is the end of the (UI-only) flow — it shows a
 "บันทึกข้อมูลเรียบร้อย" SnackBar; no backend submit yet.
 
+## P-Loan registration form
+
+Separate from the wizard, a **standalone** form (home-menu card **สมัครสินเชื่อ
+P-Loan**, route `/pLoanFormPage`) whose fields map **1:1** to the legacy
+`regmast_ploan.php` submission API. `lib/p_loan/p_loan_form_page.dart` renders 34
+scalar fields (seeded with sample values) plus 12 image-attachment groups that
+capture through the native camera bridge;
+`lib/services/p_loan_api_service.dart` builds the `multipart/form-data` POST
+(scalar fields + repeated `key[]` file parts) mirroring the original PHP `curl`
+call. **ดู Payload** previews the request; **ส่งข้อมูล** submits. The endpoint is
+internal HTTP on a private IP (`10.1.112.74`), so a live submit only works from
+inside the host network — the Payload preview works anywhere.
+
 ## Document / OCR capture (web ↔ native camera)
 
 The web build has **no camera**; the document photo is captured by the **native
@@ -155,10 +168,13 @@ lib/
     native_bridge.dart          public entry (conditional import)
     native_bridge_web.dart      web impl (flutter_inappwebview callHandler)
     native_bridge_stub.dart     non-web stub (throws / isSupported=false)
+    p_loan_api_service.dart     regmast_ploan.php multipart client
   loan_register/
     *_page.dart                 the wizard steps & pickers
     models/loan_register_form.dart   in-memory wizard model (+ mock data)
     components/                  shared field rows, styles, step indicator, etc.
+  p_loan/
+    p_loan_form_page.dart       standalone P-Loan form (regmast_ploan.php API)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture notes, conventions, and
