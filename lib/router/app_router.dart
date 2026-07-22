@@ -15,6 +15,7 @@ import '../loan_register/models/loan_register_form.dart';
 import '../loan_register/ndid_bank_select_page.dart';
 import '../loan_register/ndid_verify_page.dart';
 import '../loan_register/transfer_type_picker_page.dart';
+import '../p_loan/p_loan_form_page.dart';
 
 /// Route paths for the loan-register wizard. These map 1:1 to the browser URL
 /// (path strategy is enabled in main.dart), e.g.
@@ -39,6 +40,8 @@ abstract final class AppRoutes {
   static const String documentsToPrepare = '/documentsToPreparePage';
   static const String branchSelect = '/branchSelectPage';
   static const String appointmentDateTime = '/appointmentDateTimePage';
+  // Standalone P-Loan registration form (maps to the regmast_ploan.php API).
+  static const String pLoanForm = '/pLoanFormPage';
 }
 
 /// The app router.
@@ -53,6 +56,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.home,
       builder: (context, state) => const LoanRegisterListPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanForm,
+      builder: (context, state) => const PLoanFormPage(),
     ),
     GoRoute(
       path: AppRoutes.customerInfo,

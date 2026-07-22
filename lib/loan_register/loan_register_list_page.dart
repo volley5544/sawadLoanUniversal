@@ -19,7 +19,7 @@ class LoanRegisterListPage extends StatefulWidget {
   State<LoanRegisterListPage> createState() => _LoanRegisterListPageState();
 }
 
-enum _RegisterCategory { motorcycle, draft }
+enum _RegisterCategory { motorcycle, draft, pLoan }
 
 class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   _RegisterCategory _selected = _RegisterCategory.motorcycle;
@@ -27,6 +27,10 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   void _goToStep1() {
     // No form passed -> CustomerInfoPage seeds step 1 from AppState().customerDetail.
     context.push(AppRoutes.customerInfo);
+  }
+
+  void _goToPLoanForm() {
+    context.push(AppRoutes.pLoanForm);
   }
 
   /// Back from the list page (the root of the web flow). If there's web history
@@ -87,6 +91,18 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('รายการเตรียมข้อมูล')),
                   );
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _CategoryCard(
+                assetName: 'DocumentIcon.svg',
+                label: 'สมัครสินเชื่อ P-Loan',
+                selected: _selected == _RegisterCategory.pLoan,
+                onTap: () {
+                  setState(() => _selected = _RegisterCategory.pLoan);
+                  _goToPLoanForm();
                 },
               ),
             ),
