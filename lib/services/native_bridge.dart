@@ -92,6 +92,49 @@
 /// ```
 ///
 /// (Implemented in the srisawad host's `loan_universal_web_widget.dart`.)
+///
+/// ## `httpMultipart` — CORS-free multipart upload (P-Loan save API)
+///
+/// **Not implemented by the host yet — the P-Loan save submit needs it.**
+///
+/// `POST /SavePloanContract` takes `multipart/form-data` with repeated
+/// `group[]` file parts, and (verified 2026-07-27) answers **401 with no
+/// `Access-Control-Allow-*` headers on the preflight**, so a browser upload is
+/// blocked. `httpRequest` above can't carry it either: multipart needs the file
+/// bytes, and that handler's body is a single string. This handler takes the
+/// parts **base64-encoded inside the JSON envelope** and lets the host assemble
+/// the real multipart request natively.
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'httpMultipart',
+///   callback: (args) async {
+///     final req = jsonDecode(args.first as String) as Map<String, dynamic>;
+///     // req: {url, headers: {..}?, fields: {name: value},
+///     //       files: [{field: 'carImage[]', filename, contentType, base64}]}
+///     // SECURITY: allowlist the URL prefix, exactly as for httpRequest.
+///     if (!allowedPrefixes.any('${req['url']}'.startsWith)) {
+///       return jsonEncode({'status': 0, 'error': 'URL not allowed'});
+///     }
+///     final request = http.MultipartRequest('POST', Uri.parse('${req['url']}'))
+///       ..headers.addAll(Map<String, String>.from(req['headers'] ?? {}))
+///       ..fields.addAll(Map<String, String>.from(req['fields'] ?? {}));
+///     for (final f in (req['files'] as List? ?? [])) {
+///       request.files.add(http.MultipartFile.fromBytes(
+///         '${f['field']}', base64Decode('${f['base64']}'),
+///         filename: '${f['filename']}',
+///         contentType: MediaType.parse('${f['contentType']}'),
+///       ));
+///     }
+///     final res = await http.Response.fromStream(await request.send());
+///     return jsonEncode({'status': res.statusCode, 'body': res.body});
+///     // network failure -> {'status': 0, 'error': '...'}
+///   },
+/// );
+/// ```
+///
+/// Do **not** set `Content-Type` from `headers` — `MultipartRequest` has to
+/// append its own boundary.
 library;
 
 export 'native_bridge_stub.dart'

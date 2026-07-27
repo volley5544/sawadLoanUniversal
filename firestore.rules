@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// Firestore security rules for sawad-loan-universal (prod + uat).
+//
+// Threat model: this app ships as a **public Flutter web build**. Anything the
+// client can read, anyone on the internet can read — the bundle is downloadable
+// and the project id is in it. So these rules are written as an allowlist of
+// exactly one document, and nothing else is reachable.
+//
+// Deploy:  firebase deploy --only firestore:rules -P uat
+//
+// History: uat was briefly left at `allow read, write: if true`, which exposed
+// the live `agent_web_api_token*` values in application/config to anonymous
+// readers and allowed anonymous writes. That is what this file exists to
+// prevent recurring.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Default deny ────────────────────────────────────────────────────
+    // Firestore evaluates rules as a union of allows, so this does not
+    // override the grant below — it documents the baseline and makes an
+    // accidental "open everything" edit visible in review.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── The one document the web app may read ───────────────────────────
+    // Runtime endpoint config: non-secret base URLs only. Secrets (the
+    // agent_web_api_token* values) stay in application/config, which no rule
+    // below grants, so they remain unreachable from any client.
+    //
+    // Rules are per-document, not per-field: there is no way to expose part of
+    // application/config. Splitting the public values into their own document
+    // is the only way to serve them safely.
+    match /application/public_config {
+      // `get`, not `read`: read = get + list. Allowing only `get` means a
+      // client can fetch this exact document but cannot enumerate the
+      // `application` collection to discover sibling documents.
+      //
+      // request.auth != null is satisfied by anonymous sign-in. That is not a
+      // real access control — anyone can mint an anonymous token with the
+      // public web API key — but it means every read is attributable to a
+      // Firebase UID, gives per-identity abuse controls, and is the hook App
+      // Check plugs into when bot protection is wanted.
+      allow get: if request.auth != null;
+
+      // The client never writes config, and never needs the collection listing.
+      allow list, write: if false;
+    }
+
+    // Everything else — including application/config, and any collection added
+    // later — is denied by omission. Adding a new client-readable document
+    // requires an explicit match block here, which is the point.
+  }
+}

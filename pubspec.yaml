@@ -58,6 +58,12 @@ dependencies:
   web: ^1.1.0
   go_router: ^17.3.0
 
+  # Camera / gallery image picking for the P-Loan attachment groups
+  # ("แนบรูป"). On web this is image_picker_for_web, i.e. a hidden
+  # <input type="file" accept="image/*"> (with `capture` for the camera
+  # source), so it relies on the WebView host's file-chooser support.
+  image_picker: ^1.1.2
+
   # NDID local-node API client (lib/services/ndid_api.dart) — used only when
   # running inside the native host (real identity verification flow).
   http: ^1.2.2
@@ -86,6 +92,9 @@ flutter:
 
   assets:
     - assets/
+    # Icons for the P-Loan application flow. Kept in a subfolder because the
+    # source project's MotorLoanIcon.svg is a different file from ours.
+    - assets/p_loan/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -7,7 +7,7 @@ import '../services/native_bridge.dart';
 import '../services/ndid_api.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
-import 'models/loan_register_form.dart';
+import '../models/ndid_subject.dart';
 
 /// เลือกธนาคารที่เกี่ยวข้อง NDID — pick the Identity Provider (IDP) bank used
 /// for NDID verification (screens #3–#4 on slide 8).
@@ -25,7 +25,10 @@ import 'models/loan_register_form.dart';
 class NdidBankSelectPage extends StatefulWidget {
   const NdidBankSelectPage({Key? key, this.form}) : super(key: key);
 
-  final LoanRegisterForm? form;
+  /// The flow that launched this screen — the loan-register wizard's form or
+  /// the P-Loan application's flow. Only [NdidSubject] is needed, which is why
+  /// both can share these screens.
+  final NdidSubject? form;
 
   @override
   State<NdidBankSelectPage> createState() => _NdidBankSelectPageState();
@@ -76,9 +79,8 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     }
   }
 
-  /// Digits-only Thai ID from the form (UI shows it as 1-2345-…).
-  String get _citizenId =>
-      (widget.form?.thaiId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+  /// Digits-only Thai ID from the launching flow.
+  String get _citizenId => widget.form?.ndidThaiId ?? '';
 
   Future<void> _loadIdps() async {
     setState(() {

@@ -3,13 +3,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../loan_register/components/loan_register_styles.dart';
-import '../loan_register/components/register_field_row.dart';
-import '../loan_register/components/register_text_field.dart';
-import '../loan_register/components/save_next_bar.dart';
-import '../services/native_bridge.dart';
-import '../services/p_loan_api_service.dart';
+import '../../loan_register/components/loan_register_styles.dart';
+import '../../loan_register/components/register_field_row.dart';
+import '../../loan_register/components/register_text_field.dart';
+import '../../loan_register/components/save_next_bar.dart';
+import '../../services/native_bridge.dart';
+import '../../services/p_loan_api_service.dart';
 
 /// A scalar text field on the P-Loan form: its API key, Thai label and
 /// keyboard type.
@@ -152,6 +153,8 @@ class _PLoanFormPageState extends State<PLoanFormPage> {
   /// Attached image bytes per image-group key.
   final Map<String, List<Uint8List>> _images = {};
 
+  final ImagePicker _picker = ImagePicker();
+
   bool _submitting = false;
 
   @override
@@ -180,20 +183,75 @@ class _PLoanFormPageState extends State<PLoanFormPage> {
   Map<String, String> _collectFields() =>
       {for (final e in _controllers.entries) e.key: e.value.text.trim()};
 
-  /// Ask the native host to capture a photo for [group], then append it.
+  /// Let the user pick a camera shot or a gallery image for [group], then
+  /// append it.
+  ///
+  /// Camera prefers the native host's own camera (framing mask + native
+  /// downscaling) when the bridge is available; everything else goes through
+  /// `image_picker`, which on web is a hidden `<input type="file">`.
   Future<void> _addImage(_ImageGroup group) async {
-    if (!NativeCameraBridge.isSupported) {
-      _snack('การถ่ายรูปใช้ได้เฉพาะในแอปพลิเคชันเท่านั้น');
-      return;
-    }
+    final source = await _pickImageSource(group.label);
+    if (source == null || !mounted) return; // sheet dismissed
+    final useHostCamera =
+        source == ImageSource.camera && NativeCameraBridge.isSupported;
     try {
-      final bytes = await NativeCameraBridge.captureDocument(group.key);
+      final bytes = useHostCamera
+          ? await NativeCameraBridge.captureDocument(group.key)
+          : await _pickWithImagePicker(source);
       if (!mounted || bytes == null) return; // null = cancelled
       setState(() => _images[group.key]!.add(bytes));
     } catch (e) {
       if (!mounted) return;
-      _snack('ไม่สามารถถ่ายรูปได้: $e');
+      _snack('ไม่สามารถแนบรูปได้: $e');
     }
+  }
+
+  /// Bottom sheet asking กล้อง vs. คลังภาพ. Returns null if dismissed.
+  Future<ImageSource?> _pickImageSource(String title) {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(title, style: LoanRegisterStyles.appBarTitleStyle()),
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_camera_outlined,
+                  color: LoanRegisterStyles.primary),
+              title: Text('ถ่ายรูป', style: LoanRegisterStyles.valueStyle()),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined,
+                  color: LoanRegisterStyles.primary),
+              title: Text('เลือกรูปจากคลังภาพ',
+                  style: LoanRegisterStyles.valueStyle()),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Pick one image through `image_picker`. The size caps are honoured on
+  /// mobile/desktop only — `image_picker_for_web` ignores them, so a web build
+  /// gets the original file bytes.
+  Future<Uint8List?> _pickWithImagePicker(ImageSource source) async {
+    final file = await _picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    return file == null ? null : await file.readAsBytes();
   }
 
   void _removeImage(String key, int index) {

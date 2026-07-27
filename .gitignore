@@ -52,3 +52,24 @@ ndid_doc/
 
 # Mobile API docs with real example data/tokens (do not commit)
 api_data/
+
+# Auto-deploy bookkeeping (tools/deploy-uat.sh): a fingerprint of the last
+# deployed sources and the last version stamp. Machine-local, not shared.
+/.deploy-stamp-uat
+/.deploy-version-uat
+
+# Firestore config dumps + the backups the importer takes before writing.
+# These hold live API tokens (agent_web_api_token*) — do not commit.
+/etc/*.txt
+/etc/backup/
+
+# NDID node docs (Postman collection/environment + proxy spec). Same reason as
+# ndid_doc/ above: vendor material, and the environment file carries node keys.
+/dap/
+
+# Reference copy of the original regmast_ploan.php curl call. Kept locally for
+# comparison with services/p_loan_api_service.dart; internal host + not ours.
+/p-loan-api-call.php
+
+# Stray compiled-Dart dump (a copy of a build's main.dart.js). Build artifact.
+/m.js

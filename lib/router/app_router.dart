@@ -15,7 +15,16 @@ import '../loan_register/models/loan_register_form.dart';
 import '../loan_register/ndid_bank_select_page.dart';
 import '../loan_register/ndid_verify_page.dart';
 import '../loan_register/transfer_type_picker_page.dart';
-import '../p_loan/p_loan_form_page.dart';
+import '../models/ndid_subject.dart';
+import '../p_loan/application/models/p_loan_flow.dart';
+import '../p_loan/application/p_loan_amount_page.dart';
+import '../p_loan/application/p_loan_conclusion_page.dart';
+import '../p_loan/application/p_loan_contract_select_page.dart';
+import '../p_loan/application/p_loan_customer_data_page.dart';
+import '../p_loan/application/p_loan_installment_page.dart';
+import '../p_loan/application/p_loan_success_page.dart';
+import '../p_loan/application/p_loan_vehicle_photos_page.dart';
+import '../p_loan/submit_form/p_loan_form_page.dart';
 
 /// Route paths for the loan-register wizard. These map 1:1 to the browser URL
 /// (path strategy is enabled in main.dart), e.g.
@@ -42,6 +51,17 @@ abstract final class AppRoutes {
   static const String appointmentDateTime = '/appointmentDateTimePage';
   // Standalone P-Loan registration form (maps to the regmast_ploan.php API).
   static const String pLoanForm = '/pLoanFormPage';
+
+  // P-Loan application flow (lib/p_loan/application/) — a 6-step wizard over
+  // the mobile API. Paths are consistently camelCase, unlike the source
+  // project's mix of /PloanCardPage01 and /ploanInstallmentPage03.
+  static const String pLoanContractSelect = '/pLoan/contract';
+  static const String pLoanAmount = '/pLoan/amount';
+  static const String pLoanInstallment = '/pLoan/installment';
+  static const String pLoanVehiclePhotos = '/pLoan/photos';
+  static const String pLoanCustomerData = '/pLoan/customer';
+  static const String pLoanConclusion = '/pLoan/conclusion';
+  static const String pLoanSuccess = '/pLoan/success';
 }
 
 /// The app router.
@@ -60,6 +80,59 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.pLoanForm,
       builder: (context, state) => const PLoanFormPage(),
+    ),
+    // ── P-Loan application flow ────────────────────────────────────────
+    // Steps 2-6 carry the accumulated PLoanFlow in `extra`. Unlike the
+    // loan-register wizard there is no mock seed to fall back on (the flow is
+    // wired to live APIs), so a deep link without `extra` redirects to step 1
+    // rather than rendering a half-empty screen.
+    GoRoute(
+      path: AppRoutes.pLoanContractSelect,
+      builder: (context, state) => const PLoanContractSelectPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanAmount,
+      redirect: (context, state) =>
+          state.extra is PLoanFlow ? null : AppRoutes.pLoanContractSelect,
+      builder: (context, state) =>
+          PLoanAmountPage(flow: state.extra as PLoanFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanInstallment,
+      redirect: (context, state) =>
+          state.extra is PLoanFlow ? null : AppRoutes.pLoanContractSelect,
+      builder: (context, state) =>
+          PLoanInstallmentPage(flow: state.extra as PLoanFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanVehiclePhotos,
+      redirect: (context, state) =>
+          state.extra is PLoanFlow ? null : AppRoutes.pLoanContractSelect,
+      builder: (context, state) =>
+          PLoanVehiclePhotosPage(flow: state.extra as PLoanFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanCustomerData,
+      redirect: (context, state) =>
+          state.extra is PLoanFlow ? null : AppRoutes.pLoanContractSelect,
+      builder: (context, state) =>
+          PLoanCustomerDataPage(flow: state.extra as PLoanFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanConclusion,
+      redirect: (context, state) =>
+          state.extra is PLoanFlow ? null : AppRoutes.pLoanContractSelect,
+      builder: (context, state) =>
+          PLoanConclusionPage(flow: state.extra as PLoanFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.pLoanSuccess,
+      redirect: (context, state) =>
+          state.extra is (PLoanFlow, String) ? null : AppRoutes.home,
+      builder: (context, state) {
+        final (flow, transNo) = state.extra as (PLoanFlow, String);
+        return PLoanSuccessPage(flow: flow, transNo: transNo);
+      },
     ),
     GoRoute(
       path: AppRoutes.customerInfo,
@@ -103,13 +176,15 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.ndidBankSelect,
+      // NdidSubject, not LoanRegisterForm: both the wizard's step 4 and the
+      // P-Loan flow's step 6 push here with their own state object.
       builder: (context, state) =>
-          NdidBankSelectPage(form: state.extra as LoanRegisterForm?),
+          NdidBankSelectPage(form: state.extra as NdidSubject?),
     ),
     GoRoute(
       path: AppRoutes.ndidVerify,
       builder: (context, state) =>
-          NdidVerifyPage(form: state.extra as LoanRegisterForm?),
+          NdidVerifyPage(form: state.extra as NdidSubject?),
     ),
     // ── Step 5: นัดหมายส่งเอกสาร (slide 9) ──────────────────────────
     GoRoute(

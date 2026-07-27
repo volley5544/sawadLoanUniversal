@@ -4,15 +4,32 @@ Flutter app for a Thai loan-application ("สมัครสินเชื่�
 Flutter web**, embedded inside a separate native Flutter app via
 `flutter_inappwebview` (the native host launches this web build in a WebView).
 Android/iOS/desktop scaffolding still exists but the web build is what ships.
-**UI-only at this stage** — no backend/API wiring yet, and no Firebase SDK in
-the app. Firebase is used **only for Hosting** (deploying the web build); there
-are two projects, `prod` and `uat` (see Deploy below). Screens render from mock
-data + a customer profile the host will provide. App language/data is **Thai**;
-code comments are English.
+App language/data is **Thai**; code comments are English.
+
+**Two features, at very different stages** — this is the thing to get straight
+before changing anything:
+
+| | 5-step loan-register wizard (`lib/loan_register/`) | P-Loan application (`lib/p_loan/application/`) |
+| --- | --- | --- |
+| State | **UI-only.** Renders from `LoanRegisterForm.mock()` | **Live end to end**, no mock fallback |
+| Submits | nowhere — final ถัดไป is a SnackBar | `POST /topup` (Extra) / `POST /SavePloanContract` (new) |
+| Reads | a customer profile + address book | `/user/detail`, `/loan/list`, `/topup/*`, `/pdf/loan`, `/vision/thai-id-validate` |
+
+There is still **no Firebase SDK** in the app — but Firebase is no longer only
+Hosting: the uat project also serves a runtime-config document over the
+**Firestore REST API**, read with an **anonymous Auth** token minted over REST
+(`services/firebase_auth_rest.dart`, `services/app_config_api.dart`). Two
+projects, `prod` and `uat` (see Deploy below).
 
 ## Current state (read this first)
 
-- **No backend yet.** The wizard does not submit anywhere. It now runs all the
+- **The P-Loan application flow is the live one.** Its screens have no mock
+  fallback (fixtures exist behind a default-off define — see **Mock mode**). Both
+  products post to a real endpoint, but only the **Extra** path can currently
+  complete: a **new P-Loan** submit is blocked on a native-host handler that does
+  not exist yet (see **Outstanding** #2). Everything below in this list is about
+  the **wizard**, which is still UI-only.
+- **The wizard has no backend.** It does not submit anywhere. It now runs all the
   way through **step 5** (ข้อมูลลูกค้า → หลักประกัน → สินเชื่อ → เอกสารแนบ/NDID →
   นัดหมายส่งเอกสาร); the final "ถัดไป" on step 5 just shows a `SnackBar`
   ("บันทึกข้อมูลเรียบร้อย"). "บันทึกเตรียมข้อมูล" (save draft) buttons only show a
@@ -53,7 +70,7 @@ code comments are English.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # smoke test (app boots to the list page) — green
+flutter test               # 79 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -104,6 +121,71 @@ firebase deploy --only hosting -P prod
 - `firebase.json` serves `build/web` as an SPA and sends `no-cache` for
   `index.html`, `flutter_bootstrap.js`, `main.dart.js`,
   `flutter_service_worker.js` so the WebView never serves a stale build.
+
+### Auto-deploy to uat (`tools/deploy-uat.sh`)
+
+A `Stop` hook in `.claude/settings.local.json` runs `tools/deploy-uat.sh` when
+Claude finishes a turn, so code changes reach uat without asking. Run it by hand
+any time — `tools/deploy-uat.sh [--force]`.
+
+Deliberately **not** a `PostToolUse`/`Write|Edit` hook: that fires after every
+single edit and would push dozens of half-finished refactors per task.
+
+The script declines to deploy when:
+
+- **nothing changed** — it fingerprints `lib/`, `web/`, `assets/`,
+  `pubspec.yaml` and `pubspec.lock` against `.deploy-stamp-uat`, so a docs- or
+  test-only turn is a silent no-op;
+- **`flutter analyze` reports an error or warning** — it never ships a build
+  that doesn't compile, and reports the first message instead.
+
+`WEB_VERSION` is derived from the version **actually live** on the site (+1)
+rather than a local counter, so a CI deploy in between can't make it go
+backwards. The stamp is only written after a successful deploy, so a failure
+retries on the next turn. Both stamp files are git-ignored.
+
+**Still manual:** bumping `sawad_loan_universal_version_uat` in the host's
+appConfig to match. Until that is raised, the host's stale-cache auto-reload
+won't fire for the new build.
+
+### appConfig Firestore importer (`tools/firestore-import/`)
+
+Beyond Hosting, the **uat** project (`sawad-loan-universal-uat`) now also holds
+the appConfig document **`application/config`** — the same shape as the srisawad
+mobile app's, including `sawad_loan_universal_version` /
+`…_version_uat`. It was seeded on 2026-07-27 from the dump in
+`etc/firestore_clone_data.txt`.
+
+`tools/firestore-import/import-config.mjs` parses those console-export dumps
+(`<field>` / `<value>` / `(<type>)` records, brace-delimited `(map)`,
+index-keyed `(array)`) into Firestore REST typed values and PATCHes them to a
+project. **One tap:** double-click `import-uat-config.bat` in the repo root.
+
+```sh
+node tools/firestore-import/import-config.mjs --dry-run   # preview only
+node tools/firestore-import/import-config.mjs             # write to the uat alias
+```
+
+- Zero npm deps (Node 20 `fetch`); auth reuses the **Firebase CLI login** —
+  it reads the CLI's `cloud-platform`-scoped access token from
+  `~/.config/configstore/firebase-tools.json` and shells out to `firebase
+  projects:list` to refresh it when near expiry, so no service-account key is
+  needed. `firebase login` is the only prerequisite.
+- Defaults to the `uat` alias in `.firebaserc`; **refuses prod-looking project
+  ids** unless `--allow-prod`. Backs the existing document up to `etc/backup/`
+  before writing, replaces by default (`--merge` to keep unlisted fields), and
+  reads back to verify. Unknown `(type)` markers are a hard error, never a
+  guess.
+- `etc/*.txt` and `etc/backup/` are **git-ignored** — the dumps contain live
+  `agent_web_api_token*` values.
+- **`application/config` is the private one.** It holds the
+  `agent_web_api_token*` values, and `firestore.rules` grants no client any
+  access to it (verified: an anonymous `GET` returns **403**). The app reads
+  `application/public_config` instead — see **Runtime config from Firestore**.
+- Its `sawad_loan_universal_version_uat` field is **vestigial**, left over from
+  the seeded dump. The host's stale-build check reads the *srisawad* project's
+  appConfig, not this copy, so don't chase this number when a client looks
+  stale.
 
 ## App structure (lib/)
 
@@ -181,6 +263,12 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   list + an acknowledge checkbox; the "ลงนามเอกสารและยืนยันตัวตน NDID" button
   starts the NDID flow and, on success, pops `true` back to step 4.
 - `ndid_bank_select_page.dart` — **เลือกผู้ให้บริการ NDID** (slide 8 frames 3–4).
+  **Shared with the P-Loan flow's step 6.** It and `ndid_verify_page` take a
+  `NdidSubject` (`models/ndid_subject.dart`) rather than a `LoanRegisterForm`:
+  they only ever needed the Thai ID and the picked IdP id, so `LoanRegisterForm`
+  and `PLoanFlow` both implement that interface instead of the pages being
+  duplicated. `ndidThaiId` is digits-only — the wizard holds it formatted for
+  display, and each implementation strips its own.
   Registered vs not-registered bank grids; ย้อนกลับ / ถัดไป. Inside the host the
   grids come from `NdidApi.listIdps()` (with the form's Thai ID → registered;
   full list minus those → not registered) with loading/retry states; a plain
@@ -224,9 +312,383 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   on step 4 are held in page state only (not on the form). When adding fields
   here, also seed them in `mock()`.
 
-### P-Loan registration form (`lib/p_loan/`)
+### P-Loan (`lib/p_loan/`) — two separate features
 
-A **standalone** data-entry form — *not* part of the 5-step wizard — reached from
+`lib/p_loan/` holds **two unrelated things**, both ported from the FlutterFlow
+project at `D:\FlutterProject\land_and_house_web_new`. Don't confuse them:
+
+| | `submit_form/` | `application/` |
+| --- | --- | --- |
+| What | Internal 34-field data-entry form | Customer-facing 6-step wizard |
+| Source folder | its `lib/p_loan_form_page/` | its `lib/p_loan/` |
+| Submits to | `regmast_ploan.php` (internal IP) | `POST /topup` (Extra) / `POST /SavePloanContract` (new) |
+| Home-menu card | สมัครสินเชื่อ P-Loan | ขอสินเชื่อส่วนบุคคล |
+| Data | Sample/mock values | Live API, no mock fallback |
+
+### P-Loan application flow (`lib/p_loan/application/`)
+
+A **6-step wizard**: เลือกสัญญา → ยอดจัดสินเชื่อ → จำนวนงวด →
+รูปภาพหลักประกัน → ตรวจสอบข้อมูลส่วนตัว → สรุป/ยืนยัน, then a success screen.
+Entry point `AppRoutes.pLoanContractSelect` (`/pLoan/contract`). Step 6 ends
+with an NDID signing hop reusing the wizard's screens — see **Step 6** below.
+
+#### Two products, one flow (`PLoanKind`)
+
+Step 1 offers both, and everything after it is the same six screens:
+
+| | `PLoanKind.extra` — **สินเชื่อเพิ่ม** | `PLoanKind.newLoan` — **ขอสินเชื่อใหม่** |
+| --- | --- | --- |
+| What | more money against an existing contract | a fresh personal loan |
+| Step 1 | the contract carousel | the soft-orange card above it |
+| Amount | pre-filled with the contract's approved limit | **starts blank**, customer types it |
+| Bounds | `min/max_topup_amount` | none client-side (see below) |
+| Payout | request − old principal − duty | request − duty |
+| Submits to | `POST /topup` | `POST /SavePloanContract` |
+
+`PLoanFlow.kind` is set on step 1 and read by every screen after it. The Extra
+path is byte-for-byte what it was; only the new path is new, and only it shows
+the `PLoanKindBanner` strip, so an unmarked flow is an Extra.
+
+**A new P-Loan still picks a contract.** Every endpoint the flow touches
+(`/topup/detail` for the interest rate and stamp duty, `/topup/calculator`,
+`/pdf/loan`) is keyed by `db_name` + `contract_no`, so one is needed to reach
+them at all. Nothing is drawn against it — it is a **data reference**, which is
+exactly what the regmast field `refContractNo` ("เลขที่สัญญาอ้างอิง") already
+meant. The card names the contract it will reference (the one visible in the
+carousel below, so swiping changes it) rather than silently picking one.
+Consequence: **no contracts ⇒ neither product is available**, and step 1 says so.
+
+**The two kinds submit to different endpoints, and must.** `POST /topup` books
+against `contract_no`, so posting a new P-Loan there would file a top-up of the
+customer's existing loan for an amount never approved against it.
+`PLoanFlow.toSubmissionJson()` **throws** for `newLoan` (pinned by
+`test/p_loan_flow_test.dart`) and `PLoanFlow.submitTarget` picks the endpoint;
+step 6 switches on it. A new P-Loan goes to the P-Loan save API below.
+
+**No invented amount limits.** For a new loan the only client-side rule is
+`PLoanFlow.newLoanMinimumAmount` (100 — the rounding unit). Whether the product
+will price a given amount is `/topup/calculator`'s answer, and its message is
+shown as-is rather than pre-empted with a guessed floor or ceiling. If the real
+product has bounds, they belong on the server or in the config, not here.
+
+**Read the source's history before changing this.** Its `lib/p_loan` folder is a
+copy-paste fork of `lib/customer_topup`, only lightly renamed — `ploan_status_page`
+differs from `topup_status_page` by 36 lines, all of them class/route names — and
+it was left half-finished:
+
+- Its final submit was **unreachable** (`if (!false) { Navigator.pop(); return; }`
+  sat directly above `saveNewTopupCall`), so this port is the first version that
+  actually posts. **It submits `POST /topup`, not `regmast_ploan.php`** — that
+  endpoint family is what the whole flow reads from, so the feature is a top-up
+  request wearing P-Loan naming. Rename it if that's wrong.
+- Step 2's amount field/slider/validation sat behind
+  `if (FFAppState().savePLoanData.isNewPLoan)`, and `savePLoanData` was never
+  assigned, so the screen always rendered read-only. **The input is enabled here**
+  per the behaviour that dead code documented (bounds from `/topup/detail`, round
+  down to the nearest 100, re-run the calculator). That flag turned out to be the
+  new-loan product: it is read in exactly one place in the source and assigned
+  nowhere, so the new-P-Loan path was designed there and never built. It is
+  `PLoanKind` here.
+- Its ID check accepted **four hardcoded Thai IDs** alongside the customer's own,
+  which let anyone holding one of those cards verify against *any* account. That
+  backdoor is **deliberately not reproduced** — `test/p_loan_flow_test.dart` pins
+  it shut. Also dropped: a hardcoded dev `hash_thai_id`, a hardcoded contract no.
+  in the upload path, a never-cancelled 1 Hz `while(true) setState()` heartbeat
+  on three pages, and ~a dozen `if (false)` branches.
+
+Structure:
+
+- `models/` — plain-Dart response models (`loan_contract.dart` for `/loan/list`
+  and its nested tree, `loan_amount_detail.dart`, `installment_plan.dart`,
+  `loan_documents.dart`) plus `p_loan_flow.dart`, the mutable state object
+  passed page→page as go_router `extra` (same convention as `LoanRegisterForm`;
+  the source kept all of it in a global `FFAppState`). `json_coerce.dart` holds
+  the tolerant `asString`/`asInt`/`asDouble` helpers — this API returns `1500`,
+  `1500.0` and `"1500"` for the same field.
+- **Wire quirks that are real, not typos** — `topup_argeement_file` (agreement),
+  `lastest_date` (latest), `car_chassisNo`/`car_engineNo` mixed case, and
+  camelCase keys inside `installments[]` while everything around them is
+  snake_case. `/pdf/loan` also wants `x-srisawad: x1_c3Jpc2F3YWQ`, not `x1`.
+- `components/p_loan_components.dart` — money/date formatters, section header,
+  amount row, contract + bank cards, loading/error views, bottom button.
+- `pdf_opener.dart` — conditional import (web/stub) that opens a base64 contract
+  PDF via a `Blob` object URL. The consent sheet requires the document to have
+  been opened before it will accept consent.
+- Step 1 is **slimmed down** from the source's 8,257-line page: the add-on
+  product grid (and its Firestore `topupProductConfig` collection), "special
+  limit" offers, three dead duplicate card implementations and the taps that
+  navigated out into the top-up flow are all left out.
+- Deviation worth knowing: for loan types other than `M`/`C` the source's step-4
+  confirm button was permanently disabled (a dead end). Here those types require
+  the tax-disc photo only, so the flow stays completable.
+
+### P-Loan submission payload (`models/p_loan_submission.dart`)
+
+The wizard carries **everything `regmast_ploan.php` needs** — the same 34 scalar
+fields and 12 image groups `submit_form/p_loan_form_page.dart` collects by hand.
+Nothing is sent to *that* endpoint from the wizard; what actually ships a new
+P-Loan is `PLoanContractSubmission` → `POST /SavePloanContract` (see **P-Loan save
+API** below), which reuses these values under its own field names. This mapper
+stays as the regmast view of the same data, and as the preview for an Extra:
+
+```dart
+final s = PLoanSubmission.fromFlow(flow);
+await PLoanApiService().submit(fields: s.fields, imageGroups: s.imageGroups);
+```
+
+- **Every field is accounted for** — derived from flow state, a fixed constant,
+  or reported in `unresolvedFields`. A field is never filled with a
+  plausible-looking guess: a wrong `empId` or GPS district is worse than a blank
+  one. `test/p_loan_submission_test.dart` asserts the produced key set equals the
+  form's exactly (34, no more, no less), so the two can't drift.
+- **Photos carry two wire identities.** `PLoanPhoto.payloadKey` is its field in
+  the `POST /topup` JSON; `PLoanPhoto.pLoanGroup` is its regmast image group.
+  Several slots share a group — all six vehicle angles are `carImage[]` repeated
+  parts — and a slot may have an empty `payloadKey` when only P-Loan has a slot
+  for it.
+- **`creditAmt` is kind-dependent.** It is the *already-approved* limit, which
+  for an Extra is the contract's top-up headroom. A new P-Loan has none until
+  underwriting sets one, so it is left blank and reported in `unresolvedFields`
+  rather than borrowing the reference contract's — that number describes a
+  different product. `requestCredit`/`loanAmt` carry what the customer asked for
+  either way.
+- **Host-supplied inputs.** `empId`, `mktChannel` and `customerSource` come from
+  optional launch params (`?empId=&mktChannel=&customerSource=`) via `AppState`.
+  `gpsProvinceId` / `gpsAumphurId` are **ids, not names**, so they need a lookup
+  against lat/lng that this flow does not perform — they stay blank and are
+  reported.
+- **Groups with no capture step** — `eSignatureImage`, `requestDocImage` and the
+  four `coBorrow*` co-borrower groups — are listed in
+  `PLoanSubmission.unsupportedImageGroups`. Adding a co-borrower or signature
+  step is what would fill them.
+- Step 4 gained two **optional** attachments for the P-Loan-only groups
+  (เล่มทะเบียนรถ, หน้าสมุดบัญชี); being optional they never block the Next button.
+- In mock mode step 6 shows a **ดู Payload (P-Loan)** button that dumps the
+  fields, file counts and unresolved list — the same QA affordance the submit
+  form has. It is **kind-aware**: for a new P-Loan it previews the
+  `SavePloanContract` payload that will actually be sent, for an Extra the
+  regmast one.
+
+### P-Loan save API (`services/p_loan_contract_api.dart`)
+
+`POST /SavePloanContract` on `https://dev.swpfin.com:8082` — where a **new
+P-Loan** is filed. A separate service from the mobile API: different host and
+port (`kPLoanSaveApiBase`), HTTP **Basic** auth instead of a bearer token
+(`kPLoanSaveApiAuth`), and a `multipart/form-data` body with repeated `group[]`
+file parts. Both defines are overridable per build.
+
+`PLoanContractSubmission.fromFlow(flow)` builds it — a **second** mapper beside
+`PLoanSubmission`, because the field set is close to `regmast_ploan.php` but not
+the same:
+
+| | `PLoanSubmission` (regmast) | `PLoanContractSubmission` (save API) |
+| --- | --- | --- |
+| Customer name | one `test` field | `firstName` + `lastName` |
+| Account holder | — | `bankAccName` |
+| Branch | `branchID` | `branchId` (lower `d`) |
+| Not sent | — | `transNo`, `transDate`, `payDay`, `initialDate`, `lastPeriodPromo`, `remark` |
+| Count | 34 | 30 |
+
+Shared values are **read back from `PLoanSubmission`** rather than re-derived, so
+the two payloads can't disagree about the same number; a test asserts every
+shared key matches and that the produced key set is exactly the 30 from the
+API's own sample (the untracked `etc/api.txt`).
+
+**⚠ Transport: this needs a native-host handler that does not exist yet.**
+Verified against the live endpoint on 2026-07-27:
+
+- no `Authorization` header → **401**;
+- **no `Access-Control-Allow-*` header on any response**, and the `OPTIONS`
+  preflight is 401'd — so a browser upload is blocked before it is sent;
+- `GET`/`OPTIONS` with valid auth → 404. The route is POST-only.
+
+So it can't be called from a plain browser at all, and inside the WebView it
+needs the host's new **`httpMultipart`** bridge handler (contract + host snippet
+in `native_bridge.dart`). `sendMultipartGroupsApiRequest` tries the bridge, falls
+back to a direct upload if the host is older, and when that fails too says which
+handler is missing. CORS headers on the endpoint would be the other fix; either
+side closes it.
+
+**⚠ The Basic credential ships in the bundle.** It is a shared service account
+(`prod` in the username, on the dev host) baked in as a `--dart-define` default,
+the same way `kNdidApiKey` is — and a define changes where a value comes from,
+not who can read it. Anyone can pull it out of `main.dart.js`. The fixes are
+server-side: proxy this endpoint behind the mobile API, or issue a credential
+scoped to this client that can be rotated on its own.
+
+**Fields the flow can't fill**, reported in
+`PLoanContractSubmission.unresolvedFields` rather than guessed:
+`gpsProvinceId`/`gpsAumphurId` (ids needing a lat/lng lookup), `latitude` and
+`longitude` (never assigned — the flow has no device-location step; the
+customer's registered coordinates on `CustomerDetail` are deliberately **not**
+substituted, being a different thing from where the application was raised),
+`creditAmt` for a new loan, and `empId`/`mktChannel`/`customerSource` when the
+host doesn't pass them. On a refusal the client appends the blank ones to the
+server's message, because "HTTP 400" against 30 form fields is unactionable.
+
+### Step 6: contract documents + PDPA consents
+
+**Document viewer.** The three contract PDFs arrive base64 from `POST /pdf/loan`
+and are rendered **inline**: tapping a document row opens a near-full-height
+sheet with `PdfInlineView` (`pdf_view.dart`, conditional import) showing the PDF
+in an `<iframe>` backed by a `Blob` object URL — the browser's own renderer, so
+no PDF dependency. Object URLs are revoked on dispose, and the view factory
+resolves its URL from a map at build time so a reopened sheet can't point at a
+revoked blob.
+
+> ⚠ **Android WebView has no built-in PDF renderer**, so the frame is blank
+> there. Desktop browsers and iOS WKWebView are fine. The sheet keeps an
+> "เปิดในแท็บใหม่" action (`pdf_opener.dart`) that hands the blob to the OS as
+> the fallback; the robust fix is an `openPdf` handler on the native bridge so
+> the host displays it.
+
+Because the document is now on screen, the old "you must open it first" gate is
+gone — only the acknowledge checkbox remains.
+
+**NDID signing.** Step 6 also carries a **ลงนามเอกสารและยืนยันตัวตน NDID**
+section, mirroring the wizard's step 4: a `RegisterFieldRow` that opens the NDID
+flow and, on success, flips to a green check + banner + ดาวน์โหลดเอกสาร. It sets
+`PLoanFlow.ndidVerified`, which **gates `canSubmit`**.
+
+Two deliberate differences from step 4:
+
+- It goes **straight to `ndidBankSelect`**, skipping the wizard's
+  `document_review_page`. That screen exists to show the contract documents
+  before signing, and step 6 already does — with the real PDFs from `/pdf/loan`
+  instead of the wizard's mock list. So the gate here is the document consents:
+  tapping the row before all three are accepted says so. Read, then sign.
+- **ดาวน์โหลดเอกสาร actually opens the PDF** (`pdf_opener.dart`), where the
+  wizard's equivalent is a stub SnackBar — that flow has no documents to open.
+
+Note this is distinct from the ID-card block above it: that is KYC on a photo
+(`/vision/thai-id-validate`), this is the customer signing the contract with
+their bank identity. Both are required. Nothing about the NDID result reaches the
+submit payload — neither `POST /topup` nor `SavePloanContract` has a field for
+it, and `eSignatureImage` stays empty because NDID produces a verification
+reference, not an image.
+
+**PDPA consents.** Two checkboxes at the bottom of step 6 feed
+`marketingConsent` / `sensitiveConsent` on the flow, which map to the payload's
+`marketingConsent`/`sensitiveConsent` as `Y`/`N`. They used to be hardcoded `Y`.
+
+- **ยินยอมข้อมูลอ่อนไหว is required** and gates `PLoanFlow.canSubmit` — the
+  application can't be assessed without it.
+- **ยินยอมการตลาด is a genuine opt-in** and deliberately gates nothing.
+- `N` is a real answer, so neither ever appears in `unresolvedFields`.
+
+### Mock mode (demo switch — off by default)
+
+The flow runs against the **live mobile API**. Fixtures remain behind
+`kPLoanUseMockData` in `config/app_environment.dart`, which **defaults to
+`false`**, for demoing without a backend or reproducing a state the API can't
+currently produce:
+
+```sh
+flutter build web ... --dart-define=P_LOAN_MOCK=true
+```
+
+- Fixtures: `p_loan/application/models/p_loan_mock.dart`. Built by feeding JSON
+  through the real `fromJson` constructors, so a wire-key change breaks them too
+  rather than letting them drift. Also the shared test data for
+  `p_loan_flow_test` / `p_loan_submission_test`.
+- Guards: one `if (kPLoanUseMockData)` per method in `services/p_loan_api.dart`,
+  including `fetchCustomer` / `fetchAddressBook` — which is why steps 1 and 5
+  call `PLoanApi` rather than `UserApi` directly.
+- While on, every screen shows `PLoanMockBanner` and a submit returns a `MOCK-`
+  prefixed transaction number. `test/p_loan_mock_test.dart` asserts the default
+  is **off**, so a deployment can never quietly serve fixtures.
+
+### Live API behaviour worth knowing
+
+Verified against `https://dev.swpfin.com:7076`:
+
+- **Business hours.** `GET /topup/detail` answers `code: "503"` with
+  `"50301:ท่านสามารถขอสินเชื่อได้ในเวลา 07:00 ถึง 20:30 เท่านั้น"` outside
+  07:00–20:30. Step 2 surfaces that message in its error view with a retry —
+  it is the API's rule, not a bug.
+- **Unknown customer.** `GET /user/detail` answers `results.code: "404"` /
+  `"Not Found"` rather than an HTTP error, so step 1 shows "Not Found" when the
+  launch `hashThaiId` is not a real customer.
+- **Empty contract list.** `GET /loan/list` answers `200` with
+  `results: []`, which step 1 renders as "ไม่พบสัญญาที่สามารถขอสินเชื่อได้".
+- The mobile API sends `access-control-allow-origin: *`, which is what lets the
+  multipart ID-card upload bypass the native bridge (see `api_transport.dart`).
+
+### Runtime config from Firestore (`services/app_config_api.dart`)
+
+On startup `main.dart` fires an **un-awaited** `_loadRuntimeConfig()` that reads
+the Firestore document **`application/public_config`** (path overridable with
+`--dart-define=APP_CONFIG_PATH=collection/doc`) from the project in
+`AppEnvironment.current.firebaseProjectId`, and publishes it on
+`AppState.appConfig`. Verified working on uat: it resolves
+`api_url.api_url_base` = `https://dev.swpfin.com:7076`.
+
+- **No Firebase SDK** — it's a plain `GET` against the Firestore REST API
+  through the usual `sendApiRequest` transport, with
+  `services/firestore_rest.dart` unwrapping the typed-value format
+  (`{"stringValue": …}`, `mapValue`, `arrayValue`, `integerValue`-as-string).
+  That decoder is the inverse of `tools/firestore-import/parse-dump.mjs`.
+- `AppConfigApi.ensureLoaded()` **memoises** the request, so `SrisawadApi.baseUrl()`
+  can await it on every call without re-fetching and without blocking boot.
+- It **never throws.** Any failure resolves to an empty `AppConfig`, records
+  `AppConfigApi.lastError`, and the API clients fall back to the compile-time
+  `AppEnvironment.mobileApiBase`. The reason is `print`ed so a denied read is
+  visible in the WebView console.
+- **Authenticated with an anonymous identity.** The rules gate the document on
+  `request.auth != null`, so `AppConfigApi` first calls
+  `FirebaseAuthRest.idToken()` (`accounts:signUp`, memoised, renewed 5 min
+  before expiry) and sends it as a bearer. When sign-in fails, the read is
+  skipped and the compile-time endpoint is used.
+- **Anonymous auth is not an access control** and the code says so: anyone can
+  mint a token with the public web API key, which ships in this bundle. What it
+  buys is a Firebase UID per reader (traceable, rate-limitable), rules that
+  never say `if true`, and the hook App Check would plug into. The **actual**
+  protection is that this document holds no secrets.
+- **Why `public_config` and not `config`:** rules are per-document, not
+  per-field, and `application/config` also holds `agent_web_api_token*`. There
+  is no way to expose part of a document, so the non-secret URL map lives in its
+  own document. `firestore.rules` allows `get` (not `read`, so the collection
+  can't be listed) on that one document and denies everything else, including
+  `application/config`.
+
+### API groups (`lib/services/`)
+
+Split into groups on purpose, even though P-Loan and top-up currently hit the
+same endpoints — the two products share them because both start from the same
+data (an existing contract, its limit, its installment calculation).
+
+| File | Contents |
+| --- | --- |
+| `srisawad_api.dart` | Shared base-URL resolution, headers, send helper, `SrisawadApiException`, and `GET /loan/list` (shared by both products) |
+| `topup_api.dart` | `TopupApi` — `/topup/detail`, `/topup/calculator`, `POST /topup` |
+| `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan` and `/vision/thai-id-validate` |
+| `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /SavePloanContract`, the **P-Loan save API** (own host, Basic auth, multipart). Reached via `PLoanApi.saveNewLoan` |
+| `user_api.dart` | Customer profile + address book |
+
+**Base URL resolution order** (`SrisawadApi.baseUrl()`):
+`api_url['api_url_base']` from the config → `api_url_prod`/`api_url_dev` for the
+active env → `AppEnvironment.current.mobileApiBase`. `api_url_base` is preferred
+because it is **per-project**: the uat Firebase project's copy holds the uat host
+(`https://dev.swpfin.com:7076`) and prod's holds prod, so it can't cross
+environments the way the absolute `api_url_prod` key would. Trailing slashes are
+stripped, so a value like `https://mobile-api.swpfin.com/` won't produce `//`.
+
+When P-Loan gets its own endpoints, only the delegating methods in `PLoanApi`
+change — no screen is touched.
+
+Failures throw `SrisawadApiException`; there is **no mock fallback**, so callers
+must render an error state. `POST /topup` replies with a `head`/`body` envelope
+unlike every other endpoint here (`head.error_flag == 'N'` means success).
+
+`sendMultipartApiRequest` (in `api_transport.dart`) always uses `package:http`
+directly, even inside the host: the `httpRequest` bridge carries its body as a JS
+string and can't round-trip binary. That's safe for the mobile API specifically
+because it sends `access-control-allow-origin: *` — do **not** reuse it for the
+NDID gateway.
+
+### P-Loan submission form (`lib/p_loan/submit_form/`)
+
+A **standalone** data-entry form — *not* part of any wizard — reached from
 the third home-menu card (**สมัครสินเชื่อ P-Loan**, go_router route
 `/pLoanFormPage`, `AppRoutes.pLoanForm`). Its fields map **1:1** to the legacy
 P-Loan submission API `regmast_ploan.php` (originally a PHP `curl` call; the
@@ -237,8 +699,15 @@ reference).
   / ลูกค้า / สินเชื่อ / การโอนเงิน / GPS / ความยินยอม), each an editable
   `RegisterTextField` **seeded with sample values** so the page renders fully
   populated (same mock convention as the wizard). Plus 12 **image-attachment
-  groups** (`documentImage`, `cardIdImage`, `carImage`, …) captured via
-  `NativeCameraBridge.captureDocument(<groupKey>)`, shown as removable thumbnails.
+  groups** (`documentImage`, `cardIdImage`, `carImage`, …) shown as removable
+  thumbnails. Each group's **แนบรูป** button opens a source bottom sheet
+  (ถ่ายรูป / เลือกรูปจากคลังภาพ): กล้อง uses
+  `NativeCameraBridge.captureDocument(<groupKey>)` when the host bridge is
+  available (framing mask + native downscale) and otherwise falls back to
+  `image_picker`; คลังภาพ always goes through `image_picker`. Unlike the wizard's
+  OCR buttons this works in a plain browser too. Note
+  `image_picker_for_web` **ignores** `maxWidth`/`imageQuality`, so a
+  gallery/browser pick uploads the original-resolution bytes.
   Bottom bar (`SaveNextBar`): **ดู Payload** previews the exact fields + file
   counts in a dialog; **ส่งข้อมูล** submits.
 - `services/p_loan_api_service.dart` — `PLoanApiService`: builds the
@@ -320,6 +789,13 @@ mixed content when the app is served over `https:`).
 - Compress the photo natively (≈1280px / JPEG ~80) before base64 so the bridge
   stays fast. The full handler code lives in the doc comment of
   `native_bridge.dart`.
+- **`httpMultipart` handler — ⚠ not implemented by the host yet.** Needed by
+  the P-Loan save API, which takes file parts and sends no CORS headers.
+  `httpRequest` can't carry it (its body is a single string), so this handler
+  takes the parts as **base64 inside its JSON envelope** and the host assembles
+  the real multipart request natively. Full snippet in `native_bridge.dart`'s
+  doc comment. Until it exists, a new-P-Loan submit fails with a message naming
+  it.
 - **`openBranchPicker` handler:** `pickBranch()` asks the host to open its
   branch-picker map (step-5 appointment). The host pushes a selection-mode map
   page and returns the chosen branch as a **JSON string** (`branchName`,
@@ -345,24 +821,36 @@ mixed content when the app is served over `https:`).
 ## Assets
 
 `assets/` holds `MotorLoanIcon.svg`, `DocumentIcon.svg` (rendered via
-`flutter_svg`). `pubspec.yaml` includes the whole `assets/` dir.
+`flutter_svg`). `assets/p_loan/` holds the 14 icons for the P-Loan application
+flow, copied from the source project. **They live in a subfolder on purpose:**
+the source's `MotorLoanIcon.svg` is a different 6.4 KB file that would otherwise
+overwrite our 313-byte one. `pubspec.yaml` lists `assets/` and `assets/p_loan/`
+separately — a bare `assets/` entry does **not** recurse into subdirectories.
 
 ## Dependencies
 
 `shared_preferences` (persist `CustomerDetail`), `google_fonts` (NotoSansThai),
 `hexcolor`, `flutter_svg`, `web` (window/console bindings for the native
 bridge), `http` (NDID local-node API client + P-Loan `regmast_ploan.php`
-client). The `camera` plugin was **removed** — the host owns the camera. SDK
+client), `image_picker` (camera/gallery picking for the P-Loan attachment
+groups; on web it's a hidden `<input type="file" accept="image/*">`, so it needs
+the WebView host to support the file chooser). The wizard's OCR/document capture
+still goes through the host bridge — the host owns that camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
 `colorScheme: .fromSeed(...)`, `mainAxisAlignment: .center`); needs a recent
 toolchain (built on Flutter 3.38 / Dart 3.10).
 
 ## Known quirks / gotchas
 
-- `flutter analyze` reports ~19 **pre-existing `info` lints** (`use_super_parameters`,
-  `withOpacity` deprecation, `unnecessary_underscores`) in the original screen
-  code — no errors. Not introduced by the web conversion; clean up when
-  convenient.
+- `flutter analyze` reports **39 pre-existing `info` lints**
+  (`use_super_parameters`, `withOpacity` deprecation, `unnecessary_underscores`,
+  `use_null_aware_elements`) in the original screen code — **no errors or
+  warnings**. That count is the baseline: if a change makes it 40, the extra one
+  is yours. New code uses the modern forms (`withValues`, `?value` map entries)
+  rather than matching the surrounding lint.
+- **The repo is not `dart format`-clean** (29 of 41 files predate it). Don't run
+  a repo-wide format — it buries real changes in whitespace. Match the local
+  style by hand.
 - Buddhist-era dates: the UI shows/expects B.E. `dd/MM/yyyy` (year = CE + 543).
   `_formatBuddhistDate` assumes a year > 2200 is already B.E. Today's "2569" =
   2026 CE.
@@ -371,6 +859,78 @@ toolchain (built on Flutter 3.38 / Dart 3.10).
   fields.
 - Non-web targets: `NativeCameraBridge` is a stub that throws; the OCR button
   shows a "ใช้ได้เฉพาะในแอป" snackbar (guarded by `NativeCameraBridge.isSupported`).
+
+## Security posture
+
+`firestore.rules` (deployed to **both** projects) is an allowlist of exactly one
+document:
+
+```
+match /{document=**}            { allow read, write: if false; }   // baseline
+match /application/public_config { allow get: if request.auth != null;
+                                   allow list, write: if false; }
+```
+
+**History worth not repeating:** uat was briefly left at
+`allow read, write: if true`. That was verified exploitable with zero
+credentials — both `agent_web_api_token` values were readable and arbitrary
+writes succeeded (a probe document was written, then deleted). The rules file
+exists to stop that recurring; it is checked in, so deploy it with
+`firebase deploy --only firestore:rules -P uat|prod` after any change.
+
+Credentials that ship in the web bundle, and therefore are **not** secret from
+anyone who opens the app: the Firebase web API key (fine — it grants nothing),
+`kNdidApiKey`, and `kPLoanSaveApiAuth` (**not** fine — a shared service account;
+see **P-Loan save API**).
+
+## Outstanding (next session starts here)
+
+Grouped by who has to act. Nothing here is a bug in shipped behaviour — each is
+either a decision someone else owns, or something left undone on purpose with the
+reason recorded.
+
+**Needs someone else to act:**
+
+1. **Rotate `agent_web_api_token` and `agent_web_api_token_uat`.** They were
+   readable by anyone while the uat rules were open. Closing the rules does not
+   un-leak them.
+2. **Implement the `httpMultipart` bridge handler in the host app**
+   (`loan_universal_web_widget.dart`; full snippet in `native_bridge.dart`).
+   Until then **a new-P-Loan submit cannot succeed** — the save endpoint sends no
+   CORS headers, so the browser blocks the upload. The app already fails with a
+   message naming the handler. CORS headers on the endpoint would fix it from the
+   other side instead.
+3. **Do something about `kPLoanSaveApiAuth`.** Proxy `SavePloanContract` behind
+   the mobile API, or issue a client-scoped credential. A `--dart-define` moved
+   where the value comes from, not who can read it.
+4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
+   to match the deployed `WEB_VERSION` (35 as of 2026-07-28), or the host's
+   stale-cache auto-reload never fires.
+5. **`empId` / `mktChannel` / `customerSource`** reach the payload only if the
+   host appends them as launch params. They are blank otherwise and reported.
+
+**Open in this repo, deliberately not done:**
+
+6. **No live `SavePloanContract` submit has ever run.** Auth, routing and the
+   CORS behaviour were verified by probing; the field mapping is verified against
+   the API's sample and by tests. One real submit is still needed — it was
+   skipped rather than file a junk application in dev.
+7. **`latitude` / `longitude` have no source.** `PLoanFlow` never assigns them —
+   there is no device-location step. `CustomerDetail` carries registered
+   coordinates, deliberately **not** substituted: "where the application was
+   raised" is a different fact. `gpsProvinceId`/`gpsAumphurId` likewise need an
+   id lookup from lat/lng.
+8. **`firebase.json` cache headers miss `/` and deep links.** Hosting matches the
+   requested path, not the rewritten one, so `/index.html` gets `no-cache` but
+   `/` and `/pLoan/contract` get `max-age=3600`.
+9. **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey` is
+   empty — anonymous sign-in is skipped there and the compile-time endpoint is
+   used. Register one and paste the key to enable the config read on prod.
+10. **Android WebView cannot render the inline PDF** (`pdf_view_web.dart`'s
+    iframe is blank). "เปิดในแท็บใหม่" is the fallback; an `openPdf` bridge
+    handler is the real fix.
+11. **App Check** is not enabled, and the `?token=` JWT still travels in the
+    launch URL.
 
 ## Conventions
 

@@ -8,16 +8,22 @@ a separate **native Flutter app** via
 native host opens this web build in a WebView). The Android/iOS/desktop
 scaffolding still exists, but the **web build is what ships**.
 
-> Status: **UI-only** — no backend wiring yet. Screens render from mock data and
-> a customer profile the native host will provide. UI text/data is Thai; code
-> comments are English.
+> **Two features at different stages.** The 5-step wizard is **UI-only** — no
+> backend submit; its screens render from mock data plus a customer profile the
+> native host provides. The **P-Loan application flow**
+> (`lib/p_loan/application/`) is **live end to end** against the srisawad mobile
+> API, with no mock fallback. UI text/data is Thai; code comments are English.
+>
+> See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
+> whom — most notably, a new-P-Loan submit needs an `httpMultipart` handler in
+> the native host before it can succeed.
 
 ## Build & run
 
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # widget smoke test
+flutter test                                  # 79 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -80,6 +86,10 @@ card on step 4 to its verified state (green check + ดาวน์โหลด�
 the bottom **ถัดไป** → step 5. The NDID verified flag lives on
 `LoanRegisterForm.ndidVerified`.
 
+The two NDID screens are **shared with the P-Loan flow's step 6**: they take a
+`NdidSubject` (`lib/models/ndid_subject.dart`), which both `LoanRegisterForm`
+and `PLoanFlow` implement, so neither flow needs a copy of them.
+
 > The **bank's own app** screens (K+ PIN pad, NDID provider consent/terms) are
 > **third-party — not rebuilt here**. `ndid_verify_page` simulates that hop with
 > a "จำลองยืนยันตัวตนสำเร็จ" button; a real integration would receive the IDP
@@ -99,13 +109,68 @@ date/time calendar** screens (slide 9, right frames) are **out of scope** and
 not built. Step 5's **ถัดไป** is the end of the (UI-only) flow — it shows a
 "บันทึกข้อมูลเรียบร้อย" SnackBar; no backend submit yet.
 
-## P-Loan registration form
+## P-Loan application flow
+
+A **6-step wizard** (`lib/p_loan/application/`, entry route `/pLoan/contract`,
+home-menu card **ขอสินเชื่อส่วนบุคคล**): เลือกสัญญา → ยอดจัดสินเชื่อ → จำนวนงวด
+→ รูปภาพหลักประกัน → ตรวจสอบข้อมูลส่วนตัว → สรุป/ยืนยัน. Unlike the rest of this
+repo it is wired to live APIs with **no mock fallback** — see
+`lib/services/p_loan_api.dart`.
+
+Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
+
+- **สินเชื่อเพิ่มจากสัญญาเดิม** (P-Loan Extra) — the contract carousel. More
+  money against a contract the customer already has; the amount is pre-filled
+  with that contract's approved limit and bounded by it.
+- **ขอสินเชื่อใหม่** (new P-Loan) — the card above it. A fresh loan whose amount
+  **starts blank** for the customer to type, with no limit inherited from a
+  contract and no old principal deducted from the payout.
+
+A contract is picked either way: for a new P-Loan it is only a **data
+reference**, because every endpoint the flow calls is keyed by
+`db_name` + `contract_no`.
+
+The two kinds **submit to different endpoints**, because `POST /topup` books
+against that contract: an Extra goes there, a new P-Loan goes to the P-Loan save
+API (`POST /SavePloanContract`, `lib/services/p_loan_contract_api.dart`).
+⚠ That endpoint sends no CORS headers, so it needs an `httpMultipart` handler on
+the native bridge that **the host app does not implement yet** — see
+[CLAUDE.md](CLAUDE.md), which also covers the Basic credential that ships in the
+web bundle.
+
+Step 6 ends with an **NDID** hop — the customer signs the contract documents
+with their bank identity, reusing the wizard's own NDID screens (they take a
+`NdidSubject`, which both flows implement). It gates the submit.
+
+API endpoints are read at startup from the Firestore document
+**`application/public_config`** (`api_url.api_url_base`), authenticated with an
+**anonymous** Firebase identity minted over REST — there is no Firebase SDK in
+the app. It falls back to the compile-time `AppEnvironment` value if that read
+fails, and never blocks boot. The secrets live in a *separate*
+`application/config` document that no client rule grants access to; `firestore.rules`
+is checked in and deployed to both projects.
+
+Payload mapping: `PLoanContractSubmission.fromFlow(flow)` builds the 30 fields
+`SavePloanContract` takes, and `PLoanSubmission.fromFlow(flow)` the 34 that
+`regmast_ploan.php` does — the shared values are read back from the latter so the
+two can't drift. Fields with no source in this flow are reported in
+`unresolvedFields` rather than guessed.
+
+Ported from the FlutterFlow app's `lib/p_loan`, which turned out to be an
+unfinished copy-paste fork of its top-up flow: the submit was unreachable, step
+2's amount input never rendered, and the ID check accepted four hardcoded Thai
+IDs. All three are fixed/removed here — the details and the remaining naming
+caveat are in [CLAUDE.md](CLAUDE.md).
+
+## P-Loan submission form
 
 Separate from the wizard, a **standalone** form (home-menu card **สมัครสินเชื่อ
 P-Loan**, route `/pLoanFormPage`) whose fields map **1:1** to the legacy
-`regmast_ploan.php` submission API. `lib/p_loan/p_loan_form_page.dart` renders 34
-scalar fields (seeded with sample values) plus 12 image-attachment groups that
-capture through the native camera bridge;
+`regmast_ploan.php` submission API. `lib/p_loan/submit_form/p_loan_form_page.dart` renders 34
+scalar fields (seeded with sample values) plus 12 image-attachment groups. Each
+group's **แนบรูป** button asks for a source (ถ่ายรูป / เลือกรูปจากคลังภาพ): the camera
+uses the native bridge inside the host and `image_picker` elsewhere, the gallery
+always uses `image_picker` — so attachments also work in a plain browser.
 `lib/services/p_loan_api_service.dart` builds the `multipart/form-data` POST
 (scalar fields + repeated `key[]` file parts) mirroring the original PHP `curl`
 call. **ดู Payload** previews the request; **ส่งข้อมูล** submits. The endpoint is
@@ -161,20 +226,35 @@ The full handler example also lives in the doc comment of
 
 ```
 lib/
-  main.dart                     app entry; reads ?hashThaiId; home = list page
+  main.dart                     app entry; launch params; warms runtime config
   app_state.dart                ChangeNotifier singleton; persists CustomerDetail
-  models/customer_detail.dart   plain-Dart API model (snake_case JSON)
+  models/
+    customer_detail.dart        plain-Dart API model (snake_case JSON)
+    ndid_subject.dart           what the shared NDID screens need from a flow
+    app_config.dart             the Firestore runtime-config document
   services/
     native_bridge.dart          public entry (conditional import)
     native_bridge_web.dart      web impl (flutter_inappwebview callHandler)
     native_bridge_stub.dart     non-web stub (throws / isSupported=false)
+    api_transport.dart          shared HTTP + multipart, bridge-aware
     p_loan_api_service.dart     regmast_ploan.php multipart client
+    srisawad_api.dart           shared base URL / headers / GET /loan/list
+    topup_api.dart              top-up API group (/topup/*)
+    p_loan_api.dart             P-Loan API group (the flow's single seam)
+    p_loan_contract_api.dart    P-Loan save API (POST /SavePloanContract)
+    app_config_api.dart         Firestore runtime config (REST, no SDK)
+    firebase_auth_rest.dart     anonymous sign-in over REST (no SDK)
+    firestore_rest.dart         typed-value decoder for the REST format
   loan_register/
     *_page.dart                 the wizard steps & pickers
     models/loan_register_form.dart   in-memory wizard model (+ mock data)
     components/                  shared field rows, styles, step indicator, etc.
   p_loan/
-    p_loan_form_page.dart       standalone P-Loan form (regmast_ploan.php API)
+    submit_form/                standalone P-Loan form (regmast_ploan.php API)
+    application/                6-step P-Loan application flow (mobile API)
+firestore.rules                 deny-by-default + one client-readable document
+tools/firestore-import/         seeds appConfig from a console-export dump
+tools/deploy-uat.sh             Stop-hook auto-deploy to uat
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture notes, conventions, and

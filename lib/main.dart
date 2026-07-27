@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'config/app_environment.dart';
 import 'router/app_router.dart';
 import 'router/url_strategy.dart';
+import 'services/app_config_api.dart';
 import 'services/native_bridge.dart';
 import 'services/user_api.dart';
 
@@ -48,6 +49,17 @@ Future<void> main() async {
   // needs. (Path URL strategy is on, so the query is before any path.)
   appState.hashThaiId = Uri.base.queryParameters['hashThaiId'] ?? '';
   appState.authToken = Uri.base.queryParameters['token'] ?? '';
+  // Optional; only the P-Loan submission uses these.
+  appState.empId = Uri.base.queryParameters['empId'] ?? '';
+  appState.mktChannel = Uri.base.queryParameters['mktChannel'] ?? '';
+  appState.customerSource = Uri.base.queryParameters['customerSource'] ?? '';
+
+  // Warm the runtime config (Firestore `application/config`) so the API
+  // clients' base URL is ready before the user can reach a screen that calls
+  // one. Not awaited — boot isn't blocked on it; SrisawadApi.baseUrl() awaits
+  // the same memoised future, so a call that beats the fetch still gets the
+  // right endpoint rather than the fallback.
+  unawaited(_loadRuntimeConfig());
 
   // Fetch the customer profile + address book in the background so step 1
   // auto-fills. Deliberately not awaited: the UI boots on persisted/mock data
@@ -55,6 +67,27 @@ Future<void> main() async {
   unawaited(_loadCustomerProfile());
 
   runApp(const MyApp());
+}
+
+/// Loads the Firestore runtime config and publishes it on [AppState].
+///
+/// Never throws: [AppConfigApi] resolves to an empty config on any failure and
+/// records the reason, which is logged here so a denied read is visible in the
+/// WebView console instead of silently falling back.
+Future<void> _loadRuntimeConfig() async {
+  final config = await AppConfigApi.ensureLoaded();
+  appState.appConfig = config;
+
+  final error = AppConfigApi.lastError;
+  if (error != null) {
+    // ignore: avoid_print — intentional: surface in the WebView console.
+    print('[SawadLoanUniversal] app config: $error '
+        '(falling back to ${AppEnvironment.current.mobileApiBase})');
+    return;
+  }
+  // ignore: avoid_print
+  print('[SawadLoanUniversal] app config loaded from $kAppConfigPath — '
+      'api base ${config.apiUrlBase}');
 }
 
 /// Loads the customer profile (`/user/detail`) and address book

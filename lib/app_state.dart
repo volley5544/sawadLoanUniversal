@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/app_config.dart';
 import 'models/customer_address.dart';
 import 'models/customer_detail.dart';
 
@@ -64,6 +65,29 @@ class AppState extends ChangeNotifier {
     _customerAddressBook = value;
     notifyListeners();
   }
+
+  /// Runtime config read from Firestore on startup (`AppConfigApi`), holding
+  /// the `api_url` map the API clients resolve their base URL from. Null until
+  /// the fetch lands; an empty [AppConfig] when it failed, in which case the
+  /// clients fall back to the compile-time [AppEnvironment] endpoint.
+  /// In-memory only — refetched each launch so a config change takes effect on
+  /// the next load.
+  AppConfig? _appConfig;
+  AppConfig? get appConfig => _appConfig;
+  set appConfig(AppConfig? value) {
+    _appConfig = value;
+    notifyListeners();
+  }
+
+  /// Optional launch parameters the P-Loan submission needs but nothing in
+  /// the app can derive: the staff id raising the application and the
+  /// marketing/source codes. Read from the launch URL in `main.dart`
+  /// (`?empId=&mktChannel=&customerSource=`); empty when the host omits them,
+  /// which surfaces in `PLoanSubmission.unresolvedFields` rather than being
+  /// guessed. See `p_loan/application/models/p_loan_submission.dart`.
+  String empId = '';
+  String mktChannel = '';
+  String customerSource = '';
 
   /// This web build's version stamp (from `--dart-define=WEB_VERSION`, set in
   /// `main.dart` to `kWebVersion`). Lets us detect a stale cached web build —

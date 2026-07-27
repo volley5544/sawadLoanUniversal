@@ -1,12 +1,13 @@
 import '../../models/customer_address.dart';
 import '../../models/customer_detail.dart';
+import '../../models/ndid_subject.dart';
 
 /// In-memory holder for the loan-register (สมัครสินเชื่อ) wizard.
 ///
 /// UI-only build: this carries the values shown across the step pages and is
 /// passed page → page. It is seeded with the mock data from the design so the
 /// screens render exactly like slide 7. No persistence / backend wiring here.
-class LoanRegisterForm {
+class LoanRegisterForm implements NdidSubject {
   // ── Step 1: ข้อมูลลูกค้า ─────────────────────────────────────────────
   String firstName;
   String lastName;
@@ -69,10 +70,16 @@ class LoanRegisterForm {
   /// step-4 "ถัดไป" and flips the contract-docs card to its verified state.
   bool ndidVerified;
 
+  /// [NdidSubject.ndidThaiId] — [thaiId] is held formatted for display
+  /// (`1-2345-…`); the NDID node wants bare digits.
+  @override
+  String get ndidThaiId => thaiId.replaceAll(RegExp(r'[^0-9]'), '');
+
   /// NDID node id of the IdP (bank) picked on [NdidBankSelectPage] — consumed
   /// by [NdidVerifyPage] to create the real verification request when running
   /// inside the native host. Transient selection state, so not seeded in
   /// [mock()]. Null in the plain-browser (simulated) flow.
+  @override
   String? ndidIdpId;
 
   // ── Step 5: นัดหมายส่งเอกสาร ──────────────────────────────────────────

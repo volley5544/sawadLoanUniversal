@@ -54,16 +54,90 @@ const String kNdidApiKey = String.fromEnvironment(
   defaultValue: 'ndid_Gl_dI1z8JCeHebNbnyzICvpCep3KHLYY1oeDHjfNTXI',
 );
 
+/// Base URL of the **P-Loan save API** — `POST <base>/SavePloanContract`, the
+/// endpoint a completed P-Loan application is filed to.
+///
+/// ```sh
+/// flutter build web ... --dart-define=P_LOAN_SAVE_API_BASE=https://...
+/// ```
+///
+/// No trailing slash. Separate from the mobile API: it is a different host and
+/// port, with its own auth scheme (see [kPLoanSaveApiAuth]).
+const String kPLoanSaveApiBase = String.fromEnvironment(
+  'P_LOAN_SAVE_API_BASE',
+  defaultValue: 'https://dev.swpfin.com:8082',
+);
+
+/// `Authorization` header value for the P-Loan save API — HTTP Basic.
+///
+/// ```sh
+/// flutter build web ... --dart-define=P_LOAN_SAVE_API_AUTH='Basic <base64>'
+/// ```
+///
+/// **⚠ This is a shared service credential in a public web bundle.** Anyone can
+/// download `main.dart.js` and read it, exactly as with [kNdidApiKey] — a
+/// `--dart-define` changes where the value comes from, not who can see it. The
+/// only real fixes are server-side: proxy this endpoint behind the mobile API
+/// (which already fronts the app), or issue a credential scoped to this client
+/// that can be rotated and rate-limited on its own. Until then, treat the
+/// account as compromised-by-design and give it the narrowest possible rights.
+const String kPLoanSaveApiAuth = String.fromEnvironment(
+  'P_LOAN_SAVE_API_AUTH',
+  defaultValue: 'Basic Y2RwYXBpcHJvZDpQQHNzdzByZDEyMyNAITIwMjU=',
+);
+
+/// Serve the P-Loan application flow from fixtures instead of calling the
+/// mobile API.
+///
+/// **Off by default — the flow runs against the live API.** Kept as a switch
+/// for demoing without a backend, or for reproducing a screen state the API
+/// can't currently produce:
+///
+/// ```sh
+/// flutter build web ... --dart-define=P_LOAN_MOCK=true
+/// ```
+///
+/// Everything it affects lives behind one guard per method in
+/// `services/p_loan_api.dart`, and the fixtures are in
+/// `p_loan/application/models/p_loan_mock.dart` (also used by the tests). While
+/// it is on, every screen in the flow shows a banner so fixture data can't be
+/// mistaken for real.
+const bool kPLoanUseMockData = bool.fromEnvironment(
+  'P_LOAN_MOCK',
+  defaultValue: false,
+);
+
+/// Firestore path of the runtime-config document read at startup
+/// (`services/app_config_api.dart`). Overridable so the config can be moved to
+/// a document with narrower security rules without a code change:
+///
+/// ```sh
+/// flutter build web ... --dart-define=APP_CONFIG_PATH=application/public_config
+/// ```
+///
+/// Must be a `collection/document` pair.
+const String kAppConfigPath = String.fromEnvironment(
+  'APP_CONFIG_PATH',
+  defaultValue: 'application/public_config',
+);
+
 enum AppEnvironment {
   prod(
     name: 'prod',
     firebaseProjectAlias: 'prod',
+    firebaseProjectId: 'sawad-loan-universal-prod',
+    // No web app registered on prod yet — register one and paste its key here
+    // to enable the anonymous read of the runtime config. Empty means the app
+    // skips sign-in and uses the compile-time endpoint below.
+    firebaseApiKey: '',
     mobileApiBase: 'https://mobile-api.swpfin.com',
     srisawadHeader: 'x1',
   ),
   uat(
     name: 'uat',
     firebaseProjectAlias: 'uat',
+    firebaseProjectId: 'sawad-loan-universal-uat',
+    firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
     mobileApiBase: 'https://dev.swpfin.com:7076',
     srisawadHeader: '', // UAT doesn't require the x-srisawad header
   );
@@ -71,6 +145,8 @@ enum AppEnvironment {
   const AppEnvironment({
     required this.name,
     required this.firebaseProjectAlias,
+    required this.firebaseProjectId,
+    required this.firebaseApiKey,
     required this.mobileApiBase,
     required this.srisawadHeader,
   });
@@ -80,6 +156,18 @@ enum AppEnvironment {
 
   /// Alias used in `.firebaserc` (`firebase deploy -P <alias>`).
   final String firebaseProjectAlias;
+
+  /// Firebase project id, used to build the Firestore REST URL for the runtime
+  /// config document. Must match the `.firebaserc` alias above.
+  final String firebaseProjectId;
+
+  /// Firebase **web API key** for anonymous sign-in (`FirebaseAuthRest`).
+  ///
+  /// Not a secret: it identifies the project to Google's endpoints, is expected
+  /// to be public in a web client, and grants nothing on its own — access is
+  /// decided entirely by the Firestore rules. Empty disables sign-in, in which
+  /// case the config read is skipped and [mobileApiBase] is used.
+  final String firebaseApiKey;
 
   /// Base URL of the srisawad **mobile API** (customer profile + addresses —
   /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing

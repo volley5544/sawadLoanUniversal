@@ -25,6 +25,12 @@ const String _kBranchPickerHandlerName = 'openBranchPicker';
 /// fetch is blocked. The host allowlists which URLs it will call.
 const String _kHttpRequestHandlerName = 'httpRequest';
 
+/// Name of the JavaScript handler the native host registers to perform a
+/// **multipart/form-data** POST natively on our behalf
+/// (`addJavaScriptHandler(handlerName: 'httpMultipart', ...)`). Used for the
+/// P-Loan save API, which needs file parts and sends no CORS headers.
+const String _kHttpMultipartHandlerName = 'httpMultipart';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -137,6 +143,53 @@ class NativeCameraBridge {
         .callMethod<JSPromise>(
           'callHandler'.toJS,
           _kHttpRequestHandlerName.toJS,
+          payload.toJS,
+        )
+        .toDart;
+
+    final json = result.isUndefinedOrNull ? null : (result as JSString).toDart;
+    if (json == null || json.isEmpty) return null; // handler missing/no reply
+
+    final decoded = jsonDecode(json);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  /// Asks the native host to perform a **multipart/form-data** POST natively
+  /// (no CORS) and resolves with `{'status': int, 'body': String?,
+  /// 'error': String?}`, the same shape as [sendHttpRequest].
+  ///
+  /// [files] entries are `{field, filename, contentType, base64}`. File bytes
+  /// travel as **base64 inside the JSON envelope** — the bridge carries a JS
+  /// string, which cannot round-trip raw binary but carries base64 fine; the
+  /// host decodes each part and builds the real multipart body.
+  ///
+  /// Returns `null` if the host doesn't implement the handler (older host app
+  /// build). Throws if the bridge is unavailable.
+  static Future<Map<String, dynamic>?> sendHttpMultipart({
+    required String url,
+    Map<String, String>? headers,
+    Map<String, String> fields = const {},
+    List<Map<String, String>> files = const [],
+  }) async {
+    final host = _host;
+    if (host == null) {
+      throw UnsupportedError(
+        'Not running inside the flutter_inappwebview host '
+        '(window.flutter_inappwebview is undefined).',
+      );
+    }
+
+    final payload = jsonEncode({
+      'url': url,
+      'headers': ?headers,
+      'fields': fields,
+      'files': files,
+    });
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kHttpMultipartHandlerName.toJS,
           payload.toJS,
         )
         .toDart;

@@ -19,7 +19,7 @@ class LoanRegisterListPage extends StatefulWidget {
   State<LoanRegisterListPage> createState() => _LoanRegisterListPageState();
 }
 
-enum _RegisterCategory { motorcycle, draft, pLoan }
+enum _RegisterCategory { motorcycle, draft, pLoan, pLoanFlow }
 
 class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   _RegisterCategory _selected = _RegisterCategory.motorcycle;
@@ -66,45 +66,72 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
       body: Padding(
         padding: const EdgeInsets.fromLTRB(
             LoanRegisterStyles.padding, 20, LoanRegisterStyles.padding, 16),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _CategoryCard(
-                assetName: 'MotorLoanIcon.svg',
-                label: 'มอเตอร์ไซต์',
-                selected: _selected == _RegisterCategory.motorcycle,
-                onTap: () {
-                  setState(() => _selected = _RegisterCategory.motorcycle);
-                  _goToStep1();
-                },
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'MotorLoanIcon.svg',
+                    label: 'มอเตอร์ไซต์',
+                    selected: _selected == _RegisterCategory.motorcycle,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.motorcycle);
+                      _goToStep1();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'DocumentIcon.svg',
+                    label: 'รายการเตรียมข้อมูล',
+                    selected: _selected == _RegisterCategory.draft,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.draft);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('รายการเตรียมข้อมูล')),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'DocumentIcon.svg',
+                    label: 'สมัครสินเชื่อ P-Loan',
+                    selected: _selected == _RegisterCategory.pLoan,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.pLoan);
+                      _goToPLoanForm();
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _CategoryCard(
-                assetName: 'DocumentIcon.svg',
-                label: 'รายการเตรียมข้อมูล',
-                selected: _selected == _RegisterCategory.draft,
-                onTap: () {
-                  setState(() => _selected = _RegisterCategory.draft);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('รายการเตรียมข้อมูล')),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _CategoryCard(
-                assetName: 'DocumentIcon.svg',
-                label: 'สมัครสินเชื่อ P-Loan',
-                selected: _selected == _RegisterCategory.pLoan,
-                onTap: () {
-                  setState(() => _selected = _RegisterCategory.pLoan);
-                  _goToPLoanForm();
-                },
-              ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'DocumentIcon.svg',
+                    label: 'ขอสินเชื่อส่วนบุคคล',
+                    selected: _selected == _RegisterCategory.pLoanFlow,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.pLoanFlow);
+                      context.push(AppRoutes.pLoanContractSelect);
+                    },
+                  ),
+                ),
+                // Empty slots keep the card the same width as the row above.
+                const SizedBox(width: 16),
+                const Expanded(child: SizedBox.shrink()),
+                const SizedBox(width: 16),
+                const Expanded(child: SizedBox.shrink()),
+              ],
             ),
           ],
         ),

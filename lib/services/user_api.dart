@@ -4,6 +4,7 @@ import '../config/app_environment.dart';
 import '../models/customer_address.dart';
 import '../models/customer_detail.dart';
 import 'api_transport.dart';
+import 'srisawad_api.dart';
 
 /// Client for the srisawad **mobile API** (`api_data/api1.md`):
 ///
@@ -20,20 +21,21 @@ import 'api_transport.dart';
 class UserApi {
   UserApi._();
 
-  static String get _base => AppEnvironment.current.mobileApiBase;
+  /// Base URL from the Firestore runtime config (`api_url.api_url_base`),
+  /// falling back to the compile-time [AppEnvironment] value. Shared with the
+  /// top-up and P-Loan groups so every caller agrees on one endpoint — see
+  /// [SrisawadApi.baseUrl].
+  static Future<String> get _base => SrisawadApi.baseUrl();
 
-  static Map<String, String> _headers({String? token}) => {
-        if (AppEnvironment.current.srisawadHeader.isNotEmpty)
-          'x-srisawad': AppEnvironment.current.srisawadHeader,
-        if (token != null && token.isNotEmpty)
-          'Authorization': 'Bearer $token',
-      };
+  static Map<String, String> _headers({String? token}) =>
+      SrisawadApi.headers(token ?? '');
 
   /// Fetches the customer profile for [hashThaiId]. The payload sits under
   /// `results` with its own `code`/`message`; anything but code 200 throws.
   static Future<CustomerDetail> fetchUserDetail(String hashThaiId) async {
+    final base = await _base;
     final json = await _getJson(
-      Uri.parse('$_base/user/detail'
+      Uri.parse('$base/user/detail'
           '?hash_thai_id=${Uri.encodeQueryComponent(hashThaiId)}'),
     );
     final results = json is Map<String, dynamic> ? json['results'] : null;
@@ -54,8 +56,9 @@ class UserApi {
     String hashThaiId, {
     String? token,
   }) async {
+    final base = await _base;
     final json = await _getJson(
-      Uri.parse('$_base/profile/address/${Uri.encodeComponent(hashThaiId)}'),
+      Uri.parse('$base/profile/address/${Uri.encodeComponent(hashThaiId)}'),
       token: token,
     );
     if (json is! Map<String, dynamic>) {

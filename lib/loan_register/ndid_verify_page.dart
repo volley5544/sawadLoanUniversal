@@ -8,7 +8,7 @@ import '../services/native_bridge.dart';
 import '../services/ndid_api.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
-import 'models/loan_register_form.dart';
+import '../models/ndid_subject.dart';
 
 /// ยืนยันตัวตน — NDID identity-verification waiting screen (screen #5 on
 /// slide 8) followed by the ยืนยันตัวตนสำเร็จ success screen (final frame).
@@ -25,7 +25,10 @@ import 'models/loan_register_form.dart';
 class NdidVerifyPage extends StatefulWidget {
   const NdidVerifyPage({Key? key, this.form}) : super(key: key);
 
-  final LoanRegisterForm? form;
+  /// The flow that launched this screen — the loan-register wizard's form or
+  /// the P-Loan application's flow. Only [NdidSubject] is needed, which is why
+  /// both can share these screens.
+  final NdidSubject? form;
 
   @override
   State<NdidVerifyPage> createState() => _NdidVerifyPageState();
@@ -52,7 +55,7 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   String? _ndidRequestId;
 
   String get _citizenId =>
-      (widget.form?.thaiId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+      widget.form?.ndidThaiId ?? '';
 
   @override
   void initState() {
