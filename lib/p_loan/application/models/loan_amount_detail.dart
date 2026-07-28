@@ -151,24 +151,57 @@ class LoanAmountDetail {
         topupSpecials: asInt(json['topup_specials']),
       );
 
-  /// Only the fields step 2 recalculates locally after the calculator returns
-  /// a new fee.
-  LoanAmountDetail copyWith({int? feeAmount}) => LoanAmountDetail(
+  /// A minimal detail seeded from the step-1 [LoanContract], for a **new
+  /// P-Loan**.
+  ///
+  /// A new P-Loan does not call `GET /topup/detail`: its reference contract is
+  /// only a data key, and the top-up system rejects it (`ไม่พบสัญญาใน vloan`)
+  /// for contracts that were never topped up. Everything step 2 shows before
+  /// the customer names an amount can be read straight off the contract; the
+  /// rate, stamp duty and due day come from the calculator, run on the typed
+  /// amount from the Next button — see `PLoanAmountPage`, which folds the
+  /// calculator's response back in with [copyWith].
+  factory LoanAmountDetail.fromContract(LoanContract contract) =>
+      LoanAmountDetail(
+        code: '200',
+        dbName: contract.dbName,
+        contractNo: contract.contractNo,
+        contractDate: contract.contractDate,
+        contractDetails: contract.contractDetails,
+        carDetails: contract.carDetails,
+        // Not locked (an Extra-only concept) and no fee yet — the calculator
+        // prices the duty for the amount the customer actually requests.
+        interestPaidFlag: 'N',
+      );
+
+  /// The fields step 2 folds back in after the calculator returns.
+  ///
+  /// An Extra refreshes only [feeAmount] (the duty for the requested amount);
+  /// a new P-Loan additionally takes [interestRate], [dueDay] and
+  /// [firstDueDate] from the calculator, since it skipped `GET /topup/detail`
+  /// where those would otherwise come from.
+  LoanAmountDetail copyWith({
+    int? feeAmount,
+    double? interestRate,
+    int? dueDay,
+    String? firstDueDate,
+  }) =>
+      LoanAmountDetail(
         code: code,
         message: message,
         dbName: dbName,
         contractNo: contractNo,
         contractDetails: contractDetails,
         carDetails: carDetails,
-        firstDueDate: firstDueDate,
-        dueDay: dueDay,
+        firstDueDate: firstDueDate ?? this.firstDueDate,
+        dueDay: dueDay ?? this.dueDay,
         contractDate: contractDate,
         defaultTopupAmount: defaultTopupAmount,
         installmentNumber: installmentNumber,
         installmentAmount: installmentAmount,
         minAmountWithRate: minAmountWithRate,
         maxTopupAmount: maxTopupAmount,
-        interestRate: interestRate,
+        interestRate: interestRate ?? this.interestRate,
         transferAmount: transferAmount,
         osBalance: osBalance,
         dataDate: dataDate,

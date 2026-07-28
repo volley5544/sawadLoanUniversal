@@ -10,6 +10,7 @@ import '../../services/p_loan_api.dart';
 import '../../services/srisawad_api.dart';
 import 'components/p_loan_components.dart';
 import 'models/loan_amount_detail.dart';
+import 'models/loan_contract.dart';
 import 'models/p_loan_flow.dart';
 
 /// **Step 2 — ข้อมูลยอดจัดสินเชื่อ.** Shows the approved limit and lets the
@@ -68,14 +69,35 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   PLoanFlow get _flow => widget.flow;
 
   /// Fetches the limits, and — for an Extra only — the installment options for
-  /// its default amount. A new P-Loan has no default to price, so its plan is
-  /// built on the first commit instead.
+  /// its default amount.
+  ///
+  /// A **new P-Loan** makes no call here at all. `GET /topup/detail` asks the
+  /// top-up system about the reference contract, which rejects it
+  /// (`ไม่พบสัญญาใน vloan`) for contracts that were never topped up — the very
+  /// error this screen used to show. Nothing on the screen needs that call
+  /// before an amount is entered: the contract, collateral and profile data
+  /// are already in hand, and the rate and stamp duty come from the calculator,
+  /// run on the customer's own amount from the Next button (see [_proceed]).
   Future<void> _load() async {
     final contract = _flow.contract;
     if (contract == null) {
       setState(() {
         _loading = false;
         _error = 'ไม่พบข้อมูลสัญญา';
+      });
+      return;
+    }
+    if (_flow.isNewPLoan) {
+      // Seed a local detail from the contract already in hand — no round-trip.
+      // Reuse an existing one when returning from a later step so the priced
+      // rate/duty and the typed amount survive a back-navigation.
+      _flow.amountDetail ??= LoanAmountDetail.fromContract(contract);
+      _amountController.text = _flow.requestedAmount > 0
+          ? formatWholeMoney(_flow.requestedAmount)
+          : '';
+      setState(() {
+        _loading = false;
+        _error = null;
       });
       return;
     }
@@ -89,17 +111,6 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
         contractNo: contract.contractNo,
         token: _flow.authToken,
       );
-      if (_flow.isNewPLoan) {
-        // Nothing to price yet — a new P-Loan starts with no amount, so the
-        // calculator has nothing to run on. The plan arrives on the first
-        // commit instead. `detail` is still needed: it carries the interest
-        // rate and the stamp duty this loan is priced with.
-        if (!mounted) return;
-        _flow.amountDetail = detail;
-        _amountController.text = '';
-        setState(() => _loading = false);
-        return;
-      }
       final amount = detail.defaultTopupAmount;
       final plan = await PLoanApi.calculateInstallments(
         dbName: contract.dbName,
@@ -140,48 +151,84 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
     _commitAmount();
   }
 
+  /// Reads the field, rounds down to the nearest 100, and stores it as the
+  /// requested amount, dropping any plan priced for a different one.
+  ///
+  /// A null plan afterwards is the signal that the amount changed and needs
+  /// (re)pricing — [_commitAmount] and [_proceed] both key off it.
+  void _commitTypedAmount() {
+    final detail = _flow.amountDetail;
+    final typed = parseAmount(_amountController.text);
+    // Clearing the field falls back to the approved limit for an Extra; for a
+    // new P-Loan there is no such default, so blank stays blank.
+    final amount = typed == 0 && !_flow.isNewPLoan
+        ? (detail?.defaultTopupAmount ?? 0)
+        : roundDownToHundred(typed);
+    _amountController.text = amount == 0 ? '' : formatWholeMoney(amount);
+    if (amount != _flow.requestedAmount) {
+      _flow
+        ..requestedAmount = amount
+        // A new amount invalidates any earlier plan and the tenor picked on
+        // step 3 from it.
+        ..plan = null
+        ..installment = null;
+    }
+  }
+
+  /// On blur: commit the typed amount. An **Extra** re-prices here as before; a
+  /// **new P-Loan** defers pricing to the Next button, so it stops after the
+  /// commit (see [_proceed]).
   Future<void> _commitAmount() async {
     final detail = _flow.amountDetail;
     final contract = _flow.contract;
     if (detail == null || contract == null) return;
 
-    final typed = parseAmount(_amountController.text);
-    // Clearing the field falls back to the approved limit for an Extra; for a
-    // new P-Loan there is no such default, so blank stays blank.
-    final amount = typed == 0 && !_flow.isNewPLoan
-        ? detail.defaultTopupAmount
-        : roundDownToHundred(typed);
-    _amountController.text = amount == 0 ? '' : formatWholeMoney(amount);
-    if (amount == _flow.requestedAmount) {
-      setState(() {});
-      return;
-    }
-    setState(() => _flow.requestedAmount = amount);
+    _commitTypedAmount();
+    setState(() {});
 
-    // Out-of-range values show inline guidance instead of calling the API.
-    if (!_flow.isRequestedAmountAllowed) return;
+    if (_flow.isNewPLoan) return;
+    // Unchanged amount is already priced (plan survived the commit), and
+    // out-of-range values show inline guidance instead of calling the API.
+    if (_flow.plan != null || !_flow.isRequestedAmountAllowed) return;
+    await _recalculate(detail, contract);
+  }
 
+  /// Prices [PLoanFlow.requestedAmount] with `POST /topup/calculator` and folds
+  /// the result into the flow. Returns true when a usable plan came back.
+  Future<bool> _recalculate(
+      LoanAmountDetail detail, LoanContract contract) async {
     setState(() => _recalculating = true);
     try {
       final plan = await PLoanApi.calculateInstallments(
         dbName: contract.dbName,
         contractNo: contract.contractNo,
-        loanAmount: amount,
+        loanAmount: _flow.requestedAmount,
         interestRate: detail.interestRate,
         feeAmount: detail.feeAmount,
         token: _flow.authToken,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _flow
           ..plan = plan
-          ..amountDetail = detail.copyWith(feeAmount: plan.feeAmount)
+          // An Extra only refreshes the duty; a new P-Loan skipped
+          // /topup/detail, so the calculator is where its rate, duty and due
+          // day come from — fold them all in.
+          ..amountDetail = _flow.isNewPLoan
+              ? detail.copyWith(
+                  feeAmount: plan.feeAmount,
+                  interestRate: plan.interestRate,
+                  dueDay: plan.dueDay,
+                  firstDueDate: plan.firstDueDate,
+                )
+              : detail.copyWith(feeAmount: plan.feeAmount)
           // A new amount invalidates any tenor picked on step 3.
           ..installment = null;
         _recalculating = false;
       });
+      return true;
     } on SrisawadApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         // Drop the previous plan: it was priced for the previous amount, and
         // leaving it in place would let the user advance to step 3 with an
@@ -195,7 +242,41 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
       });
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
+      return false;
     }
+  }
+
+  /// The Next button. An **Extra** is already priced (on blur), so it just
+  /// advances. A **new P-Loan** commits the typed amount and prices it here —
+  /// the flow's first and only `POST /topup/calculator` call for a new loan —
+  /// then advances once options come back.
+  Future<void> _proceed() async {
+    final detail = _flow.amountDetail;
+    final contract = _flow.contract;
+    if (detail == null || contract == null) return;
+
+    if (!_flow.isNewPLoan) {
+      // First tap while editing commits the field (mirrors the old behaviour);
+      // the on-blur calculation then lights the button for the advancing tap.
+      if (_amountFocus.hasFocus) {
+        _amountFocus.unfocus();
+        return;
+      }
+      if (!(_flow.plan?.installments.isNotEmpty ?? false)) return;
+      context.push(AppRoutes.pLoanInstallment, extra: _flow);
+      return;
+    }
+
+    _amountFocus.unfocus();
+    _commitTypedAmount();
+    setState(() {});
+    if (!_flow.isRequestedAmountAllowed) return;
+    if (_flow.plan == null) {
+      final ok = await _recalculate(detail, contract);
+      if (!ok) return;
+    }
+    if (!mounted) return;
+    context.push(AppRoutes.pLoanInstallment, extra: _flow);
   }
 
   @override
@@ -417,27 +498,21 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
 
   Widget _bottomBar() {
     final editing = _amountFocus.hasFocus;
-    final ready = _flow.isRequestedAmountAllowed &&
-        (_flow.plan?.installments.isNotEmpty ?? false) &&
-        !_recalculating;
-    // Enabled while editing even when not yet `ready`: a new P-Loan arrives
-    // here with no amount and no plan, so a button that only lit up once the
-    // calculator had run would be dead on the one tap the user makes after
-    // typing. The first tap commits the edit (which runs the calculator), the
-    // second advances.
+    // A new P-Loan can proceed as soon as a valid amount is typed — the Next
+    // button itself runs the calculator (see [_proceed]). An Extra needs the
+    // on-blur calculation to have produced a plan first.
+    final ready = _flow.isNewPLoan
+        ? _flow.requestedAmount >= PLoanFlow.newLoanMinimumAmount
+        : _flow.isRequestedAmountAllowed &&
+            (_flow.plan?.installments.isNotEmpty ?? false);
+    // Enabled while editing even when not yet `ready`, so the one tap the user
+    // makes right after typing isn't dead: for a new P-Loan that tap commits
+    // and prices in one go; for an Extra it commits and the on-blur calculation
+    // lights the button for the advancing tap.
     return PLoanBottomButton(
       label: 'ถัดไป',
       busy: _recalculating,
-      onPressed: (ready || editing)
-          ? () {
-              if (_amountFocus.hasFocus) {
-                _amountFocus.unfocus();
-                return;
-              }
-              if (!ready) return;
-              context.push(AppRoutes.pLoanInstallment, extra: _flow);
-            }
-          : null,
+      onPressed: (_recalculating || !(ready || editing)) ? null : _proceed,
     );
   }
 }
