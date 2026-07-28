@@ -7,6 +7,7 @@ import '../p_loan/application/models/installment_plan.dart';
 import '../p_loan/application/models/loan_amount_detail.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../p_loan/application/models/loan_documents.dart';
+import '../p_loan/application/models/new_loan_installment.dart';
 import '../p_loan/application/models/p_loan_mock.dart';
 import '../p_loan/application/models/p_loan_submission.dart';
 import 'api_transport.dart';
@@ -95,7 +96,8 @@ class PLoanApi {
     );
   }
 
-  /// Steps 2/3 — installment options for the requested amount.
+  /// Steps 2/3 — installment options for the requested amount (**P-Loan
+  /// Extra**). A new P-Loan uses [calculateNewLoanInstallments] instead.
   static Future<InstallmentPlan> calculateInstallments({
     required String dbName,
     required String contractNo,
@@ -114,6 +116,25 @@ class PLoanApi {
       token: token,
     );
   }
+
+  /// Steps 2/3 — installment options for a **new P-Loan**.
+  ///
+  /// TEMPORARY: the new-P-Loan product has no installment-calculator endpoint
+  /// yet, and [calculateInstallments] (the top-up calculator) can't price it —
+  /// the reference contract isn't a top-up candidate, so the server answers
+  /// `ไม่พบสัญญาใน vloan`. Until the real call exists, this returns the
+  /// client-side estimate from [provisionalNewLoanPlan] so the flow stays
+  /// walkable. When the endpoint lands, swap the body here for it — no screen
+  /// changes (this is the seam [PLoanApi]'s doc describes).
+  static Future<InstallmentPlan> calculateNewLoanInstallments({
+    required int loanAmount,
+  }) =>
+      Future.delayed(
+        // A short beat so step 2's "กำลังคำนวณ..." state still shows, matching
+        // the feel of the real calculator round-trip it stands in for.
+        const Duration(milliseconds: 350),
+        () => provisionalNewLoanPlan(loanAmount),
+      );
 
   /// Submits the application. [pdfRequest] is echoed back as the `save_pdf`
   /// block, which must match what [generateDocuments] was given.

@@ -82,6 +82,11 @@ class _PLoanInstallmentPageState extends State<PLoanInstallmentPage> {
                           color: LoanRegisterStyles.label,
                         ),
                       ),
+                      // A new P-Loan's options are a client-side estimate until
+                      // its own calculator API exists (see
+                      // PLoanApi.calculateNewLoanInstallments). Flag them so the
+                      // figures aren't read as a final quote.
+                      if (flow.isNewPLoan) const _ProvisionalEstimateNote(),
                       const SizedBox(height: 12),
                       for (final option in options)
                         _OptionTile(
@@ -102,6 +107,42 @@ class _PLoanInstallmentPageState extends State<PLoanInstallmentPage> {
                 flow.installment = _selected;
                 context.push(AppRoutes.pLoanVehiclePhotos, extra: flow);
               },
+      ),
+    );
+  }
+}
+
+/// Provisional-estimate banner shown for a new P-Loan, whose installment
+/// figures are computed on the client pending its own calculator API.
+class _ProvisionalEstimateNote extends StatelessWidget {
+  const _ProvisionalEstimateNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: LoanRegisterStyles.primarySoft,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: LoanRegisterStyles.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'ยอดผ่อนชำระเป็นตัวเลขประมาณการเบื้องต้น '
+              'อยู่ระหว่างเชื่อมต่อระบบคำนวณสินเชื่อใหม่',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 12.5,
+                height: 1.4,
+                color: LoanRegisterStyles.value,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

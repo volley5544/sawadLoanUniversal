@@ -193,27 +193,35 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
     await _recalculate(detail, contract);
   }
 
-  /// Prices [PLoanFlow.requestedAmount] with `POST /topup/calculator` and folds
-  /// the result into the flow. Returns true when a usable plan came back.
+  /// Prices [PLoanFlow.requestedAmount] and folds the result into the flow.
+  /// Returns true when a usable plan came back.
+  ///
+  /// An **Extra** hits `POST /topup/calculator`. A **new P-Loan** has no
+  /// calculator endpoint yet, so it uses the client-side estimate from
+  /// [PLoanApi.calculateNewLoanInstallments] — see that method for why.
   Future<bool> _recalculate(
       LoanAmountDetail detail, LoanContract contract) async {
     setState(() => _recalculating = true);
     try {
-      final plan = await PLoanApi.calculateInstallments(
-        dbName: contract.dbName,
-        contractNo: contract.contractNo,
-        loanAmount: _flow.requestedAmount,
-        interestRate: detail.interestRate,
-        feeAmount: detail.feeAmount,
-        token: _flow.authToken,
-      );
+      final plan = _flow.isNewPLoan
+          ? await PLoanApi.calculateNewLoanInstallments(
+              loanAmount: _flow.requestedAmount,
+            )
+          : await PLoanApi.calculateInstallments(
+              dbName: contract.dbName,
+              contractNo: contract.contractNo,
+              loanAmount: _flow.requestedAmount,
+              interestRate: detail.interestRate,
+              feeAmount: detail.feeAmount,
+              token: _flow.authToken,
+            );
       if (!mounted) return false;
       setState(() {
         _flow
           ..plan = plan
           // An Extra only refreshes the duty; a new P-Loan skipped
-          // /topup/detail, so the calculator is where its rate, duty and due
-          // day come from — fold them all in.
+          // /topup/detail, so the rate and duty come from the plan itself
+          // (the provisional estimate for now) — fold them in.
           ..amountDetail = _flow.isNewPLoan
               ? detail.copyWith(
                   feeAmount: plan.feeAmount,
