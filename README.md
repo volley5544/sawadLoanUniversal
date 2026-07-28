@@ -124,11 +124,15 @@ Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
   with that contract's approved limit and bounded by it.
 - **ขอสินเชื่อใหม่** (new P-Loan) — the card above it. A fresh loan whose amount
   **starts blank** for the customer to type, with no limit inherited from a
-  contract and no old principal deducted from the payout.
+  contract and no old principal deducted from the payout. Its step 2 makes **no
+  top-up call** (the top-up system rejects a never-topped-up contract with
+  `ไม่พบสัญญาใน vloan`), and — until the new-P-Loan calculator API exists — step 3
+  shows a **provisional client-side installment estimate** computed on the amount
+  the customer enters. See [CLAUDE.md](CLAUDE.md) → *New-P-Loan pricing (interim)*.
 
 A contract is picked either way: for a new P-Loan it is only a **data
-reference**, because every endpoint the flow calls is keyed by
-`db_name` + `contract_no`.
+reference** — it supplies `refContractNo` and the `db_name` + `contract_no` key
+that `/pdf/loan` (and, for an Extra, the `/topup/*` endpoints) need.
 
 The two kinds **submit to different endpoints**, because `POST /topup` books
 against that contract: an Extra goes there, a new P-Loan goes to the P-Loan save

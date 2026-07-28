@@ -27,8 +27,10 @@ projects, `prod` and `uat` (see Deploy below).
   fallback (fixtures exist behind a default-off define — see **Mock mode**). Both
   products post to a real endpoint, but only the **Extra** path can currently
   complete: a **new P-Loan** submit is blocked on a native-host handler that does
-  not exist yet (see **Outstanding** #2). Everything below in this list is about
-  the **wizard**, which is still UI-only.
+  not exist yet (see **Outstanding** #2). A new P-Loan also **prices steps 2–3
+  with an interim client-side estimate** — it has no calculator API yet and the
+  top-up one rejects its reference contract (see **New-P-Loan pricing (interim)**).
+  Everything below in this list is about the **wizard**, which is still UI-only.
 - **The wizard has no backend.** It does not submit anywhere. It now runs all the
   way through **step 5** (ข้อมูลลูกค้า → หลักประกัน → สินเชื่อ → เอกสารแนบ/NDID →
   นัดหมายส่งเอกสาร); the final "ถัดไป" on step 5 just shows a `SnackBar`
@@ -343,20 +345,21 @@ Step 1 offers both, and everything after it is the same six screens:
 | Amount | pre-filled with the contract's approved limit | **starts blank**, customer types it |
 | Bounds | `min/max_topup_amount` | none client-side (see below) |
 | Payout | request − old principal − duty | request − duty |
+| Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
 | Submits to | `POST /topup` | `POST /SavePloanContract` |
 
 `PLoanFlow.kind` is set on step 1 and read by every screen after it. The Extra
 path is byte-for-byte what it was; only the new path is new, and only it shows
 the `PLoanKindBanner` strip, so an unmarked flow is an Extra.
 
-**A new P-Loan still picks a contract.** Every endpoint the flow touches
-(`/topup/detail` for the interest rate and stamp duty, `/topup/calculator`,
-`/pdf/loan`) is keyed by `db_name` + `contract_no`, so one is needed to reach
-them at all. Nothing is drawn against it — it is a **data reference**, which is
-exactly what the regmast field `refContractNo` ("เลขที่สัญญาอ้างอิง") already
-meant. The card names the contract it will reference (the one visible in the
-carousel below, so swiping changes it) rather than silently picking one.
-Consequence: **no contracts ⇒ neither product is available**, and step 1 says so.
+**A new P-Loan still picks a contract.** It supplies `refContractNo`
+("เลขที่สัญญาอ้างอิง") and the `db_name` + `contract_no` that `/pdf/loan` (and,
+for an Extra, the `/topup/*` endpoints) are keyed by. Nothing is drawn against
+it — it is a **data reference**. The card names the contract it will reference
+(the one visible in the carousel below, so swiping changes it) rather than
+silently picking one. Consequence: **no contracts ⇒ neither product is
+available**, and step 1 says so. A new P-Loan no longer calls `/topup/detail` or
+`/topup/calculator` at all — see **New-P-Loan pricing (interim)** below.
 
 **The two kinds submit to different endpoints, and must.** `POST /topup` books
 against `contract_no`, so posting a new P-Loan there would file a top-up of the
@@ -366,10 +369,37 @@ customer's existing loan for an amount never approved against it.
 step 6 switches on it. A new P-Loan goes to the P-Loan save API below.
 
 **No invented amount limits.** For a new loan the only client-side rule is
-`PLoanFlow.newLoanMinimumAmount` (100 — the rounding unit). Whether the product
-will price a given amount is `/topup/calculator`'s answer, and its message is
-shown as-is rather than pre-empted with a guessed floor or ceiling. If the real
-product has bounds, they belong on the server or in the config, not here.
+`PLoanFlow.newLoanMinimumAmount` (100 — the rounding unit). If the real product
+has a floor or ceiling it belongs on the server or in the config, not guessed
+here. The interim estimate below prices any amount ≥ that minimum; the real
+calculator will impose whatever bounds it has.
+
+**New-P-Loan pricing (interim — no calculator API yet).** A new P-Loan makes
+**neither** top-up pricing call:
+
+- **Step 2 (`p_loan_amount_page.dart`) makes no top-up call on entry.**
+  `GET /topup/detail` asks the top-up system about the reference contract, which
+  answers `ไม่พบสัญญาใน vloan` for a contract that was never topped up — so the
+  screen used to dead-end there. Instead it seeds a local `LoanAmountDetail` from
+  the step-1 contract (`LoanAmountDetail.fromContract`) and shows a blank amount
+  field. The Extra path is unchanged (fetches `/topup/detail`, prices on entry
+  and re-prices on blur).
+- **Step 3 installments are a client-side estimate.** The new-P-Loan product has
+  no installment-calculator endpoint yet, and `/topup/calculator` can't price it
+  (same `vloan` rejection). So `PLoanApi.calculateNewLoanInstallments` returns
+  `provisionalNewLoanPlan` (`models/new_loan_installment.dart`) — flat-rate
+  add-on interest over `[12,24,36,48,60]` months at a placeholder `1.25%/month`,
+  standard stamp duty (1 baht per 2,000) — run from the **ถัดไป** button on the
+  amount the customer typed. Its rate/duty are folded back into the flow
+  (`LoanAmountDetail.copyWith` now also carries
+  `interestRate`/`dueDay`/`firstDueDate`). Step 3 shows a provisional-estimate
+  note so the figures aren't read as a final quote.
+
+This is deliberately **separate** from `kPLoanUseMockData` (off in production,
+deleted with mock mode): the estimate runs in the *live* flow.
+`PLoanApi.calculateNewLoanInstallments` is the seam — when the real endpoint
+lands, swap its body and delete `new_loan_installment.dart`; no screen changes.
+The placeholder rate and tenor list are `const`s at the top of that file.
 
 **Read the source's history before changing this.** Its `lib/p_loan` folder is a
 copy-paste fork of `lib/customer_topup`, only lightly renamed — `ploan_status_page`
@@ -400,7 +430,9 @@ Structure:
 
 - `models/` — plain-Dart response models (`loan_contract.dart` for `/loan/list`
   and its nested tree, `loan_amount_detail.dart`, `installment_plan.dart`,
-  `loan_documents.dart`) plus `p_loan_flow.dart`, the mutable state object
+  `loan_documents.dart`, and `new_loan_installment.dart` — the interim
+  client-side installment estimate for a new P-Loan, see **New-P-Loan pricing**
+  above) plus `p_loan_flow.dart`, the mutable state object
   passed page→page as go_router `extra` (same convention as `LoanRegisterForm`;
   the source kept all of it in a global `FFAppState`). `json_coerce.dart` holds
   the tolerant `asString`/`asInt`/`asDouble` helpers — this API returns `1500`,
@@ -661,7 +693,7 @@ data (an existing contract, its limit, its installment calculation).
 | --- | --- |
 | `srisawad_api.dart` | Shared base-URL resolution, headers, send helper, `SrisawadApiException`, and `GET /loan/list` (shared by both products) |
 | `topup_api.dart` | `TopupApi` — `/topup/detail`, `/topup/calculator`, `POST /topup` |
-| `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan` and `/vision/thai-id-validate` |
+| `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan`, `/vision/thai-id-validate`, and `calculateNewLoanInstallments` (interim client-side estimate for a new P-Loan) |
 | `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /SavePloanContract`, the **P-Loan save API** (own host, Basic auth, multipart). Reached via `PLoanApi.saveNewLoan` |
 | `user_api.dart` | Customer profile + address book |
 
@@ -931,6 +963,13 @@ reason recorded.
     handler is the real fix.
 11. **App Check** is not enabled, and the `?token=` JWT still travels in the
     launch URL.
+12. **New-P-Loan installment calculator API.** Step 2/3 pricing for a new P-Loan
+    is a client-side estimate (`PLoanApi.calculateNewLoanInstallments` →
+    `new_loan_installment.dart`): the product has no calculator endpoint and
+    `/topup/calculator` rejects its reference contract (`ไม่พบสัญญาใน vloan`).
+    Wire the real call into that seam when it exists and delete the interim file;
+    the placeholder rate (`1.25%/month`) and tenors (`[12,24,36,48,60]`) live at
+    the top of it.
 
 ## Conventions
 
