@@ -2,10 +2,10 @@
 /// client.
 ///
 /// TEMPORARY — the new-P-Loan product has no installment-calculator endpoint
-/// yet, and the top-up calculator (`POST /topup/calculator`) can't price it:
-/// its reference contract isn't a top-up candidate, so the server answers
-/// `ไม่พบสัญญาใน vloan`. Until the real endpoint lands, step 3 is fed these
-/// locally-computed options so the flow stays walkable.
+/// yet, and the top-up calculator (`POST /topup/calculator`) can't stand in:
+/// it is keyed by `db_name` + `contract_no`, and a new P-Loan has no contract.
+/// Until the real endpoint lands, step 3 is fed these locally-computed options
+/// so the flow stays walkable.
 ///
 /// This is deliberately **separate** from the full mock-mode fixtures in
 /// `p_loan_mock.dart` (which are gated by `kPLoanUseMockData` and deleted along

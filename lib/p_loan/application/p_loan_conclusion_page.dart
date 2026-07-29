@@ -57,6 +57,10 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   /// Builds the `save_pdf` block, which is both the `/pdf/loan` request body
   /// and a nested field of the submit payload — so it must be identical in
   /// both places.
+  ///
+  /// **Extra only.** Every key it is built from (`contract_no`, `db_name`,
+  /// `from`, `contract_date`) comes from the contract, and a new P-Loan has
+  /// none — see [PLoanFlow.canGenerateDocuments].
   ContractPdfRequest? _pdfRequest() {
     final contract = _flow.contract;
     final detail = _flow.amountDetail;
@@ -68,8 +72,11 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       contractDate: detail.contractDate,
       amount: _flow.payoutAmount.toDouble(),
       from: contract.contractDetails.comcode,
-      contractBankAccount: contract.contractBankAccount,
-      contractBankBrandname: contract.contractBankBrandname,
+      // Account and collateral come off the flow, not the contract: for a new
+      // P-Loan the customer stated both, and the generated agreement must name
+      // what they gave rather than the reference contract's.
+      contractBankAccount: _flow.bankAccountNo,
+      contractBankBrandname: _flow.bankCode,
       contractBankType: contract.contractBankType,
       contractBankBranch: '',
       interestRate: detail.interestRate,
@@ -77,11 +84,21 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       amountPerInstallment: installment.regularPeriodAmt.toDouble(),
       startInstallmentDate: _flow.plan?.firstDueDate ?? '',
       installmentDate: '',
-      vehicleType: contract.contractDetails.loanTypeName,
+      vehicleType: _flow.loanTypeName,
     );
   }
 
   Future<void> _generateDocuments() async {
+    // A new P-Loan cannot produce them at all, and that is not an error in
+    // this application's data — the rest of the screen is valid and worth
+    // showing, with the document section explaining itself in place.
+    if (!_flow.canGenerateDocuments) {
+      setState(() {
+        _loading = false;
+        _error = _flow.isNewPLoan ? null : 'ข้อมูลไม่ครบถ้วน กรุณาเริ่มรายการใหม่';
+      });
+      return;
+    }
     final request = _pdfRequest();
     if (request == null) {
       setState(() {
@@ -189,6 +206,12 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   /// Card expiry vs. the server's clock (the source compared against
   /// `payment_details.current_date_time` rather than the device time, so a
   /// wrong device clock can't pass an expired card).
+  ///
+  /// ⚠ That clock rides on the contract, so a **new P-Loan falls back to the
+  /// device time** and loses the protection. The server re-checks expiry on
+  /// submit, and the flow has no other server-time source today; a
+  /// `current_date_time` on `/user/detail` (or on the new-loan document call)
+  /// would close it.
   bool _isExpired(String expiryDate) {
     final expiry = DateTime.tryParse(expiryDate);
     if (expiry == null) return false; // unparseable -> let the server decide
@@ -441,7 +464,8 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
         children: [
           const PLoanMockBanner(),
           PLoanKindBanner(kind: _flow.kind),
-          const RegisterStepIndicator(currentStep: 6, totalSteps: 6),
+          RegisterStepIndicator(
+              currentStep: _flow.stepNumber(6), totalSteps: _flow.totalSteps),
           Expanded(child: _body()),
         ],
       ),
@@ -464,7 +488,8 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       return const PLoanLoadingView(message: 'กำลังสร้างเอกสารสัญญา...');
     }
 
-    final contract = _flow.contract!;
+    // Extra only — a new P-Loan carries no contract.
+    final contract = _flow.contract;
     final detail = _flow.amountDetail!;
     final installment = _flow.installment!;
     final isNew = _flow.isNewPLoan;
@@ -474,14 +499,17 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isNew) const PLoanSectionHeader('สัญญาอ้างอิง'),
-          ContractSummaryCard(
-            loanTypeCode: contract.contractDetails.loanTypeCode,
-            loanTypeName: contract.contractDetails.loanTypeName,
-            contractNo: contract.contractNo,
-            collateralInformation:
-                contract.contractDetails.collateralInformation,
-          ),
+          // Extra only — a new P-Loan summarises its own collateral further
+          // down (ข้อมูลหลักประกัน), so leading with the reference contract
+          // would have the summary screen open on the wrong loan.
+          if (!isNew && contract != null)
+            ContractSummaryCard(
+              loanTypeCode: contract.contractDetails.loanTypeCode,
+              loanTypeName: contract.contractDetails.loanTypeName,
+              contractNo: contract.contractNo,
+              collateralInformation:
+                  contract.contractDetails.collateralInformation,
+            ),
           const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
           // The three rows below describe the reference contract's headroom and
           // the principal a top-up would clear. None of it applies to a loan
@@ -538,7 +566,10 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           ),
           PLoanAmountRow(
             label: 'ดอกเบี้ย (ต่อเดือน)',
-            caption: 'เลขที่สัญญา ${detail.contractNo}',
+            // The rate is the reference contract's only for an Extra. A new
+            // P-Loan's comes from its own pricing, so captioning it with that
+            // contract number would attribute it to the wrong loan.
+            caption: isNew ? null : 'เลขที่สัญญา ${detail.contractNo}',
             value: '${detail.interestRate}%',
           ),
           PLoanAmountRow(
@@ -546,12 +577,34 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
             value: '${detail.dueDay}',
             showDivider: false,
           ),
+          if (isNew) ...[
+            const PLoanSectionHeader('ข้อมูลหลักประกัน'),
+            // What the customer stated on step 4 — shown back for a last check
+            // before it is filed.
+            PLoanAmountRow(
+                label: 'ประเภทหลักประกัน', value: _flow.loanTypeName),
+            PLoanAmountRow(
+                label: 'ยี่ห้อสินค้า', value: _flow.collateralBrand),
+            PLoanAmountRow(
+                label: 'รุ่นสินค้า', value: _flow.collateralSeries),
+            PLoanAmountRow(
+              label: 'ปีที่ผลิต',
+              value: _flow.collateralManufactureYear,
+              showDivider: false,
+            ),
+          ],
           const PLoanSectionHeader('ข้อมูลเลขที่บัญชี'),
           BankAccountCard(
-            bankCode: contract.contractBankBrandname,
-            accountNo: contract.contractBankAccount,
-            logoBytes: decodeBase64Image(contract.branchImage),
+            bankCode: _flow.bankCode,
+            accountNo: _flow.bankAccountNo,
+            logoBytes: decodeBase64Image(_flow.bankLogoBase64),
           ),
+          if (isNew && _flow.bankAccountName.isNotEmpty)
+            PLoanAmountRow(
+              label: 'ชื่อบัญชี',
+              value: _flow.bankAccountName,
+              showDivider: false,
+            ),
           const PLoanSectionHeader('ยืนยันตัวตน'),
           _IdentitySlot(
             slot: PLoanPhoto.idCard,
@@ -572,29 +625,38 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
                 () => _flow.photos.remove(PLoanPhoto.selfieWithIdCard)),
           ),
           const PLoanSectionHeader('เอกสารประกอบสัญญา'),
-          for (final kind in LoanDocumentKind.values)
-            _DocumentRow(
-              kind: kind,
-              accepted: _flow.consented.contains(kind),
-              onTap: () => _reviewDocument(kind),
-            ),
+          if (!_flow.canGenerateDocuments)
+            // `POST /pdf/loan` is keyed by a contract, which this product does
+            // not have. Same treatment as the interim installment estimate:
+            // say what is missing rather than showing rows that cannot open.
+            const _DocumentsUnavailableNote()
+          else
+            for (final kind in LoanDocumentKind.values)
+              _DocumentRow(
+                kind: kind,
+                accepted: _flow.consented.contains(kind),
+                onTap: () => _reviewDocument(kind),
+              ),
           const SizedBox(height: 12),
 
           // ── ลงนามเอกสารและยืนยันตัวตน NDID ─────────────────────────
           // The same hop the loan-register wizard does on its step 4, using the
           // same shared screens (see NdidSubject). It sits directly under the
-          // documents because the order is read-then-sign.
+          // documents because the order is read-then-sign — so with no
+          // documents to read there is nothing to sign, and the row is inert.
           const PLoanSectionHeader('ลงนามเอกสารและยืนยันตัวตน NDID'),
           RegisterFieldRow(
             label: 'ตรวจสอบเอกสารและยืนยันตัวตน',
             value: _flow.ndidVerified ? 'ยืนยันแล้ว' : '',
-            placeholder: 'กรุณาลงนามเอกสารและยืนยันตัวตนด้วย NDID',
+            placeholder: _flow.canGenerateDocuments
+                ? 'กรุณาลงนามเอกสารและยืนยันตัวตนด้วย NDID'
+                : 'รอเอกสารประกอบสัญญา',
             trailing: _flow.ndidVerified
                 ? const Icon(Icons.check_circle,
                     color: Colors.green, size: 22)
                 : null,
             showDivider: false,
-            onTap: _signWithNdid,
+            onTap: _flow.canGenerateDocuments ? _signWithNdid : null,
           ),
           if (_flow.ndidVerified) ...[
             const SizedBox(height: 8),
@@ -620,13 +682,17 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
             onChanged: (v) => setState(() => _flow.sensitiveConsent = v),
           ),
           const SizedBox(height: 12),
-          Text(
-            'ข้อมูลวันที่ ${formatThaiDate(detail.dataDate)}',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 12,
-              color: LoanRegisterStyles.label,
+          // Only an Extra has a data date: it comes from /topup/detail, which
+          // a new P-Loan never calls. An empty one used to render as a bare
+          // "ข้อมูลวันที่".
+          if (formatThaiDate(detail.dataDate).isNotEmpty)
+            Text(
+              'ข้อมูลวันที่ ${formatThaiDate(detail.dataDate)}',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 12,
+                color: LoanRegisterStyles.label,
+              ),
             ),
-          ),
           if (PLoanApi.isMocked)
             Align(
               alignment: Alignment.centerLeft,
@@ -640,13 +706,26 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           if (!_flow.canSubmit) ...[
             const SizedBox(height: 8),
             Text(
-              _flow.missingIdentityPhoto?.missingMessage ??
-                  _flow.missingConsent?.consentPrompt ??
-                  (!_flow.ndidVerified
-                      ? 'กรุณาลงนามเอกสารและยืนยันตัวตนด้วย NDID'
-                      : !_flow.sensitiveConsent
-                          ? 'กรุณายินยอมข้อมูลอ่อนไหวเพื่อดำเนินการต่อ'
-                          : ''),
+              // Ordered by what the customer can actually act on. The
+              // documents come first when they are unavailable, because
+              // nothing below it can be completed either and telling them to
+              // sign something that does not exist would be a dead end.
+              !_flow.canGenerateDocuments
+                  ? 'ยังไม่สามารถส่งคำขอสินเชื่อใหม่ได้ '
+                      'เนื่องจากอยู่ระหว่างเชื่อมต่อระบบเอกสารสัญญา'
+                  : _flow.missingIdentityPhoto?.missingMessage ??
+                      _flow.missingConsent?.consentPrompt ??
+                      (!_flow.ndidVerified
+                          ? 'กรุณาลงนามเอกสารและยืนยันตัวตนด้วย NDID'
+                          : !_flow.sensitiveConsent
+                              ? 'กรุณายินยอมข้อมูลอ่อนไหวเพื่อดำเนินการต่อ'
+                              // Both are gated on their own screens; say which
+                              // one to go back to rather than a dead button.
+                              : isNew && !_flow.newLoan.hasCollateral
+                                  ? 'กรุณาระบุข้อมูลหลักประกันในขั้นตอนที่ 4'
+                                  : isNew && !_flow.newLoan.hasPayoutAccount
+                                      ? 'กรุณาระบุบัญชีรับเงินในขั้นตอนที่ 5'
+                                      : ''),
               style: GoogleFonts.notoSansThai(
                 fontSize: 13,
                 color: LoanRegisterStyles.required,
@@ -830,6 +909,46 @@ class _IdentitySlot extends StatelessWidget {
                 ),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of the document rows when the flow cannot produce them.
+///
+/// Today that means a **new P-Loan**: `POST /pdf/loan` is keyed by a contract
+/// and this product has none, so the read-consent-sign step — and therefore
+/// the submit — is unreachable until the new-loan document endpoint exists.
+/// Deliberately explicit rather than an empty section, so a blocked submit is
+/// explained instead of looking broken.
+class _DocumentsUnavailableNote extends StatelessWidget {
+  const _DocumentsUnavailableNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: LoanRegisterStyles.primarySoft,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: LoanRegisterStyles.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'อยู่ระหว่างเชื่อมต่อระบบสร้างเอกสารสัญญาสำหรับสินเชื่อใหม่ '
+              'จึงยังไม่สามารถลงนามและส่งคำขอได้ในขณะนี้',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 12.5,
+                height: 1.4,
+                color: LoanRegisterStyles.value,
+              ),
+            ),
+          ),
         ],
       ),
     );

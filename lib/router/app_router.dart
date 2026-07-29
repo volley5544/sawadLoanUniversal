@@ -23,6 +23,7 @@ import '../p_loan/application/p_loan_contract_select_page.dart';
 import '../p_loan/application/p_loan_customer_data_page.dart';
 import '../p_loan/application/p_loan_installment_page.dart';
 import '../p_loan/application/p_loan_success_page.dart';
+import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../p_loan/application/p_loan_vehicle_photos_page.dart';
 import '../p_loan/submit_form/p_loan_form_page.dart';
 
@@ -56,6 +57,12 @@ abstract final class AppRoutes {
   // the mobile API. Paths are consistently camelCase, unlike the source
   // project's mix of /PloanCardPage01 and /ploanInstallmentPage03.
   static const String pLoanContractSelect = '/pLoan/contract';
+
+  /// Deep link from the LandAndHouseWeb top-up card straight into a P-Loan
+  /// Extra at step 3 — the one P-Loan route besides step 1 that a URL may
+  /// enter, because it builds its own `PLoanFlow` instead of needing one.
+  /// Takes `?dbName=&contractNo=` (+ optional `&amount=`).
+  static const String pLoanTopupCardResume = '/pLoan/resume';
   static const String pLoanAmount = '/pLoan/amount';
   static const String pLoanInstallment = '/pLoan/installment';
   static const String pLoanVehiclePhotos = '/pLoan/photos';
@@ -89,6 +96,21 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.pLoanContractSelect,
       builder: (context, state) => const PLoanContractSelectPage(),
+    ),
+    // Deep link from the top-up card. Unlike steps 2-6 this one carries its
+    // state in the query string, not in `extra`, so it survives a refresh —
+    // it rebuilds the flow from `db_name` + `contract_no` and replaces itself
+    // with step 3.
+    GoRoute(
+      path: AppRoutes.pLoanTopupCardResume,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return PLoanTopupCardResumePage(
+          dbName: q['dbName'] ?? '',
+          contractNo: q['contractNo'] ?? '',
+          amount: int.tryParse(q['amount'] ?? ''),
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.pLoanAmount,

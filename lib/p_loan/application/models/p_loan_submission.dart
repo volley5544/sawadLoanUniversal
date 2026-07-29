@@ -53,10 +53,14 @@ class PLoanSubmission {
       // 'A' = active/new, matching the sample payload in the submit form.
       'statusCode': 'A',
       'empId': flow.empId,
+      // An Extra's filing branch is the contract's. A new P-Loan has no
+      // contract and no other source for it, so it goes out blank and is
+      // reported — a wrong branch code is worse than an absent one.
       'branchID': contract?.branchCode ?? '',
-      // The contract this application is raised against — the reason the flow
-      // starts by picking one.
-      'refContractNo': contract?.contractNo ?? '',
+      // **Extra only.** "เลขที่สัญญาอ้างอิง" is the contract the top-up is
+      // raised against. A new P-Loan is not raised against anything, so this
+      // is empty by design rather than missing — see [_absentByDesign].
+      'refContractNo': flow.isNewPLoan ? '' : (contract?.contractNo ?? ''),
       'mktChannel': flow.mktChannel,
       'customerSource': flow.customerSource,
 
@@ -65,7 +69,9 @@ class PLoanSubmission {
       // The submit form labels this 'ชื่อลูกค้า'; the API name really is 'test'.
       'test': _fullName(customer?.firstName, customer?.lastName),
       'mobileNo': customer?.phoneNumber ?? '',
-      'registerYear': _buddhistYear(detail?.carDetails.manufactureYear),
+      // The collateral's year, which for a new P-Loan the customer states on
+      // step 4 — the reference contract's vehicle is a different one.
+      'registerYear': _buddhistYear(flow.collateralManufactureYear),
 
       // ── ข้อมูลสินเชื่อ ──────────────────────────────────────────────
       // requestCredit = what the customer asked for, creditAmt = the limit
@@ -90,8 +96,10 @@ class PLoanSubmission {
       'initialDate': flow.plan?.firstDueDate ?? '',
 
       // ── ข้อมูลการโอนเงิน ────────────────────────────────────────────
-      'bankCode': contract?.contractBankBrandname ?? '',
-      'bankAccNo': contract?.contractBankAccount ?? '',
+      // An Extra pays out to the account registered against its contract; a
+      // new P-Loan to the one the customer gave on step 5.
+      'bankCode': flow.bankCode,
+      'bankAccNo': flow.bankAccountNo,
       // What actually reaches the customer, after the old principal and duty.
       'transferAmt': _money(flow.payoutAmount),
 
@@ -121,9 +129,18 @@ class PLoanSubmission {
     return PLoanSubmission._(
       Map.unmodifiable(fields),
       Map.unmodifiable(images),
-      List.unmodifiable(_unresolved(fields)),
+      List.unmodifiable(_unresolved(fields, _absentByDesign(flow))),
     );
   }
+
+  /// Fields this **product** does not have, as opposed to fields this flow
+  /// failed to collect. Reporting them would send the reader looking for a
+  /// value that is not supposed to exist.
+  ///
+  /// `refContractNo` is the only one: it identifies the contract an Extra is
+  /// raised against, and a new P-Loan is raised against nothing.
+  static Set<String> _absentByDesign(PLoanFlow flow) =>
+      flow.isNewPLoan ? const {'refContractNo'} : const {};
 
   /// Groups this flow has no capture step for, so they are always empty:
   /// the e-signature and the four co-borrower groups. Listed explicitly so
@@ -151,11 +168,18 @@ class PLoanSubmission {
   // Consents need no entry above: _yesNo always yields 'Y' or 'N', so they can
   // never read as unresolved.
 
-  static List<String> _unresolved(Map<String, String> fields) => fields.entries
-      .where((e) => e.value.isEmpty && !_allowedEmpty.contains(e.key))
-      .map((e) => e.key)
-      .toList()
-    ..sort();
+  static List<String> _unresolved(
+    Map<String, String> fields,
+    Set<String> absentByDesign,
+  ) =>
+      fields.entries
+          .where((e) =>
+              e.value.isEmpty &&
+              !_allowedEmpty.contains(e.key) &&
+              !absentByDesign.contains(e.key))
+          .map((e) => e.key)
+          .toList()
+        ..sort();
 
   // ── formatting ──────────────────────────────────────────────────────
   // The API takes everything as form-encoded strings. Money carries two
@@ -249,9 +273,11 @@ class PLoanContractSubmission {
       'lastPeriod': v('lastPeriod'),
       'bankCode': v('bankCode'),
       'bankAccNo': v('bankAccNo'),
-      // The contract carries the payout account number but no holder name. It
-      // is the customer's own account, which is what the API's sample shows.
-      'bankAccName': customer?.fullName ?? '',
+      // For an Extra the contract carries the payout account number but no
+      // holder name — it is the customer's own account, which is what the
+      // API's sample shows. A new P-Loan names the holder on step 5, since
+      // the account itself is theirs to choose.
+      'bankAccName': flow.bankAccountName,
       'transferAmt': v('transferAmt'),
       'statusCode': v('statusCode'),
       'gpsAumphurId': v('gpsAumphurId'),
@@ -268,11 +294,18 @@ class PLoanContractSubmission {
       'sensitiveConsent': v('sensitiveConsent'),
     };
 
+    // Same rule as the regmast payload: a field this product does not have is
+    // not a field this flow failed to fill.
+    final absentByDesign = PLoanSubmission._absentByDesign(flow);
     return PLoanContractSubmission._(
       Map.unmodifiable(fields),
       shared.imageGroups,
       List.unmodifiable(
-        (fields.entries.where((e) => e.value.isEmpty).map((e) => e.key).toList()
+        (fields.entries
+            .where((e) =>
+                e.value.isEmpty && !absentByDesign.contains(e.key))
+            .map((e) => e.key)
+            .toList()
           ..sort()),
       ),
     );

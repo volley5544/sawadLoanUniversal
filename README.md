@@ -15,15 +15,16 @@ scaffolding still exists, but the **web build is what ships**.
 > API, with no mock fallback. UI text/data is Thai; code comments are English.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
-> whom — most notably, a new-P-Loan submit needs an `httpMultipart` handler in
-> the native host before it can succeed.
+> whom — most notably a **new-P-Loan submit**, which needs a document endpoint
+> for a contractless loan *and* an `httpMultipart` handler in the native host
+> before it can succeed. The P-Loan **Extra** path completes today.
 
 ## Build & run
 
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 79 tests
+flutter test                                  # 107 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -117,6 +118,31 @@ home-menu card **ขอสินเชื่อส่วนบุคคล**): �
 repo it is wired to live APIs with **no mock fallback** — see
 `lib/services/p_loan_api.dart`.
 
+**Two ways in** (`PLoanEntry`). Normally step 1 from the home menu. The
+**LandAndHouseWeb top-up card** instead deep-links to
+`/pLoan/resume?dbName=…&contractNo=…`, which rebuilds what steps 1–2 would have
+produced and lands on **step 3**, then goes **3 → 5 → 6**: the card already
+showed the amount (so step 2 is redundant) and an Extra's collateral is already
+on file from `/loan/list` (so step 4 is). The indicator counts **the top-up card
+itself as step 1** and so runs 2/4 → 3/4 → 4/4: the skips don't read as a bug,
+and the screen the customer came from isn't disowned. Both step 3's back button
+and the success screen close the WebView back to the card. The requested amount comes from
+`/topup/detail`'s `topup_extra`, falling back to `default_topup_amount`.
+
+Walkable in a plain browser (the mobile API sends `access-control-allow-origin:
+*`), which is the easiest way to test it:
+
+```
+https://sawad-loan-universal-uat.web.app/pLoan/resume?hashThaiId=<HASH>&token=<JWT>&dbName=<DB>&contractNo=<NO>
+```
+
+It spans three repos: this one (**done**), the native host (**done and
+committed** — needs an app release to reach testers), and LandAndHouseWeb
+(**not built** — one FlutterFlow custom action). ⚠ Skipping step 4 also means **no collateral photos are submitted**.
+All of it — the snippet, the host edits, the mock test URLs and the open
+question about `topup_extra`'s meaning — is in [CLAUDE.md](CLAUDE.md) → *Two
+entry points* and *Outstanding*.
+
 Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
 
 - **สินเชื่อเพิ่มจากสัญญาเดิม** (P-Loan Extra) — the contract carousel. More
@@ -124,23 +150,36 @@ Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
   with that contract's approved limit and bounded by it.
 - **ขอสินเชื่อใหม่** (new P-Loan) — the card above it. A fresh loan whose amount
   **starts blank** for the customer to type, with no limit inherited from a
-  contract and no old principal deducted from the payout. Its step 2 makes **no
-  top-up call** (the top-up system rejects a never-topped-up contract with
-  `ไม่พบสัญญาใน vloan`), and — until the new-P-Loan calculator API exists — step 3
-  shows a **provisional client-side installment estimate** computed on the amount
-  the customer enters. See [CLAUDE.md](CLAUDE.md) → *New-P-Loan pricing (interim)*.
+  contract and no old principal deducted from the payout.
 
-A contract is picked either way: for a new P-Loan it is only a **data
-reference** — it supplies `refContractNo` and the `db_name` + `contract_no` key
-that `/pdf/loan` (and, for an Extra, the `/topup/*` endpoints) need.
+**A new P-Loan has no contract at all.** `refContractNo` ("เลขที่สัญญาอ้างอิง")
+is an Extra's field — it names the contract the top-up is raised against — and a
+new P-Loan is raised against nothing. So the new-loan card is offered **even to a
+customer with no contracts**, and an empty `/loan/list` only rules out the Extra.
+
+Everything that would otherwise come off a contract is either asked for or
+unavailable:
+
+- **The customer enters it.** Step 4 asks for the collateral type (which decides
+  which photos are required) plus ยี่ห้อ / รุ่น / ปีที่ผลิต and optional plate
+  details; step 5 asks for the payout bank, account number and account name.
+  Both gate the submit.
+- **Pricing is an interim client-side estimate.** Steps 2–3 make no `/topup/*`
+  call — all of them are keyed by `db_name` + `contract_no` — so until the
+  new-P-Loan calculator API exists, step 3 shows a provisional estimate computed
+  on the amount entered.
+- ⚠ **The contract documents can't be generated**, because `POST /pdf/loan` is
+  keyed by a contract too. Step 6 says so in place and **a new-loan submit
+  cannot complete yet**; the Extra path is unaffected.
 
 The two kinds **submit to different endpoints**, because `POST /topup` books
-against that contract: an Extra goes there, a new P-Loan goes to the P-Loan save
+against a contract: an Extra goes there, a new P-Loan goes to the P-Loan save
 API (`POST /SavePloanContract`, `lib/services/p_loan_contract_api.dart`).
-⚠ That endpoint sends no CORS headers, so it needs an `httpMultipart` handler on
-the native bridge that **the host app does not implement yet** — see
-[CLAUDE.md](CLAUDE.md), which also covers the Basic credential that ships in the
-web bundle.
+⚠ That endpoint sends no CORS headers, so it also needs an `httpMultipart`
+handler on the native bridge that **the host app does not implement yet**.
+
+See [CLAUDE.md](CLAUDE.md) → *A new P-Loan has no contract at all* for all of
+this, plus the Basic credential that ships in the web bundle.
 
 Step 6 ends with an **NDID** hop — the customer signs the contract documents
 with their bank identity, reusing the wizard's own NDID screens (they take a
@@ -256,6 +295,9 @@ lib/
   p_loan/
     submit_form/                standalone P-Loan form (regmast_ploan.php API)
     application/                6-step P-Loan application flow (mobile API)
+      p_loan_topup_card_resume_page.dart
+                                deep-link entry from the LandAndHouseWeb
+                                top-up card; rebuilds the flow, opens step 3
 firestore.rules                 deny-by-default + one client-readable document
 tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             Stop-hook auto-deploy to uat

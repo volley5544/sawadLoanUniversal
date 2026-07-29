@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../loan_register/components/loan_register_styles.dart';
+import '../../loan_register/components/register_field_row.dart';
 import '../../loan_register/components/register_step_indicator.dart';
+import '../../loan_register/components/register_text_field.dart';
 import '../../models/customer_address.dart';
 import '../../router/app_router.dart';
 import '../../services/p_loan_api.dart';
@@ -12,8 +15,17 @@ import '../../services/user_api.dart';
 import 'components/p_loan_components.dart';
 import 'models/p_loan_flow.dart';
 
-/// **Step 5 — ตรวจสอบข้อมูลส่วนตัว.** Read-only review of the payout account,
-/// phone number and the four registered addresses, then a confirmation sheet.
+/// **Step 5 — ตรวจสอบข้อมูลส่วนตัว.** Review of the payout account, phone
+/// number and the four registered addresses, then a confirmation sheet.
+///
+/// The phone and addresses are the customer's own record and stay read-only
+/// for both products — "ไม่ถูกต้อง" points at the branch, which is what can
+/// actually change them.
+///
+/// **The payout account is read-only for an Extra and editable for a new
+/// P-Loan.** An Extra pays into the account already registered against the
+/// contract it tops up. A new P-Loan tops up nothing, so that account belongs
+/// to a different loan; it is asked for instead of inherited.
 ///
 /// The source's confirm sheet navigated to step 6 from inside itself, which
 /// left the calling screen with no say in the flow. Here the sheet returns a
@@ -32,12 +44,67 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
   String? _error;
   bool _loading = true;
 
+  // New-P-Loan payout account. Seeded from the flow so the values survive a
+  // back-navigation.
+  late final TextEditingController _accountNo;
+  late final TextEditingController _accountName;
+
   PLoanFlow get _flow => widget.flow;
 
   @override
   void initState() {
     super.initState();
+    final details = _flow.newLoan;
+    _accountNo = TextEditingController(text: details.bankAccountNo);
+    // Default the holder to the customer's own name: it is the common case and
+    // the API's sample, but it stays editable — a joint or business account is
+    // the customer's to state, not ours to assume.
+    _accountName = TextEditingController(
+      text: details.bankAccountName.isNotEmpty
+          ? details.bankAccountName
+          : (_flow.customer?.fullName ?? ''),
+    );
+    // Commit the defaulted holder name straight away (no setState — this runs
+    // before the first build).
+    details
+      ..bankAccountNo = _accountNo.text.trim()
+      ..bankAccountName = _accountName.text.trim();
+    for (final controller in [_accountNo, _accountName]) {
+      controller.addListener(_onAccountChanged);
+    }
     _load();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [_accountNo, _accountName]) {
+      controller
+        ..removeListener(_onAccountChanged)
+        ..dispose();
+    }
+    super.dispose();
+  }
+
+  /// Mirrors the fields onto the flow, rebuilding only when that flips the
+  /// confirm button.
+  void _onAccountChanged() {
+    final before = _flow.newLoan.hasPayoutAccount;
+    _flow.newLoan
+      ..bankAccountNo = _accountNo.text.trim()
+      ..bankAccountName = _accountName.text.trim();
+    if (_flow.newLoan.hasPayoutAccount != before && mounted) setState(() {});
+  }
+
+  Future<void> _pickBank() async {
+    final picked = await pickPLoanOption<String>(
+      context: context,
+      title: 'เลือกธนาคาร',
+      options: kPayoutBankCodes,
+      labelOf: bankDisplayName,
+      selected: _flow.newLoan.bankCode.isEmpty ? null : _flow.newLoan.bankCode,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _flow.newLoan.bankCode = picked);
   }
 
   Future<void> _load() async {
@@ -66,18 +133,19 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
   }
 
   /// Bank-account confirmation sheet. Returns true when the customer confirms.
+  ///
+  /// Reads the account off the flow, so it works for a new P-Loan — which has
+  /// no contract to guard on.
   Future<void> _confirm() async {
-    final contract = _flow.contract;
-    if (contract == null) return;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0x99000000),
       isScrollControlled: true,
       builder: (context) => _ConfirmAccountSheet(
-        bankCode: contract.contractBankBrandname,
-        accountNo: contract.contractBankAccount,
-        logoBase64: contract.branchImage,
+        bankCode: _flow.bankCode,
+        accountNo: _flow.bankAccountNo,
+        logoBase64: _flow.bankLogoBase64,
       ),
     );
     if (confirmed == true && mounted) {
@@ -94,7 +162,8 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
         children: [
           const PLoanMockBanner(),
           PLoanKindBanner(kind: _flow.kind),
-          const RegisterStepIndicator(currentStep: 5, totalSteps: 6),
+          RegisterStepIndicator(
+              currentStep: _flow.stepNumber(5), totalSteps: _flow.totalSteps),
           Expanded(child: _body()),
         ],
       ),
@@ -109,7 +178,6 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
       return const PLoanLoadingView(message: 'กำลังโหลดข้อมูลที่อยู่...');
     }
 
-    final contract = _flow.contract!;
     final customer = _flow.customer;
     final book = _addresses!;
     return SingleChildScrollView(
@@ -128,15 +196,19 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
             ),
           ),
           const PLoanSectionHeader('ข้อมูลเลขที่บัญชี'),
-          Text('เลขที่บัญชี',
-              style: GoogleFonts.notoSansThai(
-                  fontSize: 13, color: LoanRegisterStyles.label)),
-          const SizedBox(height: 8),
-          BankAccountCard(
-            bankCode: contract.contractBankBrandname,
-            accountNo: contract.contractBankAccount,
-            logoBytes: decodeBase64Image(contract.branchImage),
-          ),
+          if (_flow.isNewPLoan)
+            _payoutAccountInputs()
+          else ...[
+            Text('เลขที่บัญชี',
+                style: GoogleFonts.notoSansThai(
+                    fontSize: 13, color: LoanRegisterStyles.label)),
+            const SizedBox(height: 8),
+            BankAccountCard(
+              bankCode: _flow.bankCode,
+              accountNo: _flow.bankAccountNo,
+              logoBytes: decodeBase64Image(_flow.bankLogoBase64),
+            ),
+          ],
           const PLoanSectionHeader('ข้อมูลโทรศัพท์'),
           PLoanAmountRow(
             label: 'เบอร์โทรศัพท์',
@@ -154,6 +226,59 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
               'ที่ทำงาน/ที่อยู่อื่นๆ', book.otherAddress),
         ],
       ),
+    );
+  }
+
+  /// Editable payout account for a **new** P-Loan: which bank, which number,
+  /// whose name. All three are required — a transfer needs the holder's name
+  /// as well as the number, and none of them can be inherited from a contract
+  /// this loan is not drawn against.
+  Widget _payoutAccountInputs() {
+    final details = _flow.newLoan;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'กรุณาระบุบัญชีที่ต้องการให้โอนเงินสินเชื่อ',
+          style: GoogleFonts.notoSansThai(
+              fontSize: 13, color: LoanRegisterStyles.label),
+        ),
+        RegisterFieldRow(
+          label: 'ธนาคาร',
+          value: details.bankCode.isEmpty
+              ? ''
+              : bankDisplayName(details.bankCode),
+          placeholder: 'กรุณาเลือกธนาคาร',
+          onTap: _pickBank,
+        ),
+        RegisterTextField(
+          label: 'เลขที่บัญชี',
+          controller: _accountNo,
+          hint: 'กรุณากรอกเลขที่บัญชี',
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
+            LengthLimitingTextInputFormatter(20),
+          ],
+        ),
+        RegisterTextField(
+          label: 'ชื่อบัญชี',
+          controller: _accountName,
+          hint: 'กรุณากรอกชื่อเจ้าของบัญชี',
+          showDivider: false,
+        ),
+        if (!details.hasPayoutAccount)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '* กรุณาระบุธนาคาร เลขที่บัญชี และชื่อบัญชีให้ครบถ้วน',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 13,
+                color: LoanRegisterStyles.required,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -244,9 +369,15 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
             child: SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _confirm,
+                // A new P-Loan can't confirm a payout account it hasn't been
+                // given.
+                onPressed: _flow.isNewPLoan && !_flow.newLoan.hasPayoutAccount
+                    ? null
+                    : _confirm,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: LoanRegisterStyles.primary,
+                  disabledBackgroundColor:
+                      LoanRegisterStyles.primary.withValues(alpha: 0.5),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

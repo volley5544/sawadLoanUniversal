@@ -101,7 +101,11 @@ PLoanFlow _completeFlow({PLoanKind kind = PLoanKind.extra}) {
     source: 'app',
     referId: 'REF1',
     customer: CustomerDetail.fromJson(const {'thai_id': '1234567890123'}),
-    contract: LoanContract.fromJson(_contractJson),
+    // Extra only: a new P-Loan is raised against nothing, so it carries no
+    // contract through the flow at all.
+    contract: kind == PLoanKind.extra
+        ? LoanContract.fromJson(_contractJson)
+        : null,
     amountDetail: LoanAmountDetail.fromJson(_amountDetailJson),
   )
     ..requestedAmount = 30000
@@ -248,6 +252,268 @@ void main() {
       final extra = _completeFlow();
       expect(extra.submitTarget, PLoanSubmitTarget.topup);
       expect(extra.toSubmissionJson()['contract_no'], isNotEmpty);
+    });
+  });
+
+  group('a new P-Loan is raised against no contract', () {
+    test('it carries none at all — refContractNo is an Extra\'s field', () {
+      expect(_completeFlow().contract, isNotNull);
+      expect(_completeFlow(kind: PLoanKind.newLoan).contract, isNull);
+    });
+
+    test('it cannot produce contract documents, so it cannot submit yet', () {
+      // POST /pdf/loan is keyed by contract_no + db_name + from +
+      // contract_date, all of which come from the contract.
+      final fresh = _completeFlow(kind: PLoanKind.newLoan);
+      expect(fresh.canGenerateDocuments, isFalse);
+      expect(_completeFlow().canGenerateDocuments, isTrue);
+    });
+
+    test('submit needs the documents, which is what blocks a new loan', () {
+      // Everything else satisfied; only the documents are missing.
+      final fresh = _completeFlow(kind: PLoanKind.newLoan)
+        ..verifiedThaiId = '1234567890123'
+        ..consented.addAll(LoanDocumentKind.values)
+        ..ndidVerified = true
+        ..sensitiveConsent = true
+        ..documents = null;
+      fresh.newLoan
+        ..collateralType = PLoanCollateralType.motorcycle
+        ..brand = 'HONDA'
+        ..series = 'Wave 110i'
+        ..manufactureYear = '2562'
+        ..bankCode = 'SCB'
+        ..bankAccountNo = '9876543210'
+        ..bankAccountName = 'สมชาย ใจดี';
+      expect(fresh.canSubmit, isFalse);
+    });
+
+    test('an Extra with no contract is a broken flow, not a new product', () {
+      final broken = _completeFlow()
+        ..contract = null
+        ..verifiedThaiId = '1234567890123'
+        ..consented.addAll(LoanDocumentKind.values)
+        ..ndidVerified = true
+        ..sensitiveConsent = true;
+      expect(broken.canSubmit, isFalse);
+      expect(broken.canGenerateDocuments, isFalse);
+    });
+  });
+
+  group('a new P-Loan states its own collateral and payout account', () {
+    test('an Extra still reads both off the contract it draws on', () {
+      final extra = _completeFlow();
+      expect(extra.loanTypeCode, 'M');
+      expect(extra.collateralSeries, 'Wave 110i');
+      expect(extra.bankCode, 'KBANK');
+      expect(extra.bankAccountNo, '1234567890');
+    });
+
+    test('a new P-Loan inherits none of it — blank until the customer says',
+        () {
+      // The bug this replaced: a contract's vehicle (ยี่ห้อสินค้า HONDA) and
+      // its payout account were shown as this application's.
+      final fresh = _completeFlow(kind: PLoanKind.newLoan);
+      expect(fresh.loanTypeCode, isEmpty);
+      expect(fresh.collateralBrand, isEmpty);
+      expect(fresh.collateralSeries, isEmpty);
+      expect(fresh.bankCode, isEmpty);
+      expect(fresh.bankAccountNo, isEmpty);
+      expect(fresh.bankAccountName, isEmpty);
+    });
+
+    test('what the customer enters is what the flow reports', () {
+      final fresh = _completeFlow(kind: PLoanKind.newLoan);
+      fresh.newLoan
+        ..collateralType = PLoanCollateralType.car
+        ..brand = 'TOYOTA'
+        ..series = 'Yaris'
+        ..manufactureYear = '2562'
+        ..bankCode = 'SCB'
+        ..bankAccountNo = '9876543210'
+        ..bankAccountName = 'สมหญิง รักดี';
+
+      expect(fresh.loanTypeCode, 'C');
+      expect(fresh.loanTypeName, 'รถยนต์');
+      expect(fresh.collateralBrand, 'TOYOTA');
+      expect(fresh.collateralManufactureYear, '2562');
+      expect(fresh.bankCode, 'SCB');
+      expect(fresh.bankAccountName, 'สมหญิง รักดี');
+    });
+
+    test('the chosen type drives which photos step 4 requires', () {
+      // For an Extra this comes from the contract; for a new loan the customer
+      // picks it, so the same switch has to follow their choice.
+      final fresh = _completeFlow(kind: PLoanKind.newLoan);
+      // Nothing picked yet: neither M nor C, so only the tax disc.
+      expect(fresh.requiredPhotos, [PLoanPhoto.taxDisc]);
+
+      fresh.newLoan.collateralType = PLoanCollateralType.car;
+      expect(fresh.requiredPhotos, hasLength(6));
+      expect(fresh.requiredPhotos, contains(PLoanPhoto.carMile));
+
+      fresh.newLoan.collateralType = PLoanCollateralType.motorcycle;
+      expect(fresh.requiredPhotos, [PLoanPhoto.fullVehicle, PLoanPhoto.taxDisc]);
+    });
+
+    test('submit is gated on both, and only for a new P-Loan', () {
+      PLoanFlow ready(PLoanKind kind) => _completeFlow(kind: kind)
+        ..verifiedThaiId = '1234567890123'
+        ..consented.addAll(LoanDocumentKind.values)
+        ..ndidVerified = true
+        ..sensitiveConsent = true;
+
+      // An Extra takes both off its contract, so nothing extra is required.
+      expect(ready(PLoanKind.extra).canSubmit, isTrue);
+
+      final fresh = ready(PLoanKind.newLoan);
+      expect(fresh.canSubmit, isFalse, reason: 'no collateral, no account');
+
+      fresh.newLoan
+        ..collateralType = PLoanCollateralType.motorcycle
+        ..brand = 'HONDA'
+        ..series = 'Wave 110i'
+        ..manufactureYear = '2562';
+      expect(fresh.canSubmit, isFalse, reason: 'still no payout account');
+
+      fresh.newLoan
+        ..bankCode = 'SCB'
+        ..bankAccountNo = '9876543210'
+        ..bankAccountName = 'สมชาย ใจดี';
+      expect(fresh.canSubmit, isTrue);
+    });
+
+    test('a non-vehicle collateral type asks for no vehicle details', () {
+      final details = NewLoanDetails()
+        ..collateralType = PLoanCollateralType.other;
+      expect(details.hasCollateral, isTrue);
+
+      details.collateralType = PLoanCollateralType.car;
+      expect(details.hasCollateral, isFalse);
+    });
+  });
+
+  group('top-up-card requested amount', () {
+    // min 5000 / max 50000 / default 35000 from _amountDetailJson.
+    LoanAmountDetail detail({int? topupExtra}) =>
+        LoanAmountDetail.fromJson(<String, dynamic>{
+          ..._amountDetailJson,
+          'topup_extra': ?topupExtra,
+        });
+
+    test('prefers topup_extra — the วงเงินเพิ่มเติม the card shows', () {
+      expect(detail(topupExtra: 20000).topupCardRequestAmount(), 20000);
+    });
+
+    test('falls back to the approved limit when topup_extra is 0', () {
+      // It is 0 far more often than not, so it cannot be the only source.
+      expect(detail(topupExtra: 0).topupCardRequestAmount(), 35000);
+      expect(detail().topupCardRequestAmount(), 35000);
+    });
+
+    test('falls through when topup_extra is out of the priced range', () {
+      // 1000 is below min_topup_amount; nobody asserted it, so move on rather
+      // than dead-end the deep link.
+      expect(detail(topupExtra: 1000).topupCardRequestAmount(), 35000);
+      expect(detail(topupExtra: 90000).topupCardRequestAmount(), 35000);
+    });
+
+    test('an amount the card passed wins, and is rounded like step 2', () {
+      expect(detail(topupExtra: 20000).topupCardRequestAmount(requested: 30099),
+          30000);
+    });
+
+    test('but an out-of-range passed amount is refused, not substituted', () {
+      // Reporting beats filing a different number than the card displayed.
+      final d = detail(topupExtra: 20000);
+      expect(d.topupCardRequestAmount(requested: 4000), isNull);
+      expect(d.topupCardRequestAmount(requested: 60000), isNull);
+    });
+
+    test('null when nothing is priceable at all', () {
+      final none = LoanAmountDetail.fromJson(const {
+        'code': '200',
+        'min_topup_amount': 5000,
+        'max_topup_amount': 50000,
+      });
+      expect(none.topupCardRequestAmount(), isNull);
+    });
+  });
+
+  group('top-up-card entry (deep link into step 3)', () {
+    PLoanFlow fromCard() => PLoanFlow(
+          hashThaiId: 'H',
+          entry: PLoanEntry.topupCard,
+          contract: LoanContract.fromJson(_contractJson),
+          amountDetail: LoanAmountDetail.fromJson(_amountDetailJson),
+        );
+
+    test('the full wizard is the default, so nothing else changes', () {
+      expect(PLoanFlow(hashThaiId: 'H').entry, PLoanEntry.wizard);
+      expect(PLoanFlow(hashThaiId: 'H').skipsCollateralPhotos, isFalse);
+      expect(PLoanFlow(hashThaiId: 'H').totalSteps, 6);
+    });
+
+    test('visits only จำนวนงวด → ตรวจสอบข้อมูล → สรุป', () {
+      expect(PLoanEntry.topupCard.visitedSteps, [3, 5, 6]);
+      // Three screens here, plus the top-up card the customer came from.
+      expect(fromCard().totalSteps, 4);
+      expect(PLoanEntry.wizard.precedingSteps, 0);
+    });
+
+    test('counts the top-up card as step 1, so this build starts at 2', () {
+      final card = fromCard();
+      // The card is where the contract was picked and the amount shown — the
+      // wizard's steps 1–2. Starting at "1 of 3" disowned it.
+      expect(card.stepNumber(3), 2);
+      expect(card.stepNumber(5), 3);
+      expect(card.stepNumber(6), 4);
+
+      // The wizard is untouched: its numbers are already its positions.
+      final wizard = _completeFlow();
+      for (final step in [1, 2, 3, 4, 5, 6]) {
+        expect(wizard.stepNumber(step), step);
+      }
+    });
+
+    test('a step it does not visit falls back to its own number', () {
+      // Step 4 is skipped; asking for its position must not return -1+1 = 0.
+      expect(fromCard().stepNumber(4), 4);
+    });
+
+    test('skips step 4, so step 3 continues to step 5', () {
+      expect(fromCard().skipsCollateralPhotos, isTrue);
+      expect(_completeFlow().skipsCollateralPhotos, isFalse);
+    });
+
+    test('missing collateral photos never block the submit', () {
+      // Step 4 is skipped, so the flow submits with no vehicle photos at all.
+      // canSubmit gates on the *identity* photos only — this pins that the
+      // skip cannot deadlock the final button.
+      final card = fromCard()
+        ..customer = CustomerDetail.fromJson(const {'thai_id': '1234567890123'})
+        ..verifiedThaiId = '1234567890123'
+        ..documents = const LoanDocuments(
+            request: 'R', receipt: 'C', agreement: 'A')
+        ..consented.addAll(LoanDocumentKind.values)
+        ..ndidVerified = true
+        ..sensitiveConsent = true;
+      card.photos[PLoanPhoto.idCard] = Uint8List.fromList([1]);
+      card.photos[PLoanPhoto.selfieWithIdCard] = Uint8List.fromList([2]);
+
+      expect(card.missingVehiclePhoto, isNotNull,
+          reason: 'the vehicle shots really are absent');
+      expect(card.canSubmit, isTrue,
+          reason: 'but step 4 was skipped on purpose, so they must not gate');
+    });
+
+    test('it is an Extra, so it keeps the contract and posts to /topup', () {
+      final card = fromCard();
+      expect(card.kind, PLoanKind.extra);
+      expect(card.isNewPLoan, isFalse);
+      expect(card.submitTarget, PLoanSubmitTarget.topup);
+      expect(card.canGenerateDocuments, isTrue,
+          reason: 'an Extra has the contract /pdf/loan is keyed by');
     });
   });
 

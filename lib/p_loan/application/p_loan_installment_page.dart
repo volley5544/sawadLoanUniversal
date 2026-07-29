@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../loan_register/components/loan_register_styles.dart';
 import '../../loan_register/components/register_step_indicator.dart';
 import '../../router/app_router.dart';
+import '../../services/native_bridge.dart';
 import 'components/p_loan_components.dart';
 import 'models/installment_plan.dart';
 import 'models/p_loan_flow.dart';
@@ -14,6 +15,11 @@ import 'models/p_loan_flow.dart';
 ///
 /// Options are shown longest-tenor-first (i.e. smallest monthly payment first),
 /// matching the source's `reversedListInstallment`.
+///
+/// Also the **entry screen** for a top-up-card deep link
+/// ([PLoanEntry.topupCard]), which changes two things here: back closes the
+/// WebView instead of popping to a route that isn't there, and ยืนยัน continues
+/// to step 5, since an Extra's collateral is already on file.
 class PLoanInstallmentPage extends StatefulWidget {
   const PLoanInstallmentPage({super.key, required this.flow});
 
@@ -33,20 +39,33 @@ class _PLoanInstallmentPageState extends State<PLoanInstallmentPage> {
     _selected = widget.flow.installment;
   }
 
+  /// This screen is the flow's first when deep-linked, so there is nothing to
+  /// pop to — back means "return to the top-up card that opened us".
+  void _closeToTopupCard() {
+    if (NativeCameraBridge.isSupported) {
+      NativeCameraBridge.closeWebview();
+      return;
+    }
+    context.go(AppRoutes.home);
+  }
+
   @override
   Widget build(BuildContext context) {
     final flow = widget.flow;
     final plan = flow.plan;
     final options = plan?.longestFirst ?? const <InstallmentOption>[];
+    final isEntryScreen = flow.entry == PLoanEntry.topupCard;
 
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
-      appBar: pLoanAppBar(context, 'เลือกจำนวนงวด'),
+      appBar: pLoanAppBar(context, 'เลือกจำนวนงวด',
+          onBack: isEntryScreen ? _closeToTopupCard : null),
       body: Column(
         children: [
           const PLoanMockBanner(),
           PLoanKindBanner(kind: flow.kind),
-          const RegisterStepIndicator(currentStep: 3, totalSteps: 6),
+          RegisterStepIndicator(
+              currentStep: flow.stepNumber(3), totalSteps: flow.totalSteps),
           Expanded(
             child: options.isEmpty
                 ? const PLoanErrorView(
@@ -105,7 +124,14 @@ class _PLoanInstallmentPageState extends State<PLoanInstallmentPage> {
             ? null
             : () {
                 flow.installment = _selected;
-                context.push(AppRoutes.pLoanVehiclePhotos, extra: flow);
+                // A top-up-card Extra skips step 4 — its collateral is already
+                // on file from /loan/list.
+                context.push(
+                  flow.skipsCollateralPhotos
+                      ? AppRoutes.pLoanCustomerData
+                      : AppRoutes.pLoanVehiclePhotos,
+                  extra: flow,
+                );
               },
       ),
     );

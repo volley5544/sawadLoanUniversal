@@ -23,10 +23,11 @@ import 'models/p_loan_flow.dart';
 ///    below. More money against a contract they already have, bounded by its
 ///    approved limit.
 ///
-/// Both then run the same five screens. A contract is picked either way: for a
-/// new P-Loan it is only a **data reference** (the `db_name`/`contract_no`
-/// every downstream endpoint is keyed by), which is why the new-loan card names
-/// the contract it will reference rather than hiding the choice.
+/// Both then run the same five screens, but only an Extra picks a contract.
+/// A new P-Loan has none — it is a fresh loan, and `refContractNo` is an
+/// Extra's field — so **the new-loan card is offered even when the customer
+/// has no contracts at all**, and the empty-list message speaks only for the
+/// Extra below it.
 ///
 /// This is the slimmed-down counterpart of the source's 8,257-line
 /// `ploan_card_page01`. Deliberately left out: the add-on product grid (and the
@@ -102,16 +103,19 @@ class _PLoanContractSelectPageState extends State<PLoanContractSelectPage> {
 
   CustomerDetail? _customer;
 
-  /// Starts a [kind] application against [contract] and opens step 2.
+  /// Starts a [kind] application and opens step 2.
   ///
-  /// The two top-up preconditions below are checked for [PLoanKind.extra] only.
-  /// Both describe whether *that contract* can be topped up — an in-flight
-  /// top-up request, or a `can_topup` refusal — and neither says anything about
-  /// whether the customer may take out a new loan. A new P-Loan only needs the
-  /// contract to exist, and `_contracts` is already filtered to selectable
-  /// ones.
-  void _start(LoanContract contract, {required PLoanKind kind}) {
+  /// [contract] is the one being topped up, and is **null for a new P-Loan** —
+  /// that product is not raised against anything, so it carries no contract
+  /// through the flow at all.
+  ///
+  /// The two top-up preconditions below therefore apply to [PLoanKind.extra]
+  /// only. Both describe whether *that contract* can be topped up — an
+  /// in-flight top-up request, or a `can_topup` refusal — and neither says
+  /// anything about whether the customer may take out a new loan.
+  void _start(LoanContract? contract, {required PLoanKind kind}) {
     if (kind == PLoanKind.extra) {
+      if (contract == null) return;
       if (!contract.hasNoRequestYet) {
         // A request is already in flight for this contract. The source pushed
         // its status screen here; that screen isn't part of this pass, so say
@@ -137,7 +141,8 @@ class _PLoanContractSelectPageState extends State<PLoanContractSelectPage> {
       kind: kind,
       authToken: appState.authToken,
       customer: _customer,
-      contract: contract,
+      // Null for a new P-Loan, by the same reasoning as above.
+      contract: kind == PLoanKind.extra ? contract : null,
       empId: appState.empId,
       mktChannel: appState.mktChannel,
       customerSource: appState.customerSource,
@@ -169,28 +174,36 @@ class _PLoanContractSelectPageState extends State<PLoanContractSelectPage> {
     if (contracts == null) {
       return const PLoanLoadingView(message: 'กำลังโหลดข้อมูลสัญญา...');
     }
+    final newLoanCard =
+        _NewPLoanCard(onStart: () => _start(null, kind: PLoanKind.newLoan));
     if (contracts.isEmpty) {
-      // Both products need a contract: the Extra draws against one, and a new
-      // P-Loan references one to reach the endpoints at all. So an empty list
-      // ends the flow either way — say which, rather than only mentioning the
-      // Extra.
-      return const PLoanErrorView(
-        message: 'ไม่พบสัญญาที่สามารถขอสินเชื่อได้\n'
-            'การขอสินเชื่อใหม่ต้องอ้างอิงข้อมูลจากสัญญาเดิมอย่างน้อย 1 สัญญา',
+      // Only the Extra needs a contract. A new P-Loan is still available with
+      // none, so this is a notice under the card rather than an error view
+      // that ends the flow for both products.
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          newLoanCard,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                LoanRegisterStyles.padding, 12, LoanRegisterStyles.padding, 0),
+            child: Text(
+              'ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้\n'
+              'คุณยังสามารถขอสินเชื่อใหม่ได้จากด้านบน',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansThai(
+                fontSize: 14,
+                height: 1.5,
+                color: LoanRegisterStyles.label,
+              ),
+            ),
+          ),
+        ],
       );
     }
-    // Clamped: onPageChanged and the list assignment can otherwise disagree
-    // for one frame after a retry.
-    final index = _index.clamp(0, contracts.length - 1);
     return Column(
       children: [
-        _NewPLoanCard(
-          // The contract currently on screen below. Following the carousel
-          // rather than fixing on the first one keeps the reference something
-          // the customer can see and change, instead of an invisible default.
-          reference: contracts[index],
-          onStart: () => _start(contracts[index], kind: PLoanKind.newLoan),
-        ),
+        newLoanCard,
         _header(contracts.length),
         Expanded(
           child: PageView.builder(
@@ -435,13 +448,12 @@ class _ContractCard extends StatelessWidget {
 ///
 /// Styled as a soft-filled panel rather than one of the white contract cards,
 /// so it reads as a separate product and not as another contract in the list.
-/// [reference] is named on the card on purpose: a new P-Loan is not drawn
-/// against it, but every endpoint the flow calls is keyed by it, so the customer
-/// should be able to see which of their contracts the request is attached to.
+///
+/// It names no contract, and is shown whether or not the customer has any: a
+/// new P-Loan is a fresh loan, raised against nothing.
 class _NewPLoanCard extends StatelessWidget {
-  const _NewPLoanCard({required this.reference, required this.onStart});
+  const _NewPLoanCard({required this.onStart});
 
-  final LoanContract reference;
   final VoidCallback onStart;
 
   @override
@@ -483,14 +495,6 @@ class _NewPLoanCard extends StatelessWidget {
               fontSize: 13,
               color: LoanRegisterStyles.label,
               height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'อ้างอิงข้อมูลจากสัญญา ${reference.contractNo}',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 12,
-              color: LoanRegisterStyles.label,
             ),
           ),
           const SizedBox(height: 10),

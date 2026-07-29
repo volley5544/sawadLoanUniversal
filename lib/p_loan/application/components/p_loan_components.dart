@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../loan_register/components/env_version_tag.dart';
 import '../../../loan_register/components/loan_register_styles.dart';
 import '../../../services/p_loan_api.dart';
 import '../models/p_loan_flow.dart';
@@ -87,6 +88,88 @@ String bankDisplayName(String code) => switch (code.trim().toUpperCase()) {
       'GHB' => 'ธนาคารอาคารสงเคราะห์',
       _ => code.trim(),
     };
+
+/// Bank codes offered when the customer names their own payout account.
+///
+/// Deliberately the same set [bankDisplayName] can render, so a picked code
+/// never falls through to its raw form. An Extra never sees this list — its
+/// account comes off the contract.
+const List<String> kPayoutBankCodes = [
+  'KBANK', 'SCB', 'BBL', 'KTB', 'BAY', 'TTB', 'GSB', 'BAAC', 'LHB', 'CIMB',
+  'UOB', 'GHB',
+];
+
+/// Full-width bottom sheet listing [options]; pops the chosen one.
+///
+/// The flow's screens are otherwise read-only, so this is the one input idiom
+/// they need — used for the collateral type and the payout bank.
+Future<T?> pickPLoanOption<T>({
+  required BuildContext context,
+  required String title,
+  required List<T> options,
+  required String Function(T) labelOf,
+  T? selected,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetContext) => Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.7,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(title,
+                      style: LoanRegisterStyles.appBarTitleStyle()
+                          .copyWith(fontSize: 17)),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  icon: Icon(Icons.close, color: LoanRegisterStyles.label),
+                ),
+              ],
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final option in options)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        labelOf(option),
+                        style: GoogleFonts.notoSansThai(
+                          fontSize: 15,
+                          color: LoanRegisterStyles.value,
+                        ),
+                      ),
+                      trailing: option == selected
+                          ? Icon(Icons.check_circle,
+                              color: LoanRegisterStyles.primary, size: 22)
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop(option),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// SVG for a loan-type code, matching the source's per-code mapping.
 String loanTypeIconAsset(String loanTypeCode) =>
@@ -512,16 +595,25 @@ class PLoanKindBanner extends StatelessWidget {
   }
 }
 
-AppBar pLoanAppBar(BuildContext context, String title) => AppBar(
+/// Carries [EnvVersionTag] like every wizard page does, so a tester can read
+/// the env + build off any screen of the flow. Set here rather than per page
+/// because all six share this helper.
+///
+/// [onBack] replaces the default pop. Needed by whichever screen is the flow's
+/// **entry point**: a deep-linked step 3 has nothing beneath it on the stack,
+/// so back must close the WebView instead of popping to a blank route.
+AppBar pLoanAppBar(BuildContext context, String title, {VoidCallback? onBack}) =>
+    AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
-      leading: BackButton(color: LoanRegisterStyles.primary),
+      leading: BackButton(color: LoanRegisterStyles.primary, onPressed: onBack),
       centerTitle: true,
       title: Text(
         title,
         style: LoanRegisterStyles.appBarTitleStyle()
             .copyWith(color: LoanRegisterStyles.primary),
       ),
+      actions: const [EnvVersionTag()],
     );
 
 /// Single sticky primary button, the flow's standard bottom bar. [onPressed]

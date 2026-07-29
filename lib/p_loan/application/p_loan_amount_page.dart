@@ -23,9 +23,10 @@ import 'models/p_loan_flow.dart';
 ///    bounded by `min/max_topup_amount`; the old contract's principal is shown
 ///    as a deduction.
 ///  - **New P-Loan** — the field starts **blank** and the customer types the
-///    amount they want. No bound is inherited from the reference contract, and
-///    there is no old principal to deduct, so neither is shown. The calculator
-///    only runs once an amount has been entered.
+///    amount they want. There is no contract, so no bound is inherited and
+///    there is no old principal to deduct — neither is shown, and no
+///    `/topup/*` call is made. The calculator only runs once an amount has
+///    been entered.
 ///
 /// In the source this screen's entire input block — amount field, slider and
 /// validation — sat behind `if (FFAppState().savePLoanData.isNewPLoan)`, and
@@ -71,33 +72,32 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   /// Fetches the limits, and — for an Extra only — the installment options for
   /// its default amount.
   ///
-  /// A **new P-Loan** makes no call here at all. `GET /topup/detail` asks the
-  /// top-up system about the reference contract, which rejects it
-  /// (`ไม่พบสัญญาใน vloan`) for contracts that were never topped up — the very
-  /// error this screen used to show. Nothing on the screen needs that call
-  /// before an amount is entered: the contract, collateral and profile data
-  /// are already in hand, and the rate and stamp duty come from the calculator,
-  /// run on the customer's own amount from the Next button (see [_proceed]).
+  /// A **new P-Loan** makes no call here at all, and needs no contract: it has
+  /// none. `GET /topup/detail` is keyed by `db_name` + `contract_no`, so it is
+  /// unreachable, and nothing on the screen needs it before an amount is
+  /// entered — the rate and stamp duty come from the calculator, run on the
+  /// customer's own amount from the Next button (see [_proceed]).
   Future<void> _load() async {
-    final contract = _flow.contract;
-    if (contract == null) {
-      setState(() {
-        _loading = false;
-        _error = 'ไม่พบข้อมูลสัญญา';
-      });
-      return;
-    }
     if (_flow.isNewPLoan) {
-      // Seed a local detail from the contract already in hand — no round-trip.
-      // Reuse an existing one when returning from a later step so the priced
-      // rate/duty and the typed amount survive a back-navigation.
-      _flow.amountDetail ??= LoanAmountDetail.fromContract(contract);
+      // An empty detail: this product has no approved limit, no old principal
+      // and no contract to read either off. The calculator fills in the rate
+      // and duty. Reused when returning from a later step so the priced values
+      // and the typed amount survive a back-navigation.
+      _flow.amountDetail ??= const LoanAmountDetail(code: '200');
       _amountController.text = _flow.requestedAmount > 0
           ? formatWholeMoney(_flow.requestedAmount)
           : '';
       setState(() {
         _loading = false;
         _error = null;
+      });
+      return;
+    }
+    final contract = _flow.contract;
+    if (contract == null) {
+      setState(() {
+        _loading = false;
+        _error = 'ไม่พบข้อมูลสัญญา';
       });
       return;
     }
@@ -180,13 +180,14 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   /// commit (see [_proceed]).
   Future<void> _commitAmount() async {
     final detail = _flow.amountDetail;
-    final contract = _flow.contract;
-    if (detail == null || contract == null) return;
+    if (detail == null) return;
 
     _commitTypedAmount();
     setState(() {});
 
     if (_flow.isNewPLoan) return;
+    final contract = _flow.contract;
+    if (contract == null) return;
     // Unchanged amount is already priced (plan survived the commit), and
     // out-of-range values show inline guidance instead of calling the API.
     if (_flow.plan != null || !_flow.isRequestedAmountAllowed) return;
@@ -196,11 +197,13 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   /// Prices [PLoanFlow.requestedAmount] and folds the result into the flow.
   /// Returns true when a usable plan came back.
   ///
-  /// An **Extra** hits `POST /topup/calculator`. A **new P-Loan** has no
-  /// calculator endpoint yet, so it uses the client-side estimate from
-  /// [PLoanApi.calculateNewLoanInstallments] — see that method for why.
+  /// An **Extra** hits `POST /topup/calculator` (hence [contract], which only
+  /// it has). A **new P-Loan** has no calculator endpoint yet, so it uses the
+  /// client-side estimate from [PLoanApi.calculateNewLoanInstallments] — see
+  /// that method for why.
   Future<bool> _recalculate(
-      LoanAmountDetail detail, LoanContract contract) async {
+      LoanAmountDetail detail, LoanContract? contract) async {
+    if (!_flow.isNewPLoan && contract == null) return false;
     setState(() => _recalculating = true);
     try {
       final plan = _flow.isNewPLoan
@@ -208,7 +211,7 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
               loanAmount: _flow.requestedAmount,
             )
           : await PLoanApi.calculateInstallments(
-              dbName: contract.dbName,
+              dbName: contract!.dbName,
               contractNo: contract.contractNo,
               loanAmount: _flow.requestedAmount,
               interestRate: detail.interestRate,
@@ -261,9 +264,10 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   Future<void> _proceed() async {
     final detail = _flow.amountDetail;
     final contract = _flow.contract;
-    if (detail == null || contract == null) return;
+    if (detail == null) return;
 
     if (!_flow.isNewPLoan) {
+      if (contract == null) return;
       // First tap while editing commits the field (mirrors the old behaviour);
       // the on-blur calculation then lights the button for the advancing tap.
       if (_amountFocus.hasFocus) {
@@ -296,7 +300,8 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
         children: [
           const PLoanMockBanner(),
           PLoanKindBanner(kind: _flow.kind),
-          const RegisterStepIndicator(currentStep: 2, totalSteps: 6),
+          RegisterStepIndicator(
+              currentStep: _flow.stepNumber(2), totalSteps: _flow.totalSteps),
           Expanded(child: _body()),
         ],
       ),
@@ -312,7 +317,8 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
     }
 
     final detail = _flow.amountDetail!;
-    final contract = _flow.contract!;
+    // Extra only — a new P-Loan has no contract at all.
+    final contract = _flow.contract;
     final isNew = _flow.isNewPLoan;
     // Only an Extra can be locked: the flag means interest was prepaid on the
     // contract being topped up, which says nothing about a new loan.
@@ -323,13 +329,15 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isNew) const PLoanSectionHeader('สัญญาอ้างอิง'),
-          ContractSummaryCard(
-            loanTypeCode: contract.contractDetails.loanTypeCode,
-            loanTypeName: contract.contractDetails.loanTypeName,
-            contractNo: detail.contractNo,
-            collateralInformation: detail.contractDetails.collateralInformation,
-          ),
+          // Extra only — a new P-Loan has no contract to summarise.
+          if (!isNew && contract != null)
+            ContractSummaryCard(
+              loanTypeCode: contract.contractDetails.loanTypeCode,
+              loanTypeName: contract.contractDetails.loanTypeName,
+              contractNo: detail.contractNo,
+              collateralInformation:
+                  detail.contractDetails.collateralInformation,
+            ),
           // The approved-limit rows describe this contract's top-up headroom.
           // A new P-Loan is not drawn from it, so showing them would read as a
           // cap that does not apply.

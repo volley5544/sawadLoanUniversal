@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../loan_register/components/env_version_tag.dart';
 import '../../loan_register/components/loan_register_styles.dart';
 import '../../loan_register/components/register_field_row.dart';
 import '../../loan_register/components/register_text_field.dart';
@@ -326,6 +327,7 @@ class _PLoanFormPageState extends State<PLoanFormPage> {
           style: LoanRegisterStyles.appBarTitleStyle()
               .copyWith(color: LoanRegisterStyles.primary),
         ),
+        actions: const [EnvVersionTag()],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(

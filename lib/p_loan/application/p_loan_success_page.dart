@@ -3,8 +3,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../loan_register/components/env_version_tag.dart';
 import '../../loan_register/components/loan_register_styles.dart';
 import '../../router/app_router.dart';
+import '../../services/native_bridge.dart';
 import 'components/p_loan_components.dart';
 import 'models/p_loan_flow.dart';
 
@@ -35,6 +37,13 @@ class PLoanSuccessPage extends StatelessWidget {
             // Matters most on this screen: without it, a mock run looks like a
             // request that was actually filed.
             const PLoanMockBanner(),
+            // This screen has no AppBar to hang it off, so the env/build tag
+            // sits where one would be — every other page of the flow shows it.
+            const SizedBox(
+              height: 28,
+              width: double.infinity,
+              child: Align(alignment: Alignment.centerRight, child: EnvVersionTag()),
+            ),
             Expanded(
               child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -79,8 +88,17 @@ class PLoanSuccessPage extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   // Clear the wizard off the stack so back doesn't re-enter a
-                  // flow that has already been submitted.
-                  onPressed: () => context.go(AppRoutes.home),
+                  // flow that has already been submitted. A top-up-card entry
+                  // has no home to return to in this app — it closes the
+                  // WebView back to LandAndHouseWeb instead.
+                  onPressed: () {
+                    if (flow.entry == PLoanEntry.topupCard &&
+                        NativeCameraBridge.isSupported) {
+                      NativeCameraBridge.closeWebview();
+                      return;
+                    }
+                    context.go(AppRoutes.home);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: LoanRegisterStyles.primary,
                     elevation: 0,

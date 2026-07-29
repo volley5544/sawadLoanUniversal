@@ -120,9 +120,9 @@ class PLoanApi {
   /// Steps 2/3 — installment options for a **new P-Loan**.
   ///
   /// TEMPORARY: the new-P-Loan product has no installment-calculator endpoint
-  /// yet, and [calculateInstallments] (the top-up calculator) can't price it —
-  /// the reference contract isn't a top-up candidate, so the server answers
-  /// `ไม่พบสัญญาใน vloan`. Until the real call exists, this returns the
+  /// yet, and [calculateInstallments] (the top-up calculator) can't stand in —
+  /// it is keyed by `db_name` + `contract_no`, and a new P-Loan has no
+  /// contract. Until the real call exists, this returns the
   /// client-side estimate from [provisionalNewLoanPlan] so the flow stays
   /// walkable. When the endpoint lands, swap the body here for it — no screen
   /// changes (this is the seam [PLoanApi]'s doc describes).

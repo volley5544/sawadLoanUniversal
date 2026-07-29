@@ -64,7 +64,8 @@ PLoanFlow _completedFlow({PLoanKind kind = PLoanKind.extra}) {
     source: 'app',
     referId: 'REF',
     customer: mockCustomer(),
-    contract: contract,
+    // Extra only — a new P-Loan is raised against no contract.
+    contract: kind == PLoanKind.extra ? contract : null,
     amountDetail: detail,
     empId: '9472',
     mktChannel: '065',
@@ -332,14 +333,86 @@ void main() {
       expect(produced.toSet(), equals(_formFields));
     });
 
-    test('the contract is carried as a reference, not as what is drawn on', () {
+    test('sends no refContractNo, and does not report one as missing', () {
+      // 'เลขที่สัญญาอ้างอิง' identifies the contract an Extra is raised
+      // against. A new P-Loan is raised against nothing, so the field is empty
+      // by design — reporting it would send someone looking for a value that
+      // is not supposed to exist.
+      final fresh = PLoanSubmission.fromFlow(
+          _completedFlow(kind: PLoanKind.newLoan));
+      expect(fresh.fields['refContractNo'], isEmpty);
+      expect(fresh.unresolvedFields, isNot(contains('refContractNo')));
+
+      final extra = PLoanSubmission.fromFlow(_completedFlow());
+      expect(extra.fields['refContractNo'], isNotEmpty);
+    });
+
+    test('the save-API payload applies the same rule', () {
+      final fresh = PLoanContractSubmission.fromFlow(
+          _completedFlow(kind: PLoanKind.newLoan));
+      expect(fresh.fields['refContractNo'], isEmpty);
+      expect(fresh.unresolvedFields, isNot(contains('refContractNo')));
+    });
+
+    test('branchId has no source without a contract, and is reported', () {
+      // Unlike refContractNo this one is a real gap: the application is filed
+      // by some branch, we just have no way to know which.
+      final fresh = PLoanSubmission.fromFlow(
+          _completedFlow(kind: PLoanKind.newLoan));
+      expect(fresh.fields['branchID'], isEmpty);
+      expect(fresh.unresolvedFields, contains('branchID'));
+
+      expect(
+        PLoanContractSubmission.fromFlow(
+                _completedFlow(kind: PLoanKind.newLoan))
+            .unresolvedFields,
+        contains('branchId'),
+      );
+    });
+
+    test('no old principal comes off a new loan\'s payout', () {
       final flow = _completedFlow(kind: PLoanKind.newLoan);
       final f = PLoanSubmission.fromFlow(flow).fields;
-      // refContractNo is literally 'เลขที่สัญญาอ้างอิง' on the form, so a new
-      // loan uses it the same way an Extra does.
-      expect(f['refContractNo'], flow.contract!.contractNo);
-      // No old principal comes off a new loan's payout.
       expect(f['transferAmt'], flow.payoutAmount.toStringAsFixed(2));
+    });
+
+    test('does not borrow the reference contract\'s vehicle or bank account',
+        () {
+      // The reference contract has a KBANK account and a 2016 Wave; none of it
+      // describes the loan being applied for.
+      final f = PLoanSubmission.fromFlow(
+          _completedFlow(kind: PLoanKind.newLoan)).fields;
+      expect(f['bankCode'], isEmpty);
+      expect(f['bankAccNo'], isEmpty);
+      expect(f['registerYear'], isEmpty);
+
+      final extra = PLoanSubmission.fromFlow(_completedFlow()).fields;
+      expect(extra['bankCode'], 'KBANK');
+      expect(extra['bankAccNo'], '1234567890');
+    });
+
+    test('sends the collateral and account the customer gave instead', () {
+      final flow = _completedFlow(kind: PLoanKind.newLoan);
+      flow.newLoan
+        ..collateralType = PLoanCollateralType.car
+        ..brand = 'TOYOTA'
+        ..series = 'Yaris'
+        // Gregorian in, B.E. out — same rule as an Extra's.
+        ..manufactureYear = '2019'
+        ..bankCode = 'SCB'
+        ..bankAccountNo = '9876543210'
+        ..bankAccountName = 'สมหญิง รักดี';
+
+      final regmast = PLoanSubmission.fromFlow(flow).fields;
+      expect(regmast['bankCode'], 'SCB');
+      expect(regmast['bankAccNo'], '9876543210');
+      expect(regmast['registerYear'], '2562');
+
+      final save = PLoanContractSubmission.fromFlow(flow).fields;
+      expect(save['bankCode'], 'SCB');
+      expect(save['bankAccNo'], '9876543210');
+      // The holder is the customer's to state — it may not be their own name.
+      expect(save['bankAccName'], 'สมหญิง รักดี');
     });
 
     test('has no approved limit yet, and says so instead of borrowing one', () {

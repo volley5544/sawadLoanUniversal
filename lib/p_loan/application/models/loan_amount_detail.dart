@@ -113,6 +113,34 @@ class LoanAmountDetail {
   bool isAmountAllowed(int amount) =>
       amount >= minTopupAmount && amount <= maxTopupAmount;
 
+  /// The amount a **top-up-card deep link** should request, or null when none
+  /// of the candidates is one the calculator will price.
+  ///
+  /// That entry point skips step 2, so the amount is chosen here instead of
+  /// typed. Priority, and why:
+  ///
+  /// 1. [requested] — a figure the card passed explicitly. Honoured strictly:
+  ///    if it is out of range this returns null so the caller can *report* it,
+  ///    rather than quietly filing a different number than the card displayed.
+  /// 2. [topupExtra] (`topup_extra`, "วงเงินเพิ่มเติม") — what the top-up card
+  ///    shows the customer, so it is the default. Often `0`, which is why it
+  ///    cannot be the only source.
+  /// 3. [defaultTopupAmount] ("วงเงินสินเชื่อใหม่") — what step 2 pre-fills.
+  ///
+  /// Candidates 2 and 3 fall through to the next when out of range: neither is
+  /// a figure the customer asserted, so there is nothing to contradict. A
+  /// [requested] value does not fall through, for exactly the opposite reason.
+  int? topupCardRequestAmount({int? requested}) {
+    if (requested != null) {
+      final rounded = requested - (requested % 100);
+      return isAmountAllowed(rounded) ? rounded : null;
+    }
+    for (final candidate in [topupExtra, defaultTopupAmount]) {
+      if (candidate > 0 && isAmountAllowed(candidate)) return candidate;
+    }
+    return null;
+  }
+
   factory LoanAmountDetail.fromJson(Map<String, dynamic> json) =>
       LoanAmountDetail(
         code: asString(json['code']),
@@ -151,28 +179,11 @@ class LoanAmountDetail {
         topupSpecials: asInt(json['topup_specials']),
       );
 
-  /// A minimal detail seeded from the step-1 [LoanContract], for a **new
-  /// P-Loan**.
-  ///
-  /// A new P-Loan does not call `GET /topup/detail`: its reference contract is
-  /// only a data key, and the top-up system rejects it (`ไม่พบสัญญาใน vloan`)
-  /// for contracts that were never topped up. Everything step 2 shows before
-  /// the customer names an amount can be read straight off the contract; the
-  /// rate, stamp duty and due day come from the calculator, run on the typed
-  /// amount from the Next button — see `PLoanAmountPage`, which folds the
-  /// calculator's response back in with [copyWith].
-  factory LoanAmountDetail.fromContract(LoanContract contract) =>
-      LoanAmountDetail(
-        code: '200',
-        dbName: contract.dbName,
-        contractNo: contract.contractNo,
-        contractDate: contract.contractDate,
-        contractDetails: contract.contractDetails,
-        carDetails: contract.carDetails,
-        // Not locked (an Extra-only concept) and no fee yet — the calculator
-        // prices the duty for the amount the customer actually requests.
-        interestPaidFlag: 'N',
-      );
+  // There is deliberately no `fromContract` seed for a new P-Loan. One existed
+  // briefly, copying the reference contract's vehicle and limits onto the new
+  // application — but a new P-Loan has no contract at all, so step 2 starts
+  // from a bare `LoanAmountDetail(code: '200')` and the calculator fills in
+  // the rate, due day and stamp duty via [copyWith].
 
   /// The fields step 2 folds back in after the calculator returns.
   ///
