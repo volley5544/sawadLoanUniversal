@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 107 tests (models, payloads, mock-mode guard) — green
+flutter test               # 112 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -394,10 +394,13 @@ calls step 2 makes** from the minimal `db_name` + `contract_no` key, then
 - it re-checks the three preconditions step 1 checks (`isSelectable`,
   `hasNoRequestYet`, `isEligible`) because it bypasses that screen;
 - the requested amount comes from `LoanAmountDetail.topupCardRequestAmount`,
-  which prefers **`topup_extra`** (the วงเงินเพิ่มเติม the top-up card displays)
-  and falls back to `default_topup_amount` — `topup_extra` is `0` more often
-  than not, so it can't be the only source. A `?amount=` the card passes wins
-  over both;
+  which defers to the shared `preferredRequestAmount`: **`topup_extra`** (the
+  วงเงินเพิ่มเติม the top-up card displays) falling back to
+  `default_topup_amount` — `topup_extra` is `0` more often than not, so it can't
+  be the only source. A `?amount=` the card passes wins over both. **Step 2
+  resolves through the same getter** (`extraRequestAmount`), so the menu path
+  and the deep link cannot quote different amounts for one contract — pinned by
+  a test that compares the two;
 - **an `amount` the card passed is refused, not substituted**, when it is
   outside `min/max_topup_amount`: step 2 is skipped, so the customer would
   never see a different figure being filed. The two *derived* candidates do
@@ -478,7 +481,7 @@ Step 1 offers both, and everything after it is the same six screens:
 | --- | --- | --- |
 | What | more money against an existing contract | a fresh personal loan |
 | Step 1 | the contract carousel | the soft-orange card above it |
-| Amount | pre-filled with the contract's approved limit | **starts blank**, customer types it |
+| Amount | pre-filled with `topup_extra`, else the approved limit | **starts blank**, customer types it |
 | Bounds | `min/max_topup_amount` | none client-side (see below) |
 | Payout | request − old principal − duty | request − duty |
 | Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
@@ -1167,15 +1170,23 @@ reason recorded.
 7. **`branchID` / `branchId` has no source for a new P-Loan.** It comes from the
    contract's `branch_code` for an Extra. Left blank and reported rather than
    guessed; a `?branchId=` launch param or a branch picker would fill it.
-8. **⚠ Confirm `topup_extra` is the amount a top-up-card Extra should request.**
-   Instructed on 2026-07-29 and implemented, but the labels disagree with it:
-   `topup_extra` renders as **วงเงินเพิ่มเติม** on all three screens that show
-   it, while `default_topup_amount` is **วงเงินสินเชื่อใหม่** and is what step 2
-   pre-fills. Payout is still `requested − closing_balance − duty`, so if
-   `topup_extra` is *additional headroom* rather than the *total new loan*, this
-   files a smaller loan than the menu path would: with the car fixture,
-   `20000 − 12000 − 100 = 7900` received instead of `22900`. One line in
-   `LoanAmountDetail.topupCardRequestAmount` swaps the priority back.
+8. **⚠ Confirm `topup_extra` is the amount *any* Extra should request.**
+   Instructed for the deep link on 2026-07-29, then extended to **step 2** on
+   2026-07-30 — so this is now the whole Extra product, not one entry point.
+   Both resolve through `LoanAmountDetail.preferredRequestAmount`
+   (`topup_extra` → `default_topup_amount`), which is what closed the earlier
+   split where the menu path priced `default_topup_amount` and the card priced
+   `topup_extra`.
+
+   The **labels still disagree** with the choice: `topup_extra` renders as
+   **วงเงินเพิ่มเติม** on all three screens that show it, while
+   `default_topup_amount` is **วงเงินสินเชื่อใหม่** — and step 2 now displays
+   both rows while pre-filling from the first. Payout stays
+   `requested − closing_balance − duty`, so if `topup_extra` is *additional
+   headroom* rather than the *total new loan*, every Extra now files a smaller
+   loan than it did before, and the payout can even go negative once the old
+   principal exceeds the headroom. Reverting is one line: drop `topupExtra` from
+   the candidate list in `preferredRequestAmount`.
 9. **LandAndHouseWeb's button is not built yet** — see **What LandAndHouseWeb
    has to do**. Until it navigates to `srisawad://ploan-extra?…`, the deep link
    is only reachable by typing the URL.

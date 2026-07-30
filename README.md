@@ -24,7 +24,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 107 tests
+flutter test                                  # 112 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -127,7 +127,8 @@ on file from `/loan/list` (so step 4 is). The indicator counts **the top-up card
 itself as step 1** and so runs 2/4 → 3/4 → 4/4: the skips don't read as a bug,
 and the screen the customer came from isn't disowned. Both step 3's back button
 and the success screen close the WebView back to the card. The requested amount comes from
-`/topup/detail`'s `topup_extra`, falling back to `default_topup_amount`.
+`/topup/detail`'s `topup_extra`, falling back to `default_topup_amount` — the
+**same** resolution step 2 uses, so both entry points quote one amount.
 
 Walkable in a plain browser (the mobile API sends `access-control-allow-origin:
 *`), which is the easiest way to test it:
@@ -147,7 +148,9 @@ Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
 
 - **สินเชื่อเพิ่มจากสัญญาเดิม** (P-Loan Extra) — the contract carousel. More
   money against a contract the customer already has; the amount is pre-filled
-  with that contract's approved limit and bounded by it.
+  with `topup_extra` (the วงเงินเพิ่มเติม the top-up card advertises), falling
+  back to the contract's approved limit when that is `0` or out of range, and
+  bounded by `min/max_topup_amount` either way.
 - **ขอสินเชื่อใหม่** (new P-Loan) — the card above it. A fresh loan whose amount
   **starts blank** for the customer to type, with no limit inherited from a
   contract and no old principal deducted from the payout.

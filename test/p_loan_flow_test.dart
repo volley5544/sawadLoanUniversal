@@ -440,6 +440,50 @@ void main() {
     });
   });
 
+  group("step 2's Extra request amount", () {
+    // min 5000 / max 50000 / default 35000 from _amountDetailJson.
+    LoanAmountDetail detail({int? topupExtra, int? defaultTopupAmount}) =>
+        LoanAmountDetail.fromJson(<String, dynamic>{
+          ..._amountDetailJson,
+          'topup_extra': ?topupExtra,
+          'default_topup_amount': ?defaultTopupAmount,
+        });
+
+    test('prefers topup_extra — what the customer was shown they could borrow',
+        () {
+      expect(detail(topupExtra: 20000).extraRequestAmount, 20000);
+    });
+
+    test('falls back to the approved limit when topup_extra is 0', () {
+      expect(detail(topupExtra: 0).extraRequestAmount, 35000);
+      expect(detail().extraRequestAmount, 35000);
+    });
+
+    test('falls through when topup_extra is out of the priced range', () {
+      expect(detail(topupExtra: 1000).extraRequestAmount, 35000);
+      expect(detail(topupExtra: 90000).extraRequestAmount, 35000);
+    });
+
+    test('still yields the approved limit when nothing is priceable', () {
+      // Where the deep link reports null, step 2 has a field to fill: show the
+      // limit and let the inline validation message explain why it won't do.
+      final d = detail(topupExtra: 0, defaultTopupAmount: 90000);
+      expect(d.preferredRequestAmount, isNull);
+      expect(d.extraRequestAmount, 90000);
+      expect(d.topupCardRequestAmount(), isNull);
+    });
+
+    test('step 2 and the top-up card agree on the same contract', () {
+      // The two entry points must not quote different amounts — that was the
+      // bug this preference order fixed.
+      for (final extra in [0, 20000, 1000, 90000]) {
+        final d = detail(topupExtra: extra);
+        expect(d.extraRequestAmount, d.topupCardRequestAmount(),
+            reason: 'topup_extra=$extra');
+      }
+    });
+  });
+
   group('top-up-card entry (deep link into step 3)', () {
     PLoanFlow fromCard() => PLoanFlow(
           hashThaiId: 'H',

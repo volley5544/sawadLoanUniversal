@@ -113,32 +113,55 @@ class LoanAmountDetail {
   bool isAmountAllowed(int amount) =>
       amount >= minTopupAmount && amount <= maxTopupAmount;
 
+  /// The amount an **Extra** requests by default, or null when neither
+  /// candidate is one the calculator will price.
+  ///
+  /// Priority, and why:
+  ///
+  /// 1. [topupExtra] (`topup_extra`, "วงเงินเพิ่มเติม") — the headroom the
+  ///    top-up card shows the customer, so it is what they came here expecting
+  ///    to borrow. Often `0`, which is why it cannot be the only source.
+  /// 2. [defaultTopupAmount] ("วงเงินสินเชื่อใหม่") — the contract's approved
+  ///    limit, as the backstop.
+  ///
+  /// Either falls through to the next when out of the priced range: neither is
+  /// a figure the customer asserted, so there is nothing to contradict.
+  ///
+  /// **Both Extra entry points resolve through here** — step 2's pre-fill and
+  /// the top-up-card deep link — so the two can't quote different amounts for
+  /// the same contract.
+  int? get preferredRequestAmount {
+    for (final candidate in [topupExtra, defaultTopupAmount]) {
+      if (candidate > 0 && isAmountAllowed(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /// What **step 2** pre-fills and prices for an Extra.
+  ///
+  /// [preferredRequestAmount] with [defaultTopupAmount] as a last resort: the
+  /// field has to hold *something*, and an unpriceable approved limit still
+  /// renders the range guidance and the inline validation message that say why
+  /// it won't do. The deep link reports null instead — it has no field to show
+  /// and no one to correct it (see [topupCardRequestAmount]).
+  int get extraRequestAmount => preferredRequestAmount ?? defaultTopupAmount;
+
   /// The amount a **top-up-card deep link** should request, or null when none
   /// of the candidates is one the calculator will price.
   ///
   /// That entry point skips step 2, so the amount is chosen here instead of
-  /// typed. Priority, and why:
-  ///
-  /// 1. [requested] — a figure the card passed explicitly. Honoured strictly:
-  ///    if it is out of range this returns null so the caller can *report* it,
-  ///    rather than quietly filing a different number than the card displayed.
-  /// 2. [topupExtra] (`topup_extra`, "วงเงินเพิ่มเติม") — what the top-up card
-  ///    shows the customer, so it is the default. Often `0`, which is why it
-  ///    cannot be the only source.
-  /// 3. [defaultTopupAmount] ("วงเงินสินเชื่อใหม่") — what step 2 pre-fills.
-  ///
-  /// Candidates 2 and 3 fall through to the next when out of range: neither is
-  /// a figure the customer asserted, so there is nothing to contradict. A
-  /// [requested] value does not fall through, for exactly the opposite reason.
+  /// typed. A [requested] figure the card passed explicitly wins, and is
+  /// honoured strictly: if it is out of range this returns null so the caller
+  /// can *report* it, rather than quietly filing a different number than the
+  /// card displayed. That is the opposite of how the
+  /// [preferredRequestAmount] candidates behave, and deliberately so — a
+  /// `requested` value is an assertion, they are defaults.
   int? topupCardRequestAmount({int? requested}) {
     if (requested != null) {
       final rounded = requested - (requested % 100);
       return isAmountAllowed(rounded) ? rounded : null;
     }
-    for (final candidate in [topupExtra, defaultTopupAmount]) {
-      if (candidate > 0 && isAmountAllowed(candidate)) return candidate;
-    }
-    return null;
+    return preferredRequestAmount;
   }
 
   factory LoanAmountDetail.fromJson(Map<String, dynamic> json) =>

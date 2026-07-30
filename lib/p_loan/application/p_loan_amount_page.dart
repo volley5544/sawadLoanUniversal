@@ -19,9 +19,11 @@ import 'models/p_loan_flow.dart';
 ///
 /// Serves both products (see [PLoanKind]):
 ///
-///  - **P-Loan Extra** — pre-filled with the contract's approved limit and
-///    bounded by `min/max_topup_amount`; the old contract's principal is shown
-///    as a deduction.
+///  - **P-Loan Extra** — pre-filled with `topup_extra` (the วงเงินเพิ่มเติม the
+///    top-up card advertises), falling back to the contract's approved limit
+///    when it is absent or unpriceable — see
+///    [LoanAmountDetail.extraRequestAmount]. Bounded by `min/max_topup_amount`;
+///    the old contract's principal is shown as a deduction.
 ///  - **New P-Loan** — the field starts **blank** and the customer types the
 ///    amount they want. There is no contract, so no bound is inherited and
 ///    there is no old principal to deduct — neither is shown, and no
@@ -70,7 +72,8 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   PLoanFlow get _flow => widget.flow;
 
   /// Fetches the limits, and — for an Extra only — the installment options for
-  /// its default amount.
+  /// [LoanAmountDetail.extraRequestAmount] (`topup_extra` when the contract has
+  /// one, else the approved limit).
   ///
   /// A **new P-Loan** makes no call here at all, and needs no contract: it has
   /// none. `GET /topup/detail` is keyed by `db_name` + `contract_no`, so it is
@@ -111,7 +114,7 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
         contractNo: contract.contractNo,
         token: _flow.authToken,
       );
-      final amount = detail.defaultTopupAmount;
+      final amount = detail.extraRequestAmount;
       final plan = await PLoanApi.calculateInstallments(
         dbName: contract.dbName,
         contractNo: contract.contractNo,
@@ -159,10 +162,11 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   void _commitTypedAmount() {
     final detail = _flow.amountDetail;
     final typed = parseAmount(_amountController.text);
-    // Clearing the field falls back to the approved limit for an Extra; for a
-    // new P-Loan there is no such default, so blank stays blank.
+    // Clearing the field falls back to the amount step 2 seeded for an Extra
+    // (`topup_extra` when the contract has one); for a new P-Loan there is no
+    // such default, so blank stays blank.
     final amount = typed == 0 && !_flow.isNewPLoan
-        ? (detail?.defaultTopupAmount ?? 0)
+        ? (detail?.extraRequestAmount ?? 0)
         : roundDownToHundred(typed);
     _amountController.text = amount == 0 ? '' : formatWholeMoney(amount);
     if (amount != _flow.requestedAmount) {
