@@ -36,6 +36,37 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!--
+    pdf.js — required by `pdfx`, which renders the contract PDFs on step 6.
+
+    Android System WebView has **no PDF plugin**, so the previous
+    `<iframe src="blob:...">` viewer drew a blank frame there (desktop browsers
+    and iOS WKWebView were fine). pdf.js decodes the file in JavaScript and
+    paints pages to a canvas, so it needs nothing from the embedder.
+
+    Version, URLs and the cMap options mirror the LandAndHouseWeb top-up flow,
+    which renders its own contract PDFs this way inside the same WebView — this
+    is a copy of a configuration already proven on these devices.
+
+    `cMapUrl`/`cMapPacked` are **not optional here**: the documents are Thai, and
+    without the character maps pages render blank of text even though the file
+    loaded fine.
+
+    TODO: self-host these three files under `web/` so a contract cannot fail to
+    display because a third-party CDN is unreachable.
+  -->
+  <script src='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs' type='module'></script>
+  <script type='module'>
+    var { pdfjsLib } = globalThis;
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.mjs';
+
+    var pdfRenderOptions = {
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/cmaps/',
+      cMapPacked: true,
+    }
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

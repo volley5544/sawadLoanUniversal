@@ -286,6 +286,10 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   ///
   /// The wizard's equivalent button is a stub SnackBar because that flow has no
   /// documents; here the real PDF is already in hand from `/pdf/loan`.
+  ///
+  /// **Currently not rendered** — taking the contract out of the app is not
+  /// allowed for now. Kept, not deleted, because it is expected back.
+  // ignore: unused_element
   Widget _downloadAgreementButton() {
     return InkWell(
       onTap: _openAgreement,
@@ -660,8 +664,12 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           if (_flow.ndidVerified) ...[
             const SizedBox(height: 8),
             _ndidVerifiedBanner(),
-            const SizedBox(height: 12),
-            _downloadAgreementButton(),
+            // ดาวน์โหลดเอกสาร is withheld for now: the customer may read the
+            // contract in the app and consent to it, but not save it out or hand
+            // it to another app. Kept (with `_downloadAgreementButton` /
+            // `_openAgreement`) for when that is allowed again.
+            // const SizedBox(height: 12),
+            // _downloadAgreementButton(),
           ],
           const SizedBox(height: 12),
           const PLoanSectionHeader('ความยินยอม'),
@@ -1042,8 +1050,11 @@ class _ConsentSheetState extends State<_ConsentSheet> {
     _checked = widget.alreadyAccepted;
   }
 
-  /// Opens the document outside the app. Kept as a fallback for embedders
-  /// whose engine can't render a PDF in an iframe.
+  /// Opens the document outside the app.
+  ///
+  /// **Currently not wired to anything** — the contract is read in the sheet and
+  /// consented to there, not handed to the OS. Kept for when that changes.
+  // ignore: unused_element
   void _open() {
     final ok = openBase64Pdf(widget.base64Pdf,
         fileName: '${widget.kind.name}.pdf');
@@ -1079,14 +1090,19 @@ class _ConsentSheetState extends State<_ConsentSheet> {
                       style: LoanRegisterStyles.appBarTitleStyle()
                           .copyWith(fontSize: 18)),
                 ),
-                // Escape hatch for embedders with no built-in PDF renderer
-                // (Android WebView) — hands the file to the OS instead.
-                IconButton(
-                  tooltip: 'เปิดในแท็บใหม่',
-                  onPressed: _open,
-                  icon: Icon(Icons.open_in_new,
-                      size: 20, color: LoanRegisterStyles.primary),
-                ),
+                // เปิดในแท็บใหม่ is withheld for now — read and consent in the
+                // app; the contract is not handed to the OS or another app. It
+                // existed as the escape hatch for embedders with no PDF renderer,
+                // which pdfx has since made unnecessary anyway (and on Android it
+                // never worked: the host registers no onCreateWindow, so
+                // window.open was a no-op). `_open` is kept for when this is
+                // allowed again.
+                // IconButton(
+                //   tooltip: 'เปิดในแท็บใหม่',
+                //   onPressed: _open,
+                //   icon: Icon(Icons.open_in_new,
+                //       size: 20, color: LoanRegisterStyles.primary),
+                // ),
                 IconButton(
                   tooltip: 'ปิด',
                   onPressed: () => Navigator.of(context).pop(),

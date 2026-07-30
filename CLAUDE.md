@@ -867,18 +867,47 @@ as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอ�
 `สรุปยอดสินเชื่อใหม่` section already carries the duty and the payout.
 
 **Document viewer.** The three contract PDFs arrive base64 from `POST /pdf/loan`
-and are rendered **inline**: tapping a document row opens a near-full-height
-sheet with `PdfInlineView` (`pdf_view.dart`, conditional import) showing the PDF
-in an `<iframe>` backed by a `Blob` object URL — the browser's own renderer, so
-no PDF dependency. Object URLs are revoked on dispose, and the view factory
-resolves its URL from a map at build time so a reopened sheet can't point at a
-revoked blob.
+(as `data:application/pdf;base64,…`, prefix stripped on our side) and are
+rendered **inline**: tapping a document row opens a near-full-height sheet with
+`PdfInlineView` (`pdf_view.dart`) → `pdfx`'s `PdfView`.
 
-> ⚠ **Android WebView has no built-in PDF renderer**, so the frame is blank
-> there. Desktop browsers and iOS WKWebView are fine. The sheet keeps an
-> "เปิดในแท็บใหม่" action (`pdf_opener.dart`) that hands the blob to the OS as
-> the fallback; the robust fix is an `openPdf` handler on the native bridge so
-> the host displays it.
+**It renders through pdf.js, not the embedder's PDF plugin — and that is the
+point.** Until 2026-07-30 this was an `<iframe>` pointed at a `Blob` object URL,
+i.e. the browser's own renderer. That works in desktop browsers and iOS
+WKWebView and shows a **blank white frame in Android System WebView**, which
+ships no PDF renderer at all — reported from a real device walking
+mobile app → LandAndHouseWeb top-up card → P-Loan Extra. `pdfx` decodes the file
+in JavaScript and paints each page to a canvas, so it needs nothing from the
+WebView.
+
+- **`web/index.html` loads pdf.js 4.6.82 from jsDelivr** — the script, the
+  worker (`GlobalWorkerOptions.workerSrc`) and `cMapUrl`/`cMapPacked`. Version
+  and URLs are **copied from the LandAndHouseWeb top-up flow**, which renders its
+  own contract PDFs this way inside the same WebView — a configuration already
+  proven on these devices rather than a fresh guess. Its equivalent screen is
+  `customer_topup/pdf_consent_component/`.
+- **`cMapUrl` is load-bearing**, not decoration: the documents are Thai, and
+  without the character maps pages come up blank of text even though the file
+  opened fine.
+- ⚠ **pdf.js comes off a third-party CDN at runtime.** If jsDelivr is unreachable
+  the viewer goes blank again — the same symptom, a different cause. Self-hosting
+  those three files under `web/` is the follow-up (see **Outstanding**).
+- `pdf_view_web.dart` / `pdf_view_stub.dart` are **gone**: `pdfx` renders on
+  every target, so the conditional import had nothing left to switch on.
+
+**No download, no open-externally.** Instructed 2026-07-30: the customer may read
+the contract in the app and consent to it, but not save it out or hand it to
+another app. Both affordances are **commented out, not deleted** (`// ignore:
+unused_element` on the methods, which are expected back):
+
+| Where | What |
+| --- | --- |
+| `_ConsentSheet` header | the เปิดในแท็บใหม่ `IconButton` → `_open()` |
+| after NDID success | `_downloadAgreementButton()` → `_openAgreement()` |
+
+`pdf_opener.dart` itself is untouched and still compiles. Note the เปิดในแท็บใหม่
+route never worked on Android anyway: it calls `window.open`, and the host
+registers no `onCreateWindow`.
 
 Because the document is now on screen, the old "you must open it first" gate is
 gone — only the acknowledge checkbox remains.
@@ -1212,7 +1241,12 @@ separately — a bare `assets/` entry does **not** recurse into subdirectories.
 bridge), `http` (NDID local-node API client + P-Loan `regmast_ploan.php`
 client), `image_picker` (camera/gallery picking for the P-Loan attachment
 groups; on web it's a hidden `<input type="file" accept="image/*">`, so it needs
-the WebView host to support the file chooser). The wizard's OCR/document capture
+the WebView host to support the file chooser), **`pdfx` 2.9.2** (renders the step-6
+contract PDFs; pinned to the version the LandAndHouseWeb top-up flow uses, and
+**needs the pdf.js script tags in `web/index.html`** — see **Step 6 documents**.
+It also pulls native plugins for Android/iOS/desktop, harmless in a web-only
+build, but do not open a document under `flutter test` — pdf.js isn't there).
+The wizard's OCR/document capture
 still goes through the host bridge — the host owns that camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
 `colorScheme: .fromSeed(...)`, `mainAxisAlignment: .center`); needs a recent
@@ -1348,9 +1382,13 @@ reason recorded.
 16. **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey`
     is empty — anonymous sign-in is skipped there and the compile-time endpoint
     is used. Register one and paste the key to enable the config read on prod.
-17. **Android WebView cannot render the inline PDF** (`pdf_view_web.dart`'s
-    iframe is blank). "เปิดในแท็บใหม่" is the fallback; an `openPdf` bridge
-    handler is the real fix.
+17. ~~Android WebView cannot render the inline PDF.~~ **Fixed 2026-07-30** by
+    moving to `pdfx` + pdf.js (see **Step 6 documents**). The `openPdf` bridge
+    handler this entry used to call for is **no longer wanted** — it would cost a
+    host change and an app release to reach a worse UX than a web-only fix that
+    is already proven in the top-up flow. What remains is smaller:
+    **self-host pdf.js** (`web/index.html` currently pulls 4.6.82 from jsDelivr,
+    so a CDN outage blanks the contract viewer again).
 18. **App Check** is not enabled, and the `?token=` JWT still travels in the
     launch URL — now on `/pLoan/resume` too.
 19. **New-P-Loan installment calculator API.** Step 2/3 pricing for a new P-Loan

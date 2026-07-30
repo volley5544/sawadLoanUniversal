@@ -67,6 +67,7 @@ dependencies:
   # NDID local-node API client (lib/services/ndid_api.dart) — used only when
   # running inside the native host (real identity verification flow).
   http: ^1.2.2
+  pdfx: 2.9.2
 
 dev_dependencies:
   flutter_test:
