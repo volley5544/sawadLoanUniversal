@@ -502,47 +502,34 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           // หักยอดเงินต้นสัญญาเก่า row below and the collateral is summarised
           // further down, so it was the same facts told twice above the fold.
           // Removed 2026-07-30 on request. A new P-Loan never had it.
-          const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
-          // The three rows below describe the reference contract's headroom and
-          // the principal a top-up would clear. None of it applies to a loan
-          // that is not drawn against that contract.
-          if (!isNew) ...[
+          // สรุปยอดสินเชื่อใหม่ is **new-P-Loan only** (hidden for an Extra on
+          // request, 2026-07-30). Every row in it was framed as a top-up: the
+          // reference contract's headroom (ยอดจัดสินเชื่อเดิม / สินเชื่อวงเงิน
+          // อเนกประสงค์ / รวมยอดวงเงินที่อนุมัติ) and the old principal a top-up
+          // would clear — none of which an Extra draws against. The requested
+          // amount survives as ยอดจัดสินเชื่อ in the next section.
+          //
+          // ⚠ It also took จำนวนเงินที่จะได้รับ off this screen. That figure is
+          // still computed, still submitted as `transfer_amount` /
+          // `transferAmt`, and still shown on the success screen — hiding the
+          // row does not settle Outstanding #8.
+          if (isNew) ...[
+            const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
             PLoanAmountRow(
-              label: 'ยอดจัดสินเชื่อเดิม',
-              value: '${formatMoney(detail.contractDetails.creditLimit)} บาท',
+              label: 'วงเงินที่ขอ',
+              value: '${formatMoney(_flow.requestedAmount)} บาท',
             ),
-            if (detail.topupExtra != 0)
-              PLoanAmountRow(
-                label: 'สินเชื่อวงเงินอเนกประสงค์',
-                value: formatMoney(detail.topupExtra),
-                emphasis: true,
-              ),
             PLoanAmountRow(
-              label: 'รวมยอดวงเงินที่อนุมัติ',
-              value: '${formatMoney(detail.defaultTopupAmount)} บาท',
+              label: 'หักอากรสแตมป์',
+              value: '${formatMoney(detail.feeAmount)} บาท',
+            ),
+            PLoanAmountRow(
+              label: 'จำนวนเงินที่จะได้รับ',
+              value: '${formatMoney(_flow.payoutAmount)} บาท',
+              emphasis: true,
+              showDivider: false,
             ),
           ],
-          PLoanAmountRow(
-            label: isNew ? 'วงเงินที่ขอ' : 'วงเงินที่ต้องการกู้ใหม่',
-            value: '${formatMoney(_flow.requestedAmount)} บาท',
-          ),
-          if (!isNew)
-            PLoanAmountRow(
-              label: 'หักยอดเงินต้นสัญญาเก่า',
-              caption: 'เลขที่สัญญา ${detail.contractNo}',
-              value:
-                  '${formatMoney(detail.contractDetails.closingBalance)} บาท',
-            ),
-          PLoanAmountRow(
-            label: 'หักอากรสแตมป์',
-            value: '${formatMoney(detail.feeAmount)} บาท',
-          ),
-          PLoanAmountRow(
-            label: 'จำนวนเงินที่จะได้รับ',
-            value: '${formatMoney(_flow.payoutAmount)} บาท',
-            emphasis: true,
-            showDivider: false,
-          ),
           const PLoanSectionHeader('รายละเอียดคำขอสินเชื่อใหม่'),
           PLoanAmountRow(
             label: 'ยอดจัดสินเชื่อ',

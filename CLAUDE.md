@@ -827,6 +827,21 @@ server's message, because "HTTP 400" against 30 form fields is unactionable.
 
 ### Step 6: contract documents + PDPA consents
 
+(Extra step 4 in the spoken numbering — see **Step numbers** above.)
+
+**`สรุปยอดสินเชื่อใหม่` is new-P-Loan only.** Hidden for an Extra on request
+(2026-07-30). Every row in it was a top-up framing — the reference contract's
+headroom (`ยอดจัดสินเชื่อเดิม` / `สินเชื่อวงเงินอเนกประสงค์`, the `topup_extra`
+row / `รวมยอดวงเงินที่อนุมัติ`) plus `หักยอดเงินต้นสัญญาเก่า`, the principal a
+top-up would clear. An Extra draws against none of it. The requested amount is
+still on screen as `ยอดจัดสินเชื่อ` under `รายละเอียดคำขอสินเชื่อใหม่`.
+
+> ⚠ This also takes **`จำนวนเงินที่จะได้รับ`** off the screen for an Extra, which
+> is where the negative payout was visible. The figure is unchanged: still
+> computed by `PLoanFlow.payoutAmount`, still submitted as `transfer_amount`
+> (`toSubmissionJson`) and `transferAmt` (`PLoanSubmission`), and still shown on
+> the **success screen** and on step 2. Outstanding #8 is not resolved by this.
+
 **Document viewer.** The three contract PDFs arrive base64 from `POST /pdf/loan`
 and are rendered **inline**: tapping a document row opens a near-full-height
 sheet with `PdfInlineView` (`pdf_view.dart`, conditional import) showing the PDF
