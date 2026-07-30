@@ -357,7 +357,7 @@ on it (step 3's Next target and the step indicator).
 | | `PLoanEntry.wizard` | `PLoanEntry.topupCard` |
 | --- | --- | --- |
 | Entered at | step 1 (`/pLoan/contract`) | **step 3**, via `/pLoan/resume` |
-| From | this app's home menu | the **LandAndHouseWeb top-up card**'s สินเชื่อเพิ่ม button |
+| From | this app's home menu | **two triggers** — see below |
 | Visits | 1 → 2 → 3 → 4 → 5 → 6 | **3 → 5 → 6** |
 | Indicator | 1/6 … 6/6 | renumbered **2/4, 3/4, 4/4** — the card is step 1 |
 | Back on the first screen | normal pop | `closeWebview` → back to the top-up card |
@@ -401,7 +401,21 @@ calls step 2 makes** from the minimal `db_name` + `contract_no` key, then
   no fallback to `default_topup_amount` and no range check — see
   **P-Loan Extra's amount is not the top-up amount** below.
 
-**Native host side** (in the srisawad app, both changes made and **committed**):
+**`/pLoan/resume` has two triggers, one `PLoanEntry`.** Both push the same route
+with the same `{dbName, contractNo}` and no `amount`, so the flow cannot tell
+them apart — and doesn't need to:
+
+| Trigger | Where | How |
+| --- | --- | --- |
+| LandAndHouseWeb top-up card's **สินเชื่อเพิ่ม** | inside a WebView, so it can't reach native directly | `window.location.href = 'srisawad://ploan-extra?…'`, intercepted by the host |
+| The srisawad app's home **LoanCard** → สิทธิพิเศษเฉพาะคุณ chip with `product_code == 'PLD001'` | native | `Navigator.pushNamed('/loan-universal-webview', …)` directly — no custom scheme needed |
+
+The second was added 2026-07-30 (`lib/widgets/loan_card.dart` in the host repo).
+It deliberately **skips the host's `/consent` route**, which every other chip in
+that section takes: those pages book a *top-up* of the contract, and a P-Loan
+Extra only references it.
+
+**Native host side** (in the srisawad app):
 
 - `video_record_web_widget.dart` — the widget hosting LandAndHouseWeb —
   intercepts `srisawad://ploan-extra?dbName=&contractNo=&amount=` in
@@ -431,10 +445,12 @@ repo can't carry them.
 
 #### What LandAndHouseWeb has to do
 
-The third repo (`D:\FlutterProject\land_and_house_web_new`, a FlutterFlow
+The third project (`~/FlutterProject/land_and_house_web_new` — a FlutterFlow
 export, Firebase project `srisawad-mobile-app-qa-360402`) is **the user's to
-change** — it was not touched here. On the top-up card's **สินเชื่อเพิ่ม**
-button, one FlutterFlow **Custom Action**, no packages:
+change**; the local copy is read-only reference and was not edited. The action
+**already exists there**: `lib/custom_code/actions/open_p_loan_extra.dart`,
+called from `customer_topup/topup_card_page/topup_card_page_widget.dart:7337`
+when `productListItemItem.productCode == 'PLD001'`:
 
 ```dart
 import 'package:web/web.dart' as web;
@@ -451,6 +467,17 @@ build. Pass only `db_name` + `contract_no` — `hashThaiId` and `token` are adde
 natively, and **no `amount`**: the resume route reads `topup_extra` itself.
 `&amount=` stays supported for the case where the card lets the customer change
 the figure.
+
+⚠ **That version only works inside the app.** `srisawad://` resolves to nothing
+in a plain browser, so the button appears dead when testing LandAndHouseWeb on
+the web. A browser-capable variant was written on 2026-07-30 for the user to
+paste into FlutterFlow: it branches on
+`globalContext.has('flutter_inappwebview')` — the same host check this build
+uses — keeping the custom scheme inside the app and navigating straight to
+`<loan-universal>/pLoan/resume?hashThaiId=…&token=…&dbName=…&contractNo=…` in a
+browser, where `hashThaiId`/`token` come from `FFAppState()`
+(`hashThaiIdAppState` / `accessToken`) since no host is there to add them. Same
+signature, so no FlutterFlow argument changes are needed.
 
 #### Testing the deep link in a browser
 
@@ -566,9 +593,11 @@ the top-up card is built from, and then:
 `PLoanFlow.isRequestedAmountAllowed` therefore range-checks **neither** kind —
 an Extra needs `> 0`, a new loan `>= newLoanMinimumAmount`.
 
-> ⚠ **The payout formula was not changed to match** — see **Outstanding** #8.
-> `payoutAmount` still deducts the old contract's principal for an Extra, which
-> on the contract above gives `2,000 − 7,740 − 1 = −5,741`.
+**The payout formula was changed to match, later the same day.**
+`PLoanFlow.payoutAmount` is `requested − duty` for both kinds; it used to deduct
+the reference contract's closing balance as well, which on the contract above
+gave `2,000 − 7,740 − 1 = −5,741` and put that in `transfer_amount`. See
+**Step 6 documents** for the row it feeds and Outstanding #8 for the history.
 
 **No invented amount limits.** For a new loan the only client-side rule is
 `PLoanFlow.newLoanMinimumAmount` (100 — the rounding unit). If the real product
@@ -697,7 +726,12 @@ Structure:
   `lastest_date` (latest), `car_chassisNo`/`car_engineNo` mixed case, and
   camelCase keys inside `installments[]` while everything around them is
   snake_case. `/pdf/loan` also wants `x-srisawad: x1_c3Jpc2F3YWQ`, not `x1`.
-- `components/p_loan_components.dart` — money/date formatters, section header,
+- `components/p_loan_components.dart` — money/date formatters, **`formatPhone`**
+  (groups a phone as `###-###-####` for the เบอร์โทรศัพท์ row on step 5 —
+  `0863652156` → `086-365-2156`. Only a bare 10-digit run is touched; a 9-digit
+  landline, an already-grouped value or one with a country code passes through
+  rather than being forced into a shape it hasn't got. **Display only** — the
+  payload's `mobileNo` keeps the raw digits), section header,
   amount row, contract + bank cards, loading/error views, bottom button,
   `pickPLoanOption` (the bottom-sheet picker behind the collateral-type and bank
   selectors) + `kPayoutBankCodes`, and `pLoanAppBar` — which carries
@@ -1347,58 +1381,77 @@ reason recorded.
    `หักยอดเงินต้นสัญญาเก่า` rows on steps 2 and 6 went with it, and
    `LoanAmountDetail.payoutFor` was **deleted** rather than deprecated so the old
    formula can't be picked up by name.
-9. **LandAndHouseWeb's button is not built yet** — see **What LandAndHouseWeb
-   has to do**. Until it navigates to `srisawad://ploan-extra?…`, the deep link
-   is only reachable by typing the URL.
-10. **The two host-app edits need an app release.** They are committed on `main`
-    in the srisawad repo (`routegenerator.dart`,
-    `video_record_web_widget.dart`) and documented there, but only a new
+9. ~~LandAndHouseWeb's button is not built yet.~~ **Built** — `openPLoanExtra`
+   exists and is wired to `productCode == 'PLD001'` (see **What LandAndHouseWeb
+   has to do**). What remains is the user pasting the **browser-capable variant**
+   into FlutterFlow if they want the button to work when testing on the web.
+10. **The host-app edits need an app release.** `routegenerator.dart` and
+    `video_record_web_widget.dart` are committed on `main` in the srisawad repo;
+    `loan_card.dart`'s PLD001 chip was added 2026-07-30. Only a new
     Android/iOS build puts the `srisawad://ploan-extra` interception on a
     tester's phone — deploying this web repo can't.
 
 **Open in this repo, deliberately not done:**
 
-11. **No live `SavePloanContract` submit has ever run.** Auth, routing and the
+11. **🐞 `POST /topup` hardcodes both PDPA consents to `'Y'`.** Found
+    2026-07-30, **not fixed** — it is a behaviour change to a submitted field and
+    was raised rather than slipped in. `toSubmissionJson()`
+    (`p_loan_flow.dart:791-792`) sends `'marketing_consent': 'Y'` and
+    `'sensitive_consent': 'Y'` literally, while step 6's checkboxes write
+    `flow.marketingConsent` / `flow.sensitiveConsent` — which only
+    `PLoanSubmission` and `PLoanContractSubmission` read, and **neither is on the
+    Extra path**. So an Extra files `Y` for **ยินยอมการตลาด** even when the
+    customer declined it. `sensitive_consent` is harmless in practice
+    (`canSubmit` requires it, so it is always true), but marketing is a genuine
+    opt-in, which makes this a PDPA-relevant defect, not a cosmetic one. Fix is
+    two lines: `_yesNo(marketingConsent)` / `_yesNo(sensitiveConsent)`, the same
+    mapping the other two payloads already use.
+12. **No live `SavePloanContract` submit has ever run.** Auth, routing and the
     CORS behaviour were verified by probing; the field mapping is verified
     against the API's sample and by tests. One real submit is still needed — it
     was skipped rather than file a junk application in dev.
-12. **No live top-up-card deep link has ever run either.** The route, the amount
-    priority and the 3 → 5 → 6 path are unit-tested and the URL is walkable in a
-    browser, but the full native chain (LandAndHouseWeb → host → this build)
-    is untested end to end because #9 is not built yet.
-13. **`latitude` / `longitude` have no source.** `PLoanFlow` never assigns them —
+13. **The top-up-card chain has been walked, but never submitted.** On
+    2026-07-30 the user ran the real chain — srisawad app → LandAndHouseWeb
+    top-up card → this build — as far as **step 4**, where the PDF viewer turned
+    out to be blank on Android (fixed, #18). So the deep link, the host
+    interception and steps 3 → 5 → 6's data are all confirmed against a live
+    contract (`MLOAN` / `ฮฮM680702003NF61X`). What has still never happened is a
+    **live `POST /topup`** from it — nobody has pressed ยืนยัน on a real
+    application. Do that before calling the flow done, and note #11 sends the
+    wrong marketing-consent value when you do.
+14. **`latitude` / `longitude` have no source.** `PLoanFlow` never assigns them —
     there is no device-location step. `CustomerDetail` carries registered
     coordinates, deliberately **not** substituted: "where the application was
     raised" is a different fact. `gpsProvinceId`/`gpsAumphurId` likewise need an
     id lookup from lat/lng.
-14. **A top-up-card Extra submits no collateral photos.** Step 4 is skipped by
+15. **A top-up-card Extra submits no collateral photos.** Step 4 is skipped by
     design, so `carImage`/`documentImage` are empty and
     `property_image`/`act_image` go out as `''`. A test pins that this cannot
     deadlock `canSubmit`. If `POST /topup` rejects a top-up without vehicle
     shots, this is why.
-15. **`firebase.json` cache headers miss `/` and deep links.** Hosting matches
+16. **`firebase.json` cache headers miss `/` and deep links.** Hosting matches
     the requested path, not the rewritten one, so `/index.html` gets `no-cache`
     but `/`, `/pLoan/contract` and `/pLoan/resume` get `max-age=3600`.
-16. **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey`
+17. **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey`
     is empty — anonymous sign-in is skipped there and the compile-time endpoint
     is used. Register one and paste the key to enable the config read on prod.
-17. ~~Android WebView cannot render the inline PDF.~~ **Fixed 2026-07-30** by
+18. ~~Android WebView cannot render the inline PDF.~~ **Fixed 2026-07-30** by
     moving to `pdfx` + pdf.js (see **Step 6 documents**). The `openPdf` bridge
     handler this entry used to call for is **no longer wanted** — it would cost a
     host change and an app release to reach a worse UX than a web-only fix that
     is already proven in the top-up flow. What remains is smaller:
     **self-host pdf.js** (`web/index.html` currently pulls 4.6.82 from jsDelivr,
     so a CDN outage blanks the contract viewer again).
-18. **App Check** is not enabled, and the `?token=` JWT still travels in the
+19. **App Check** is not enabled, and the `?token=` JWT still travels in the
     launch URL — now on `/pLoan/resume` too.
-19. **New-P-Loan installment calculator API.** Step 2/3 pricing for a new P-Loan
+20. **New-P-Loan installment calculator API.** Step 2/3 pricing for a new P-Loan
     is a client-side estimate (`PLoanApi.calculateNewLoanInstallments` →
     `new_loan_installment.dart`): the product has no calculator endpoint and
     `/topup/calculator` can't stand in (it is keyed by a contract this product
     does not have). Wire the real call into that seam when it exists and delete
     the interim file; the placeholder rate (`1.25%/month`) and tenors
     (`[12,24,36,48,60]`) live at the top of it.
-20. **A new P-Loan's ID-card expiry check uses the device clock**, since the
+21. **A new P-Loan's ID-card expiry check uses the device clock**, since the
     server clock it should use rides on the contract. See `_isExpired`.
 
 ## Conventions

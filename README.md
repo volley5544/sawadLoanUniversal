@@ -32,6 +32,9 @@ flutter build web --release --pwa-strategy=none
   WebView.
 - Build web with **`--pwa-strategy=none`** so the Flutter service worker doesn't
   serve a stale build inside the WebView.
+- **`web/index.html` loads pdf.js** (script + worker + cMaps). `pdfx` needs it to
+  render the step-6 contract PDFs; strip those tags and the viewer goes blank
+  with no build error to warn you.
 
 ## Launch parameters
 
@@ -137,12 +140,20 @@ Walkable in a plain browser (the mobile API sends `access-control-allow-origin:
 https://sawad-loan-universal-uat.web.app/pLoan/resume?hashThaiId=<HASH>&token=<JWT>&dbName=<DB>&contractNo=<NO>
 ```
 
-It spans three repos: this one (**done**), the native host (**done and
-committed** — needs an app release to reach testers), and LandAndHouseWeb
-(**not built** — one FlutterFlow custom action). ⚠ Skipping step 4 also means **no collateral photos are submitted**.
-All of it — the snippet, the host edits, the mock test URLs and the open
-question about `topup_extra`'s meaning — is in [CLAUDE.md](CLAUDE.md) → *Two
-entry points* and *Outstanding*.
+It spans three projects, all **built** as of 2026-07-30: this one, the native
+host (committed — needs an app release to reach testers), and LandAndHouseWeb's
+`openPLoanExtra` custom action. The real chain was walked on a device that day as
+far as step 4; **no live `POST /topup` has been made yet**.
+
+Inside the app there are now **two triggers** for the same `/pLoan/resume`:
+LandAndHouseWeb's top-up card (via `srisawad://ploan-extra`, which the host
+intercepts) and the srisawad home screen's **LoanCard → สิทธิพิเศษเฉพาะคุณ** chip
+when `product_code == 'PLD001'`, which pushes the route natively.
+
+⚠ Skipping step 4 also means **no collateral photos are submitted**.
+All of it — the snippets, the host edits, the mock test URLs and what
+`topup_extra` turned out to mean — is in [CLAUDE.md](CLAUDE.md) → *Two entry
+points* and *Outstanding*.
 
 Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
 
@@ -186,9 +197,20 @@ handler on the native bridge that **the host app does not implement yet**.
 See [CLAUDE.md](CLAUDE.md) → *A new P-Loan has no contract at all* for all of
 this, plus the Basic credential that ships in the web bundle.
 
-Step 6 ends with an **NDID** hop — the customer signs the contract documents
+Step 6 shows the three contract PDFs from `POST /pdf/loan` **inline**, rendered
+by `pdfx` through pdf.js (loaded in `web/index.html`) rather than by the
+embedder's own PDF plugin — Android WebView has none, and the previous
+`<iframe>`-over-a-Blob viewer showed a blank frame there. The customer reads and
+consents in the app: there is deliberately **no download and no open-externally**
+action, both commented out rather than deleted.
+
+It then ends with an **NDID** hop — the customer signs the contract documents
 with their bank identity, reusing the wizard's own NDID screens (they take a
-`NdidSubject`, which both flows implement). It gates the submit.
+`NdidSubject`, which both flows implement). It gates the submit. `/idp/list` and
+`/rp/verify` share one pair of assurance levels (`NdidApi.minIal` 2.3 /
+`minAal` 2.2), and **non-prod builds verify a test identity** rather than the
+applicant, because the uat DAP node has no other registered one — prod always
+uses the customer's own id.
 
 API endpoints are read at startup from the Firestore document
 **`application/public_config`** (`api_url.api_url_base`), authenticated with an
