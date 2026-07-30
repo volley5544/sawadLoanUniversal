@@ -167,10 +167,8 @@ class _PLoanTopupCardResumePageState extends State<PLoanTopupCardResumePage> {
         authToken: token,
         customer: customer,
         contract: contract,
-        // As `/topup/detail` returned it — its `fee_amount` is the duty shown
-        // and deducted, not the calculator's recomputed one. Same rule step 2
-        // follows, so both entry points show one figure.
-        amountDetail: detail,
+        // The duty for the amount actually requested, as step 2 folds it in.
+        amountDetail: detail.copyWith(feeAmount: plan.feeAmount),
         empId: appState.empId,
         mktChannel: appState.mktChannel,
         customerSource: appState.customerSource,

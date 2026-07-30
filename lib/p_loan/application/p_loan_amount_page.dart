@@ -126,11 +126,7 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
       );
       if (!mounted) return;
       _flow
-        // `detail` is kept as `/topup/detail` returned it: its `fee_amount` is
-        // the duty this flow shows and deducts. The calculator answers with its
-        // own, recomputed for the requested amount, and that one is deliberately
-        // NOT folded in — see [_recalculate].
-        ..amountDetail = detail
+        ..amountDetail = detail.copyWith(feeAmount: plan.feeAmount)
         ..requestedAmount = amount
         ..plan = plan;
       _amountController.text = formatWholeMoney(amount);
@@ -231,15 +227,9 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
       setState(() {
         _flow
           ..plan = plan
-          // A **new P-Loan** skipped /topup/detail, so its rate and duty have no
-          // other source than the plan itself (the provisional estimate for
-          // now) — fold them in.
-          //
-          // An **Extra** keeps /topup/detail's `fee_amount` (requested
-          // 2026-07-30). The calculator returns its own, recomputed for the
-          // requested amount — ฿1 on a ฿2,000 offer where /topup/detail says ฿6
-          // — and folding that in is what used to make the duty change under the
-          // customer as they retyped the amount.
+          // An Extra only refreshes the duty; a new P-Loan skipped
+          // /topup/detail, so the rate and duty come from the plan itself
+          // (the provisional estimate for now) — fold them in.
           ..amountDetail = _flow.isNewPLoan
               ? detail.copyWith(
                   feeAmount: plan.feeAmount,
@@ -247,7 +237,7 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
                   dueDay: plan.dueDay,
                   firstDueDate: plan.firstDueDate,
                 )
-              : detail
+              : detail.copyWith(feeAmount: plan.feeAmount)
           // A new amount invalidates any tenor picked on step 3.
           ..installment = null;
         _recalculating = false;

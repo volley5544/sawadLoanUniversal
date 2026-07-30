@@ -844,21 +844,22 @@ section replaces it — see below.
 | Row | Value |
 | --- | --- |
 | `ยอดจัดวงเงินอเนกประสงค์` | `requestedAmount` — the **full** offer (`ยอดเต็ม`) |
-| `ค่าอากรแสตมป์` | **`/topup/detail`'s `fee_amount`** — see below |
+| `ค่าอากรแสตมป์` | `fee_amount` — **the calculator's**, see below |
 | `ค่างวด` / `จำนวนงวด` / `ดอกเบี้ย (ต่อเดือน)` / `ชำระทุกวันที่` | as before |
 | `ยอดโอนเงินเข้าบัญชี` | `PLoanFlow.payoutAmount` = amount − that duty |
 
-**Which `fee_amount`, and why it matters.** Two endpoints return one:
-`GET /topup/detail` (**6** on `MLOAN`/`ฮฮM680702003NF61X` — the duty on the
-12,000 top-up total, ฿1 per ฿2,000) and `POST /topup/calculator` (**1** — the
-duty recomputed for the 2,000 actually requested). An Extra shows and deducts
-**`/topup/detail`'s**, per instruction on 2026-07-30, so
-`LoanAmountDetail` is now carried through **unmodified** for an Extra: the
-`copyWith(feeAmount: plan.feeAmount)` that used to fold the calculator's value
-in is gone from step 2's load, its re-price, and the resume route. A **new
-P-Loan** still folds everything in — it skipped `/topup/detail` and has no other
-source. Consequence: `2,000 − 6 = 1,994` reaches the screen *and*
-`transfer_amount`, and the duty no longer shifts as the amount is retyped.
+**Two endpoints return a `fee_amount`, and the calculator's is the one used.**
+`GET /topup/detail` gives the duty on the top-up *total* (**6** on
+`MLOAN`/`ฮฮM680702003NF61X` — ฿1 per ฿2,000 of 12,000), while
+`POST /topup/calculator` recomputes it for the amount actually requested (**1**
+for 2,000). Step 2 folds the calculator's in with
+`detail.copyWith(feeAmount: plan.feeAmount)` — at its load, its blur re-price and
+the resume route — so `LoanAmountDetail.feeAmount` is the calculator's from then
+on, and `payoutAmount` deducts it (`2,000 − 1 = 1,999`).
+
+Sourcing it from `/topup/detail` instead was tried on 2026-07-30 and **reverted
+the same day**: it made the duty 6 on a 2,000 loan, i.e. the duty for a larger
+amount than the customer is borrowing.
 
 `ยอดจัดสินเชื่อ` is renamed to **`ยอดจัดวงเงินอเนกประสงค์`** for an Extra, here and
 as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอดจัดสินเชื่อ` /
