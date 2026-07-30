@@ -193,10 +193,15 @@ class LoanAmountDetail {
 
   /// The fields step 2 folds back in after the calculator returns.
   ///
-  /// An Extra refreshes only [feeAmount] (the duty for the requested amount);
-  /// a new P-Loan additionally takes [interestRate], [dueDay] and
-  /// [firstDueDate] from the calculator, since it skipped `GET /topup/detail`
-  /// where those would otherwise come from.
+  /// **Only a new P-Loan folds anything in** — [feeAmount], [interestRate],
+  /// [dueDay] and [firstDueDate] all come from the calculator there, since it
+  /// skipped `GET /topup/detail` and has no other source for them.
+  ///
+  /// An **Extra** keeps this object exactly as `/topup/detail` returned it
+  /// (requested 2026-07-30). It used to refresh [feeAmount] from the
+  /// calculator's recomputed duty — ฿1 for a ฿2,000 request where
+  /// `/topup/detail` says ฿6 — and that is the figure the screens and
+  /// [PLoanFlow.payoutAmount] now deliberately do **not** use.
   LoanAmountDetail copyWith({
     int? feeAmount,
     double? interestRate,

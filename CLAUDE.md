@@ -844,9 +844,21 @@ section replaces it — see below.
 | Row | Value |
 | --- | --- |
 | `ยอดจัดวงเงินอเนกประสงค์` | `requestedAmount` — the **full** offer (`ยอดเต็ม`) |
-| `ค่าอากรแสตมป์` | `fee_amount` |
+| `ค่าอากรแสตมป์` | **`/topup/detail`'s `fee_amount`** — see below |
 | `ค่างวด` / `จำนวนงวด` / `ดอกเบี้ย (ต่อเดือน)` / `ชำระทุกวันที่` | as before |
-| `ยอดโอนเงินเข้าบัญชี` | `PLoanFlow.payoutAmount` |
+| `ยอดโอนเงินเข้าบัญชี` | `PLoanFlow.payoutAmount` = amount − that duty |
+
+**Which `fee_amount`, and why it matters.** Two endpoints return one:
+`GET /topup/detail` (**6** on `MLOAN`/`ฮฮM680702003NF61X` — the duty on the
+12,000 top-up total, ฿1 per ฿2,000) and `POST /topup/calculator` (**1** — the
+duty recomputed for the 2,000 actually requested). An Extra shows and deducts
+**`/topup/detail`'s**, per instruction on 2026-07-30, so
+`LoanAmountDetail` is now carried through **unmodified** for an Extra: the
+`copyWith(feeAmount: plan.feeAmount)` that used to fold the calculator's value
+in is gone from step 2's load, its re-price, and the resume route. A **new
+P-Loan** still folds everything in — it skipped `/topup/detail` and has no other
+source. Consequence: `2,000 − 6 = 1,994` reaches the screen *and*
+`transfer_amount`, and the duty no longer shifts as the amount is retyped.
 
 `ยอดจัดสินเชื่อ` is renamed to **`ยอดจัดวงเงินอเนกประสงค์`** for an Extra, here and
 as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอดจัดสินเชื่อ` /
