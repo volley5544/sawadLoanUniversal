@@ -212,7 +212,8 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
           const PLoanSectionHeader('ข้อมูลโทรศัพท์'),
           PLoanAmountRow(
             label: 'เบอร์โทรศัพท์',
-            value: customer?.phoneNumber ?? '',
+            // Grouped ###-###-#### for reading; the payload keeps raw digits.
+            value: formatPhone(customer?.phoneNumber),
             showDivider: false,
           ),
           const PLoanSectionHeader('ข้อมูลที่อยู่'),

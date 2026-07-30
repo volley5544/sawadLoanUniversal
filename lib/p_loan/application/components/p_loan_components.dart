@@ -63,6 +63,20 @@ String formatThaiDate(String? raw) {
   return '$day/$month/$year';
 }
 
+/// Groups a phone number as `###-###-####` for display.
+///
+/// Thai mobiles are 10 digits, so `0863652156` reads `086-365-2156`. Anything
+/// that isn't a bare 10-digit run is passed through **unchanged** rather than
+/// forced into the pattern: a 9-digit landline, an already-grouped value or a
+/// number carrying a country code would only be mangled by it.
+///
+/// Display only — the submitted `mobileNo` stays the raw digits the API gave us.
+String formatPhone(String? raw) {
+  final text = (raw ?? '').trim();
+  if (text.length != 10 || !RegExp(r'^\d{10}$').hasMatch(text)) return text;
+  return '${text.substring(0, 3)}-${text.substring(3, 6)}-${text.substring(6)}';
+}
+
 /// Strips the thousands separators a user may have typed or pasted.
 int parseAmount(String text) =>
     int.tryParse(text.replaceAll(',', '').trim()) ?? 0;

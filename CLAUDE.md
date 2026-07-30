@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 109 tests (models, payloads, mock-mode guard) — green
+flutter test               # 111 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 

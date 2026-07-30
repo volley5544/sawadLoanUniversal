@@ -708,6 +708,19 @@ void main() {
       expect(formatWholeMoney(999), '999');
     });
 
+    test('phone numbers group as ###-###-####', () {
+      expect(formatPhone('0863652156'), '086-365-2156');
+    });
+
+    test('anything not a bare 10-digit number passes through unchanged', () {
+      // Forcing the pattern on these would mangle them, so they are left be.
+      expect(formatPhone('021234567'), '021234567'); // 9-digit landline
+      expect(formatPhone('086-365-2156'), '086-365-2156'); // already grouped
+      expect(formatPhone('+66863652156'), '+66863652156'); // country code
+      expect(formatPhone(''), '');
+      expect(formatPhone(null), '');
+    });
+
     test('dates render Buddhist-era, and bad input renders empty', () {
       expect(formatThaiDate('2026-07-27T10:00:00'), '27/07/2569');
       expect(formatThaiDate(''), '');
