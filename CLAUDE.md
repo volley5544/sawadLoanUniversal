@@ -467,6 +467,31 @@ https://sawad-loan-universal-uat.web.app/pLoan/resume?hashThaiId=<HASH>&token=<J
 `MOCK-M-6701001` has 0 (falls back to 35000). In a plain browser `closeWebview`
 is unavailable, so step 3's back and the success button fall back to `/`.
 
+#### Step numbers: Extra is 4, new P-Loan is 6
+
+**The agreed way to refer to these screens** (set 2026-07-30). When a step number
+is mentioned, resolve it here and confirm against the **screen title** before
+editing — the two numberings collide, and a report about "step 4" was once acted
+on against the wrong page because of it.
+
+| Extra (4) | New (6) | Page (`lib/p_loan/application/`) | Title |
+| --- | --- | --- | --- |
+| **1** | — | the LandAndHouseWeb top-up card — **not in this app** | — |
+| — | **1** | `p_loan_contract_select_page` | เลือกสัญญา |
+| — | **2** | `p_loan_amount_page` | ข้อมูลยอดจัดสินเชื่อ |
+| **2** | **3** | `p_loan_installment_page` | เลือกจำนวนงวด |
+| — | **4** | `p_loan_vehicle_photos_page` | รูปภาพหลักประกัน |
+| **3** | **5** | `p_loan_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว |
+| **4** | **6** | `p_loan_conclusion_page` | สรุปรายละเอียดของสัญญา |
+
+In **code** the numbering is still the six-screen one: pages call
+`_flow.stepNumber(6)` and `PLoanEntry` maps it down, so `stepNumber(6) == 4` on
+the Extra path. Translate; don't assume a spoken number matches a literal.
+
+⚠ The count comes from the **entry point**, not the product: an Extra started
+from *this* app's home menu still runs the 6-step indicator. The 4-step count is
+the top-up-card entry, which is how Extra ships.
+
 #### Two products, one flow (`PLoanKind`)
 
 Step 1 offers both, and everything after it is the same six screens:
@@ -603,10 +628,8 @@ customer could not correct either, and both reached the submit payload. Now:
   appeared under a `สัญญาอ้างอิง` header during the "data reference" design;
   on step 4 it sat directly above the fields asking for this loan's collateral.)
 
-  ⚠ **"Step 4" is ambiguous in conversation.** On the top-up-card entry the
-  indicator counts the card as 1 and runs 2/4 → 3/4 → 4/4, so the screen
-  *labelled* 4 is step **6** (สรุปรายละเอียดของสัญญา) and the photos screen is
-  skipped entirely. Check the screen title, not the circle.
+  ⚠ Beware which numbering a step number is in — see **Step numbers: Extra is
+  4, new P-Loan is 6** below.
 - The Extra path is unchanged: `PLoanFlow.loanTypeCode` / `collateral*` /
   `bank*` getters pick the source by kind, so no screen or payload mapper
   branches on it. `canSubmit` additionally requires both blocks for a new loan.
