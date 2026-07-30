@@ -33,10 +33,17 @@ class NdidApi {
   /// List identity providers. With [identifier] set (13-digit Thai ID) the
   /// node returns only the IdPs the citizen has onboarded with; without it,
   /// all IdPs at the given assurance levels.
+  ///
+  /// [minIal] / [minAal] were raised from `1.1` / `1` on 2026-07-30. They filter
+  /// which IdPs come back, so a higher floor returns fewer of them — an IdP that
+  /// only supports a lower assurance level drops out of both grids on the
+  /// bank-select screen.
+  ///
+  /// Note [createVerifyRequest] still asks for `1.1` / `1`; see its doc.
   static Future<List<NdidIdp>> listIdps({
     String? identifier,
-    double minIal = 1.1,
-    num minAal = 1,
+    double minIal = 2.3,
+    num minAal = 2.2,
   }) async {
     final body = <String, dynamic>{
       'min_ial': minIal,
@@ -61,6 +68,13 @@ class NdidApi {
 
   /// Create a verification request against the chosen IdP. Returns the
   /// reference used to poll [getVerifyStatus].
+  ///
+  /// ⚠ **Its `min_ial` / `min_aal` are still `1.1` / `1`, while [listIdps] now
+  /// filters at `2.3` / `2.2`.** Not obviously wrong — asking for *less*
+  /// assurance than the listed IdPs support is legal — but the two are no longer
+  /// the same request, so an IdP is picked under one floor and verified under
+  /// another. Raise these to match if the higher levels are what the flow
+  /// actually requires.
   static Future<NdidVerifyRequest> createVerifyRequest({
     required String identifier,
     required String idpId,

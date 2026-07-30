@@ -1103,8 +1103,11 @@ failures throw `ApiTransportException`.
 `NdidApi` — static `http` client for the **NDID local-node API** (the
 `localhost:7088` wrapper; Postman collection + proxy spec live in the
 untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
-`listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
-mode 2 / min_ial 1.1 / min_aal 1 / "Authen Only"), `getVerifyStatus()`
+`listIdps()` (`POST /idp/list`, **min_ial 2.3 / min_aal 2.2** — raised from
+1.1 / 1 on 2026-07-30; these filter which IdPs come back, so a higher floor means
+fewer banks in both grids), `createVerifyRequest()` (`POST /rp/verify`,
+mode 2 / **min_ial 1.1 / min_aal 1** — deliberately *not* raised with the above,
+so the pick and the verify now use different floors), `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body).
