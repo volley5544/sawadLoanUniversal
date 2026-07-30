@@ -532,9 +532,18 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           ],
           const PLoanSectionHeader('รายละเอียดคำขอสินเชื่อใหม่'),
           PLoanAmountRow(
-            label: 'ยอดจัดสินเชื่อ',
+            // An Extra lends a วงเงินเอนกประสงค์ — the full topup_extra offer,
+            // undiminished by the old contract.
+            label: isNew ? 'ยอดจัดสินเชื่อ' : 'ยอดจัดวงเงินเอนกประสงค์',
             value: '${formatMoney(_flow.requestedAmount)} บาท',
           ),
+          // Extra only: a new P-Loan already shows the duty in สรุปยอด
+          // สินเชื่อใหม่ above, which an Extra no longer renders.
+          if (!isNew)
+            PLoanAmountRow(
+              label: 'ค่าอากรแสตมป์',
+              value: '${formatMoney(detail.feeAmount)} บาท',
+            ),
           PLoanAmountRow(
             label: 'ค่างวด',
             value: '${formatMoney(installment.regularPeriodAmt)} บาท',
@@ -554,8 +563,19 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           PLoanAmountRow(
             label: 'ชำระทุกวันที่',
             value: '${detail.dueDay}',
-            showDivider: false,
+            // Last row for a new P-Loan; an Extra adds the transfer below.
+            showDivider: !isNew,
           ),
+          // Extra only, and the section's bottom line: what actually reaches the
+          // bank account. `payoutAmount` is the same
+          // ยอดจัดวงเงินเอนกประสงค์ − ค่าอากรแสตมป์ shown two rows apart above.
+          if (!isNew)
+            PLoanAmountRow(
+              label: 'ยอดโอนเงินเข้าบัญชี',
+              value: '${formatMoney(_flow.payoutAmount)} บาท',
+              emphasis: true,
+              showDivider: false,
+            ),
           if (isNew) ...[
             const PLoanSectionHeader('ข้อมูลหลักประกัน'),
             // What the customer stated on step 4 — shown back for a last check

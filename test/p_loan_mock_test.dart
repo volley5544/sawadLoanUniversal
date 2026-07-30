@@ -56,7 +56,8 @@ void main() {
         // showing a validation error and the Next button is dead.
         expect(detail.isAmountAllowed(detail.defaultTopupAmount), isTrue,
             reason: 'default outside bounds for ${contract.contractNo}');
-        expect(detail.payoutFor(detail.defaultTopupAmount), greaterThan(0));
+        expect(detail.defaultTopupAmount - detail.feeAmount, greaterThan(0),
+            reason: 'payout (amount - duty) for ${contract.contractNo}');
       }
     });
 

@@ -670,15 +670,23 @@ class PLoanFlow implements NdidSubject {
 
   /// Money the customer receives for [requestedAmount].
   ///
-  /// A P-Loan Extra clears the old contract out of the new one, so its
-  /// principal comes off alongside the stamp duty. A new P-Loan has no old
-  /// principal to clear — only the duty comes off.
+  /// **`requested − stamp duty`, for both kinds.**
+  ///
+  /// Instructed 2026-07-30: *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินเอนกประสงค์ ลบ
+  /// ค่าอากรแสตมป์"*, the credit line being *"ยอดเต็ม"* — the full amount, not
+  /// one reduced by the old contract.
+  ///
+  /// An Extra used to deduct the reference contract's closing balance too, the
+  /// way a top-up does: there, a larger new loan *closes* the old contract, so
+  /// its principal comes off what is transferred. A P-Loan Extra does not
+  /// replace that contract — `topup_extra` is typically far smaller than the
+  /// balance would be — so deducting it drove the payout negative
+  /// (`2,000 − 7,740 − 1` on `MLOAN`/`ฮฮM680702003NF61X`), and that number was
+  /// reaching `transfer_amount` in the submitted body, not just the screen.
   int get payoutAmount {
     final detail = amountDetail;
     if (detail == null) return 0;
-    return isNewPLoan
-        ? requestedAmount - detail.feeAmount
-        : detail.payoutFor(requestedAmount);
+    return requestedAmount - detail.feeAmount;
   }
 
   /// Smallest amount a new P-Loan may be requested for: the rounding unit,

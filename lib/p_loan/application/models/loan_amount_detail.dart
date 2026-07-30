@@ -103,11 +103,12 @@ class LoanAmountDetail {
   /// The source locks the amount field when interest has been paid.
   bool get isAmountLocked => interestPaidFlag == 'Y';
 
-  /// Money actually transferred to the customer for [requestedAmount]: the
-  /// request less the old contract's principal and the stamp duty. Mirrors the
-  /// `จำนวนเงินที่จะได้รับ` row on the conclusion screen.
-  int payoutFor(int requestedAmount) =>
-      requestedAmount - contractDetails.closingBalance - feeAmount;
+  // There is no payoutFor() here any more. It computed
+  // `requested − closing_balance − fee`, the *top-up* transfer: a top-up's
+  // larger new loan closes the old contract, so its principal comes off. No
+  // product in this flow does that — see [PLoanFlow.payoutAmount], which is
+  // `requested − fee` for both kinds. Left as a comment rather than a deprecated
+  // method so the wrong formula can't be picked back up by name.
 
   /// True when [amount] sits inside the allowed request range.
   bool isAmountAllowed(int amount) =>

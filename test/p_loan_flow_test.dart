@@ -185,10 +185,12 @@ void main() {
   });
 
   group('amount rules', () {
-    test('payout deducts old principal and stamp duty', () {
-      final detail = LoanAmountDetail.fromJson(_amountDetailJson);
-      // 30000 - 12000 closing balance - 100 fee
-      expect(detail.payoutFor(30000), 17900);
+    test('payout deducts the stamp duty and nothing else', () {
+      // ยอดโอนเงินเข้าบัญชี = ยอดจัดวงเงินเอนกประสงค์ − ค่าอากรแสตมป์, on the
+      // full amount. The old contract's closing balance (12000 here) is NOT
+      // deducted: this loan does not replace that contract.
+      final flow = _completeFlow()..requestedAmount = 30000;
+      expect(flow.payoutAmount, 29900);
     });
 
     test('requested amount must sit inside the API bounds', () {
@@ -212,13 +214,22 @@ void main() {
       expect(PLoanFlow(hashThaiId: 'H').isNewPLoan, isFalse);
     });
 
-    test('a new P-Loan deducts only the duty, not an old principal', () {
+    test('neither kind deducts an old principal — only the duty', () {
       final extra = _completeFlow();
       final fresh = _completeFlow(kind: PLoanKind.newLoan);
-      // 30000 - 12000 closing balance - 100 fee
-      expect(extra.payoutAmount, 17900);
-      // 30000 - 100 fee; there is no old contract to clear.
+      // Both 30000 - 100 fee. An Extra used to come to 17900 here, deducting
+      // the 12000 closing balance the way a top-up does; it does not replace
+      // that contract, and on a real one (topup_extra 2000 vs balance 7740)
+      // that deduction made the payout negative.
+      expect(extra.payoutAmount, 29900);
       expect(fresh.payoutAmount, 29900);
+    });
+
+    test('a small Extra offer still pays out positive', () {
+      // The MLOAN/ฮฮM680702003NF61X shape: offer far below the balance.
+      final extra = _completeFlow()..requestedAmount = 2000;
+      expect(extra.payoutAmount, 1900, reason: '2000 - 100 duty');
+      expect(extra.payoutAmount, greaterThan(0));
     });
 
     test('neither kind is bounded by the contract\'s top-up range', () {
@@ -647,8 +658,9 @@ void main() {
       expect(json['contract_no'], 'ญฟC670301001NE54X');
       expect(json['hash_thai_id'], 'HASH123');
       expect(json['loan_amount'], 30000);
-      // 30000 - 12000 - 100
-      expect(json['transfer_amount'], 17900);
+      // 30000 - 100 duty. The old contract's 12000 principal is not deducted —
+      // this is what used to make transfer_amount negative on a real Extra.
+      expect(json['transfer_amount'], 29900);
       expect(json['term_period'], 24);
       expect(json['regular_period'], 1500);
       expect(json['interest_amount'], 6000.0);

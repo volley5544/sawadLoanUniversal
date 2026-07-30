@@ -24,7 +24,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 108 tests
+flutter test                                  # 109 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -154,7 +154,8 @@ Step 1 offers **two products** (`PLoanKind`), which then share all six screens:
   which this is not.
 - **ขอสินเชื่อใหม่** (new P-Loan) — the card above it. A fresh loan whose amount
   **starts blank** for the customer to type, with no limit inherited from a
-  contract and no old principal deducted from the payout.
+  contract. (Neither product deducts an old principal — the payout is
+  `request − stamp duty` for both, since neither replaces an existing contract.)
 
 **A new P-Loan has no contract at all.** `refContractNo` ("เลขที่สัญญาอ้างอิง")
 is an Extra's field — it names the contract the top-up is raised against — and a

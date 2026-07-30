@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 108 tests (models, payloads, mock-mode guard) — green
+flutter test               # 109 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -502,7 +502,7 @@ Step 1 offers both, and everything after it is the same six screens:
 | Step 1 | the contract carousel | the soft-orange card above it |
 | Amount | **fixed** at `topup_extra`, field read-only | **starts blank**, customer types it |
 | Bounds | none — `min/max_topup_amount` are the *top-up* product's | none client-side (see below) |
-| Payout | request − old principal − duty | request − duty |
+| Payout | request − duty | request − duty |
 | Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
 | Step 4 collateral | read off `/topup/detail` | **customer types it** (see below) |
 | Step 5 payout account | read off the contract | **customer types it** (see below) |
@@ -836,11 +836,22 @@ row / `รวมยอดวงเงินที่อนุมัติ`) plus
 top-up would clear. An Extra draws against none of it. The requested amount is
 still on screen as `ยอดจัดสินเชื่อ` under `รายละเอียดคำขอสินเชื่อใหม่`.
 
-> ⚠ This also takes **`จำนวนเงินที่จะได้รับ`** off the screen for an Extra, which
-> is where the negative payout was visible. The figure is unchanged: still
-> computed by `PLoanFlow.payoutAmount`, still submitted as `transfer_amount`
-> (`toSubmissionJson`) and `transferAmt` (`PLoanSubmission`), and still shown on
-> the **success screen** and on step 2. Outstanding #8 is not resolved by this.
+It took `จำนวนเงินที่จะได้รับ` with it; **`ยอดโอนเงินเข้าบัญชี`** in the next
+section replaces it — see below.
+
+**`รายละเอียดคำขอสินเชื่อใหม่` for an Extra** (instructed 2026-07-30) reads:
+
+| Row | Value |
+| --- | --- |
+| `ยอดจัดวงเงินเอนกประสงค์` | `requestedAmount` — the **full** offer (`ยอดเต็ม`) |
+| `ค่าอากรแสตมป์` | `fee_amount` |
+| `ค่างวด` / `จำนวนงวด` / `ดอกเบี้ย (ต่อเดือน)` / `ชำระทุกวันที่` | as before |
+| `ยอดโอนเงินเข้าบัญชี` | `PLoanFlow.payoutAmount` |
+
+`ยอดจัดสินเชื่อ` is renamed to **`ยอดจัดวงเงินเอนกประสงค์`** for an Extra, here and
+as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอดจัดสินเชื่อ` /
+`ยอดจัดสินเชื่อใหม่`, and gets neither new row — its own
+`สรุปยอดสินเชื่อใหม่` section already carries the duty and the payout.
 
 **Document viewer.** The three contract PDFs arrive base64 from `POST /pdf/loan`
 and are rendered **inline**: tapping a document row opens a near-full-height
@@ -1238,26 +1249,15 @@ reason recorded.
 7. **`branchID` / `branchId` has no source for a new P-Loan.** It comes from the
    contract's `branch_code` for an Extra. Left blank and reported rather than
    guessed; a `?branchId=` launch param or a branch picker would fill it.
-8. **⚠ An Extra's payout still deducts the old principal, and now goes negative.**
-   The request amount is the fixed `topup_extra` offer (see **P-Loan Extra's
-   amount is not the top-up amount**), but `PLoanFlow.payoutAmount` was left as
-   `requested − closing_balance − fee_amount` — the *top-up* formula, where a
-   larger new loan closes the old contract. `topup_extra` is smaller than the
-   balance it would have to close, so on `MLOAN` / `ฮฮM680702003NF61X` step 2 and
-   step 6 show **`2,000 − 7,740 − 1 = −5,741`**.
-
-   Two things say the deduction should go, making it `requested − duty` (what a
-   **new** P-Loan already does):
-
-   - you cannot close a ฿7,740 balance with a ฿2,000 loan, so nothing is being
-     cleared;
-   - `/topup/calculator` prices the 2,000 as a standalone 6–36 งวด schedule
-     rather than as a replacement for the existing one.
-
-   Left unchanged pending confirmation because it moves a **submitted** figure
-   (`POST /topup`'s payout), not just a label. The fix is `payoutAmount` dropping
-   its `isNewPLoan` branch, plus hiding step 2's and step 6's old-principal
-   deduction rows.
+8. ~~An Extra's payout deducts the old principal and goes negative.~~
+   **Resolved 2026-07-30.** `PLoanFlow.payoutAmount` is now `requested − duty`
+   for **both** kinds, per *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินเอนกประสงค์ ลบ
+   ค่าอากรแสตมป์"* on the full amount. It had been the *top-up* formula
+   (`− closing_balance` as well), which drove `2,000 − 7,740 − 1 = −5,741` into
+   the screen **and** into `transfer_amount` / `transferAmt`. The
+   `หักยอดเงินต้นสัญญาเก่า` rows on steps 2 and 6 went with it, and
+   `LoanAmountDetail.payoutFor` was **deleted** rather than deprecated so the old
+   formula can't be picked up by name.
 9. **LandAndHouseWeb's button is not built yet** — see **What LandAndHouseWeb
    has to do**. Until it navigates to `srisawad://ploan-extra?…`, the deep link
    is only reachable by typing the URL.

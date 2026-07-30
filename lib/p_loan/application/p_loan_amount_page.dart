@@ -23,8 +23,9 @@ import 'models/p_loan_flow.dart';
 ///    วงเงินเพิ่มเติม the top-up card advertises) and the field is read-only:
 ///    this product lends the offer, it does not let the customer size it.
 ///    `min/max_topup_amount` are **not** applied — they bound the top-up
-///    product, not this one (see [LoanAmountDetail.extraRequestAmount]). The old
-///    contract's principal is shown as a deduction.
+///    product, not this one (see [LoanAmountDetail.extraRequestAmount]). Only
+///    the stamp duty is deducted; the referenced contract's principal is not,
+///    because this loan does not replace it (see [PLoanFlow.payoutAmount]).
 ///  - **New P-Loan** — the field starts **blank** and the customer types the
 ///    amount they want. There is no contract, so no bound is inherited and
 ///    there is no old principal to deduct — neither is shown, and no
@@ -384,15 +385,12 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
           // Extra's amount is fixed either way — and the guidance above already
           // says so, so keeping it would state a wrong reason.
           const PLoanSectionHeader('รายการหัก'),
-          // A new P-Loan closes no old contract, so there is no principal to
-          // deduct — only the stamp duty.
-          if (!isNew)
-            PLoanAmountRow(
-              label: 'หักยอดเงินต้นสัญญาเก่า',
-              caption: 'เลขที่สัญญา ${detail.contractNo}',
-              value:
-                  '${formatMoney(detail.contractDetails.closingBalance)} บาท',
-            ),
+          // Neither kind deducts an old principal: a new P-Loan closes no
+          // contract, and an Extra does not replace the one it references
+          // either — only the stamp duty comes off. The
+          // หักยอดเงินต้นสัญญาเก่า row that used to sit here for an Extra was
+          // removed with that deduction, or the arithmetic on screen would no
+          // longer reach จำนวนเงินที่จะได้รับ. See [PLoanFlow.payoutAmount].
           PLoanAmountRow(
             label: 'หักอากรสแตมป์',
             value: '${formatMoney(detail.feeAmount)} บาท',
