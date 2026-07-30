@@ -1103,14 +1103,20 @@ failures throw `ApiTransportException`.
 `NdidApi` — static `http` client for the **NDID local-node API** (the
 `localhost:7088` wrapper; Postman collection + proxy spec live in the
 untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
-`listIdps()` (`POST /idp/list`, **min_ial 2.3 / min_aal 2.2** — raised from
-1.1 / 1 on 2026-07-30; these filter which IdPs come back, so a higher floor means
-fewer banks in both grids), `createVerifyRequest()` (`POST /rp/verify`,
-mode 2 / **min_ial 1.1 / min_aal 1** — deliberately *not* raised with the above,
-so the pick and the verify now use different floors), `getVerifyStatus()`
+`listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
+mode 2 / "Authen Only"), `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body).
+
+**Assurance levels are two shared constants** — `NdidApi.minIal` **2.3** /
+`NdidApi.minAal` **2.2**, raised from `1.1` / `1` on 2026-07-30. Both `/idp/list`
+and `/rp/verify` read them, so the bank is verified at the same bar it was
+offered under; change them in one place. They are a **filter**, not a
+preference: an IdP that cannot meet them vanishes from both bank-select grids.
+Verified on the uat node — at 1.1/1 the list is `idp1, idp2, idp4, idp-thaid`;
+at 2.3/2.2 it is `idp1, idp2, idp4`, so **ThaID (ไทยดี) drops out**. Narrowed
+further by `identifier`: with the NDID test id only `idp1` comes back.
 **Transport:** the gateway sends no CORS headers (and 401s preflights), so a
 browser fetch is blocked — inside the host every request goes through the
 host's `httpRequest` JS bridge handler (native HTTP, allowlisted to the NDID

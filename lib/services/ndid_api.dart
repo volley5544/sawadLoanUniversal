@@ -23,6 +23,20 @@ class NdidApi {
   static const Duration _timeout = Duration(seconds: 30);
   static const String citizenIdNamespace = 'citizen_id';
 
+  /// Assurance levels every request asks for — **IAL 2.3 / AAL 2.2**, raised
+  /// from `1.1` / `1` on 2026-07-30.
+  ///
+  /// Shared by [listIdps] and [createVerifyRequest] on purpose: the first
+  /// decides which IdPs the customer may pick from and the second is what that
+  /// IdP is then asked to assert, so a pair that drifts apart would offer a bank
+  /// under one bar and verify under another. Change them here, once.
+  ///
+  /// They are a **filter**, not a preference — an IdP that cannot meet them
+  /// disappears from the bank-select grids entirely. Verified on the uat node:
+  /// `idp-thaid` (ไทยดี) is returned at 1.1/1 and not at 2.3/2.2.
+  static const double minIal = 2.3;
+  static const num minAal = 2.2;
+
   static Uri _uri(String path) => Uri.parse('$kNdidApiBase$path');
 
   static Map<String, String> _headers({bool json = false}) => {
@@ -34,16 +48,13 @@ class NdidApi {
   /// node returns only the IdPs the citizen has onboarded with; without it,
   /// all IdPs at the given assurance levels.
   ///
-  /// [minIal] / [minAal] were raised from `1.1` / `1` on 2026-07-30. They filter
-  /// which IdPs come back, so a higher floor returns fewer of them — an IdP that
-  /// only supports a lower assurance level drops out of both grids on the
-  /// bank-select screen.
-  ///
-  /// Note [createVerifyRequest] still asks for `1.1` / `1`; see its doc.
+  /// Defaults to [NdidApi.minIal] / [NdidApi.minAal] — the same levels
+  /// [createVerifyRequest] asks for. Overridable per call, but note these
+  /// *filter* the result: a higher floor returns fewer banks.
   static Future<List<NdidIdp>> listIdps({
     String? identifier,
-    double minIal = 2.3,
-    num minAal = 2.2,
+    double minIal = NdidApi.minIal,
+    num minAal = NdidApi.minAal,
   }) async {
     final body = <String, dynamic>{
       'min_ial': minIal,
@@ -69,12 +80,9 @@ class NdidApi {
   /// Create a verification request against the chosen IdP. Returns the
   /// reference used to poll [getVerifyStatus].
   ///
-  /// ⚠ **Its `min_ial` / `min_aal` are still `1.1` / `1`, while [listIdps] now
-  /// filters at `2.3` / `2.2`.** Not obviously wrong — asking for *less*
-  /// assurance than the listed IdPs support is legal — but the two are no longer
-  /// the same request, so an IdP is picked under one floor and verified under
-  /// another. Raise these to match if the higher levels are what the flow
-  /// actually requires.
+  /// Asks for [NdidApi.minIal] / [NdidApi.minAal] — the same levels [listIdps]
+  /// filtered the chosen IdP by, so the bank is verified at the bar it was
+  /// offered under.
   static Future<NdidVerifyRequest> createVerifyRequest({
     required String identifier,
     required String idpId,
@@ -87,8 +95,8 @@ class NdidApi {
       'request_message': requestMessage,
       'idp_id_list': [idpId],
       'min_idp': 1,
-      'min_aal': 1,
-      'min_ial': 1.1,
+      'min_aal': minAal,
+      'min_ial': minIal,
       'mode': 2,
       'bypass_identity_check': false,
       'request_timeout': requestTimeoutSeconds,
