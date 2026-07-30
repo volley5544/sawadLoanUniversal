@@ -595,10 +595,13 @@ customer could not correct either, and both reached the submit payload. Now:
 - Only `ปีที่ผลิต` currently reaches a payload (`registerYear`); brand, model,
   plate, province and expiry have **no field in either submit API** and are
   collected because they identify the vehicle being photographed.
-- **`ContractSummaryCard` is Extra-only** on steps 2, 4 and 6 — there is no
-  contract to summarise. (It briefly appeared under a `สัญญาอ้างอิง` header
-  during the "data reference" design; on step 4 it sat directly above the
-  fields asking for this loan's collateral.)
+- **`ContractSummaryCard` is Extra-only**, and now only on steps **2 and 6** —
+  a new P-Loan has no contract to summarise. **Step 4 no longer shows it at
+  all** (removed 2026-07-30 on request): it was the first block under the step
+  bar and restated the contract and collateral that step 4's own
+  ข้อมูลหลักประกัน rows show immediately below. (It also briefly appeared under a
+  `สัญญาอ้างอิง` header during the "data reference" design, where on step 4 it
+  sat directly above the fields asking for this loan's collateral.)
 - The Extra path is unchanged: `PLoanFlow.loanTypeCode` / `collateral*` /
   `bank*` getters pick the source by kind, so no screen or payload mapper
   branches on it. `canSubmit` additionally requires both blocks for a new loan.
