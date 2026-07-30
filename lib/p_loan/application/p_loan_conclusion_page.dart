@@ -488,8 +488,6 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       return const PLoanLoadingView(message: 'กำลังสร้างเอกสารสัญญา...');
     }
 
-    // Extra only — a new P-Loan carries no contract.
-    final contract = _flow.contract;
     final detail = _flow.amountDetail!;
     final installment = _flow.installment!;
     final isNew = _flow.isNewPLoan;
@@ -499,17 +497,11 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Extra only — a new P-Loan summarises its own collateral further
-          // down (ข้อมูลหลักประกัน), so leading with the reference contract
-          // would have the summary screen open on the wrong loan.
-          if (!isNew && contract != null)
-            ContractSummaryCard(
-              loanTypeCode: contract.contractDetails.loanTypeCode,
-              loanTypeName: contract.contractDetails.loanTypeName,
-              contractNo: contract.contractNo,
-              collateralInformation:
-                  contract.contractDetails.collateralInformation,
-            ),
+          // No ContractSummaryCard here. It used to lead this screen for an
+          // Extra, but the contract number it showed is repeated by the
+          // หักยอดเงินต้นสัญญาเก่า row below and the collateral is summarised
+          // further down, so it was the same facts told twice above the fold.
+          // Removed 2026-07-30 on request. A new P-Loan never had it.
           const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
           // The three rows below describe the reference contract's headroom and
           // the principal a top-up would clear. None of it applies to a loan

@@ -166,6 +166,7 @@ class _PLoanVehiclePhotosPageState extends State<PLoanVehiclePhotosPage> {
 
   @override
   Widget build(BuildContext context) {
+    final contract = _flow.contract;
     final isNew = _flow.isNewPLoan;
     final required = _flow.requiredPhotos;
     final missing = _flow.missingVehiclePhoto;
@@ -188,11 +189,19 @@ class _PLoanVehiclePhotosPageState extends State<PLoanVehiclePhotosPage> {
               padding: const EdgeInsets.fromLTRB(LoanRegisterStyles.padding, 4,
                   LoanRegisterStyles.padding, 24),
               children: [
-                // No ContractSummaryCard here. An Extra used to open this screen
-                // with one, but it restated the contract and collateral that the
-                // ข้อมูลหลักประกัน rows immediately below already show, and a new
-                // P-Loan never had it. Step 2 and step 6 still summarise the
-                // contract; this screen is about the photos.
+                // Extra only: this card describes the contract being topped up,
+                // which is the collateral being photographed below. For a new
+                // P-Loan it describes a different loan's collateral, sitting
+                // directly above the fields asking for this one's — so it is
+                // left out rather than labelled around.
+                if (!isNew && contract != null)
+                  ContractSummaryCard(
+                    loanTypeCode: contract.contractDetails.loanTypeCode,
+                    loanTypeName: contract.contractDetails.loanTypeName,
+                    contractNo: contract.contractNo,
+                    collateralInformation:
+                        contract.contractDetails.collateralInformation,
+                  ),
                 const PLoanSectionHeader('ข้อมูลหลักประกัน'),
                 if (isNew) _collateralInputs() else _detailRows(),
                 // Until the type is known there is no meaningful photo list to
