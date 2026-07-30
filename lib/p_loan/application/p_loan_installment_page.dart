@@ -78,11 +78,11 @@ class _PLoanInstallmentPageState extends State<PLoanInstallmentPage> {
                         24),
                     children: [
                       Text(
-                        // An Extra lends a วงเงินเอนกประสงค์ (the topup_extra
+                        // An Extra lends a วงเงินอเนกประสงค์ (the topup_extra
                         // offer); a new P-Loan is a plain new loan.
                         flow.isNewPLoan
                             ? 'ยอดจัดสินเชื่อใหม่'
-                            : 'ยอดจัดวงเงินเอนกประสงค์',
+                            : 'ยอดจัดวงเงินอเนกประสงค์',
                         style: GoogleFonts.notoSansThai(
                           fontSize: 14,
                           color: LoanRegisterStyles.label,

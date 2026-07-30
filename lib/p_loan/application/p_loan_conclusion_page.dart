@@ -532,9 +532,9 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           ],
           const PLoanSectionHeader('รายละเอียดคำขอสินเชื่อใหม่'),
           PLoanAmountRow(
-            // An Extra lends a วงเงินเอนกประสงค์ — the full topup_extra offer,
+            // An Extra lends a วงเงินอเนกประสงค์ — the full topup_extra offer,
             // undiminished by the old contract.
-            label: isNew ? 'ยอดจัดสินเชื่อ' : 'ยอดจัดวงเงินเอนกประสงค์',
+            label: isNew ? 'ยอดจัดสินเชื่อ' : 'ยอดจัดวงเงินอเนกประสงค์',
             value: '${formatMoney(_flow.requestedAmount)} บาท',
           ),
           // Extra only: a new P-Loan already shows the duty in สรุปยอด
@@ -568,7 +568,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           ),
           // Extra only, and the section's bottom line: what actually reaches the
           // bank account. `payoutAmount` is the same
-          // ยอดจัดวงเงินเอนกประสงค์ − ค่าอากรแสตมป์ shown two rows apart above.
+          // ยอดจัดวงเงินอเนกประสงค์ − ค่าอากรแสตมป์ shown two rows apart above.
           if (!isNew)
             PLoanAmountRow(
               label: 'ยอดโอนเงินเข้าบัญชี',

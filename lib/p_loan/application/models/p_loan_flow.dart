@@ -672,7 +672,7 @@ class PLoanFlow implements NdidSubject {
   ///
   /// **`requested − stamp duty`, for both kinds.**
   ///
-  /// Instructed 2026-07-30: *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินเอนกประสงค์ ลบ
+  /// Instructed 2026-07-30: *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินอเนกประสงค์ ลบ
   /// ค่าอากรแสตมป์"*, the credit line being *"ยอดเต็ม"* — the full amount, not
   /// one reduced by the old contract.
   ///

@@ -843,12 +843,12 @@ section replaces it — see below.
 
 | Row | Value |
 | --- | --- |
-| `ยอดจัดวงเงินเอนกประสงค์` | `requestedAmount` — the **full** offer (`ยอดเต็ม`) |
+| `ยอดจัดวงเงินอเนกประสงค์` | `requestedAmount` — the **full** offer (`ยอดเต็ม`) |
 | `ค่าอากรแสตมป์` | `fee_amount` |
 | `ค่างวด` / `จำนวนงวด` / `ดอกเบี้ย (ต่อเดือน)` / `ชำระทุกวันที่` | as before |
 | `ยอดโอนเงินเข้าบัญชี` | `PLoanFlow.payoutAmount` |
 
-`ยอดจัดสินเชื่อ` is renamed to **`ยอดจัดวงเงินเอนกประสงค์`** for an Extra, here and
+`ยอดจัดสินเชื่อ` is renamed to **`ยอดจัดวงเงินอเนกประสงค์`** for an Extra, here and
 as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอดจัดสินเชื่อ` /
 `ยอดจัดสินเชื่อใหม่`, and gets neither new row — its own
 `สรุปยอดสินเชื่อใหม่` section already carries the duty and the payout.
@@ -1251,7 +1251,7 @@ reason recorded.
    guessed; a `?branchId=` launch param or a branch picker would fill it.
 8. ~~An Extra's payout deducts the old principal and goes negative.~~
    **Resolved 2026-07-30.** `PLoanFlow.payoutAmount` is now `requested − duty`
-   for **both** kinds, per *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินเอนกประสงค์ ลบ
+   for **both** kinds, per *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินอเนกประสงค์ ลบ
    ค่าอากรแสตมป์"* on the full amount. It had been the *top-up* formula
    (`− closing_balance` as well), which drove `2,000 − 7,740 − 1 = −5,741` into
    the screen **and** into `transfer_amount` / `transferAmt`. The

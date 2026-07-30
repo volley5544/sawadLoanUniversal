@@ -186,7 +186,7 @@ void main() {
 
   group('amount rules', () {
     test('payout deducts the stamp duty and nothing else', () {
-      // ยอดโอนเงินเข้าบัญชี = ยอดจัดวงเงินเอนกประสงค์ − ค่าอากรแสตมป์, on the
+      // ยอดโอนเงินเข้าบัญชี = ยอดจัดวงเงินอเนกประสงค์ − ค่าอากรแสตมป์, on the
       // full amount. The old contract's closing balance (12000 here) is NOT
       // deducted: this loan does not replace that contract.
       final flow = _completeFlow()..requestedAmount = 30000;
