@@ -687,17 +687,21 @@ class PLoanFlow implements NdidSubject {
 
   /// Whether [requestedAmount] is worth sending to the calculator.
   ///
-  /// A P-Loan Extra is bounded by the contract's approved top-up range. A new
-  /// P-Loan is not — the customer names the amount. Any product floor or
-  /// ceiling for a new loan is the server's to enforce: `/topup/calculator`
-  /// rejects what it will not price and its message is shown as-is, rather than
-  /// a bound being guessed at here.
+  /// Neither kind is range-checked here:
+  ///
+  ///  - a **P-Loan Extra** requests the fixed `topup_extra` offer, and
+  ///    `min/max_topup_amount` bound the *top-up* product rather than this one
+  ///    (see [LoanAmountDetail.extraRequestAmount]) — so the only thing that
+  ///    disqualifies it is having no offer at all;
+  ///  - a **new P-Loan** has the customer name the amount, and any product
+  ///    floor or ceiling is the server's to enforce: `/topup/calculator`
+  ///    rejects what it will not price and its message is shown as-is, rather
+  ///    than a bound being guessed at here.
   bool get isRequestedAmountAllowed {
-    final detail = amountDetail;
-    if (detail == null) return false;
+    if (amountDetail == null) return false;
     return isNewPLoan
         ? requestedAmount >= newLoanMinimumAmount
-        : detail.isAmountAllowed(requestedAmount);
+        : requestedAmount > 0;
   }
 
   /// Where a completed application of this kind is filed.

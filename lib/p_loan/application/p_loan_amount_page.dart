@@ -19,11 +19,12 @@ import 'models/p_loan_flow.dart';
 ///
 /// Serves both products (see [PLoanKind]):
 ///
-///  - **P-Loan Extra** — pre-filled with `topup_extra` (the วงเงินเพิ่มเติม the
-///    top-up card advertises), falling back to the contract's approved limit
-///    when it is absent or unpriceable — see
-///    [LoanAmountDetail.extraRequestAmount]. Bounded by `min/max_topup_amount`;
-///    the old contract's principal is shown as a deduction.
+///  - **P-Loan Extra** — the amount is **fixed** at `topup_extra` (the
+///    วงเงินเพิ่มเติม the top-up card advertises) and the field is read-only:
+///    this product lends the offer, it does not let the customer size it.
+///    `min/max_topup_amount` are **not** applied — they bound the top-up
+///    product, not this one (see [LoanAmountDetail.extraRequestAmount]). The old
+///    contract's principal is shown as a deduction.
 ///  - **New P-Loan** — the field starts **blank** and the customer types the
 ///    amount they want. There is no contract, so no bound is inherited and
 ///    there is no old principal to deduct — neither is shown, and no
@@ -72,8 +73,7 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
   PLoanFlow get _flow => widget.flow;
 
   /// Fetches the limits, and — for an Extra only — the installment options for
-  /// [LoanAmountDetail.extraRequestAmount] (`topup_extra` when the contract has
-  /// one, else the approved limit).
+  /// [LoanAmountDetail.extraRequestAmount], its fixed `topup_extra` offer.
   ///
   /// A **new P-Loan** makes no call here at all, and needs no contract: it has
   /// none. `GET /topup/detail` is keyed by `db_name` + `contract_no`, so it is
@@ -324,9 +324,11 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
     // Extra only — a new P-Loan has no contract at all.
     final contract = _flow.contract;
     final isNew = _flow.isNewPLoan;
-    // Only an Extra can be locked: the flag means interest was prepaid on the
-    // contract being topped up, which says nothing about a new loan.
-    final locked = !isNew && detail.isAmountLocked;
+    // An Extra's amount is the fixed `topup_extra` offer, so its field is
+    // always read-only; only a new P-Loan's is typed. (This subsumes
+    // `detail.isAmountLocked` — the prepaid-interest flag that used to be the
+    // only thing locking an Extra.)
+    final locked = !isNew;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(LoanRegisterStyles.padding, 4,
           LoanRegisterStyles.padding, 24),
@@ -364,10 +366,8 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
                 ? 'กรุณาระบุวงเงินที่ต้องการขอสินเชื่อ '
                     '(ยอดจัดสินเชื่อ ระบบจะปัดเป็นจำนวนเต็มร้อยเท่านั้น) '
                     'วงเงินที่อนุมัติจริงขึ้นอยู่กับผลการพิจารณา'
-                : 'คุณสามารถแก้ไขยอดขอสินเชื่อใหม่ได้ แต่จำนวนเงินต้องอยู่ระหว่าง '
-                    '${formatMoney(detail.minTopupAmount)} - '
-                    '${formatMoney(detail.maxTopupAmount)} บาท '
-                    '(ยอดจัดสินเชื่อ ระบบจะปัดเป็นจำนวนเต็มร้อยเท่านั้น)',
+                : 'ยอดขอสินเชื่อเพิ่มถูกกำหนดตามวงเงินเพิ่มเติมที่ท่านได้รับ '
+                    'จึงไม่สามารถแก้ไขได้',
             style: GoogleFonts.notoSansThai(
               fontSize: 13,
               color: LoanRegisterStyles.label,
@@ -379,14 +379,10 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
           _amountField(locked, isNew),
           _validationMessage(detail, _flow.requestedAmount, isNew),
           const SizedBox(height: 8),
-          if (locked)
-            Text(
-              '* ยอดขอสินเชื่อถูกกำหนดไว้แล้ว เนื่องจากมีการชำระดอกเบี้ยล่วงหน้า',
-              style: GoogleFonts.notoSansThai(
-                fontSize: 12,
-                color: LoanRegisterStyles.label,
-              ),
-            ),
+          // The source's "เนื่องจากมีการชำระดอกเบี้ยล่วงหน้า" note is gone:
+          // prepaid interest is no longer *why* the field is read-only — an
+          // Extra's amount is fixed either way — and the guidance above already
+          // says so, so keeping it would state a wrong reason.
           const PLoanSectionHeader('รายการหัก'),
           // A new P-Loan closes no old contract, so there is no principal to
           // deduct — only the stamp duty.
@@ -479,12 +475,16 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
     );
   }
 
-  /// The two inline bound messages the source defined, for an Extra.
+  /// Why the amount on screen can't proceed, if it can't.
   ///
-  /// A new P-Loan has no inherited bounds — the customer names the amount — so
-  /// the only thing checked here is that they have named one. Whether the
-  /// product will price it is the calculator's answer, surfaced as its own
-  /// message rather than pre-empted with an invented limit.
+  /// Neither kind is range-checked. An **Extra** requests the fixed
+  /// `topup_extra` offer, so the only failure is there being no offer — the
+  /// source's two `min/max_topup_amount` messages are gone with the bounds
+  /// themselves, which belonged to the top-up product (see
+  /// [LoanAmountDetail.extraRequestAmount]). A **new P-Loan** has the customer
+  /// name the amount, so the only check is that they have; whether the product
+  /// will price it is the calculator's answer, surfaced as its own message
+  /// rather than pre-empted with an invented limit.
   Widget _validationMessage(LoanAmountDetail detail, int amount, bool isNew) {
     if (isNew) {
       if (amount < PLoanFlow.newLoanMinimumAmount) {
@@ -493,13 +493,8 @@ class _PLoanAmountPageState extends State<PLoanAmountPage> {
       }
       return const SizedBox.shrink();
     }
-    if (amount < detail.minTopupAmount) {
-      return _hint('* จำนวนเงินต้องไม่น้อยกว่า '
-          '${formatMoney(detail.minTopupAmount)} บาท');
-    }
-    if (amount > detail.maxTopupAmount) {
-      return _hint('* ต้องการวงเงินมากกว่า '
-          '${formatMoney(detail.maxTopupAmount)} บาท '
+    if (amount <= 0) {
+      return _hint('* ไม่พบวงเงินเพิ่มเติมสำหรับสัญญานี้ '
           'สามารถติดต่อสาขาใกล้บ้านที่สะดวก');
     }
     return const SizedBox.shrink();

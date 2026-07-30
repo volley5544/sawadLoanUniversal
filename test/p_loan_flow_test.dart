@@ -221,14 +221,23 @@ void main() {
       expect(fresh.payoutAmount, 29900);
     });
 
-    test('a new P-Loan does not inherit the contract\'s top-up bounds', () {
-      // 80000 is well above the reference contract's max_topup_amount (50000).
+    test('neither kind is bounded by the contract\'s top-up range', () {
+      // 80000 is well above the reference contract's max_topup_amount (50000),
+      // and neither product cares: an Extra requests the fixed topup_extra
+      // offer, and min/max_topup_amount bound the *top-up* product rather than
+      // either of these — while a new P-Loan's amount is the customer's to name.
       final extra = _completeFlow()..requestedAmount = 80000;
       final fresh = _completeFlow(kind: PLoanKind.newLoan)
         ..requestedAmount = 80000;
-      expect(extra.isRequestedAmountAllowed, isFalse);
+      expect(extra.isRequestedAmountAllowed, isTrue);
       expect(fresh.isRequestedAmountAllowed, isTrue,
           reason: 'the customer names the amount for a new loan');
+    });
+
+    test('an Extra with no topup_extra offer cannot proceed', () {
+      // 0 is the "no offer" signal, and there is no fallback to substitute.
+      final extra = _completeFlow()..requestedAmount = 0;
+      expect(extra.isRequestedAmountAllowed, isFalse);
     });
 
     test('a new P-Loan still needs an amount to have been entered', () {
@@ -393,94 +402,56 @@ void main() {
     });
   });
 
-  group('top-up-card requested amount', () {
-    // min 5000 / max 50000 / default 35000 from _amountDetailJson.
+  group("an Extra's request amount is the fixed topup_extra offer", () {
+    // min 5000 / max 50000 / default 35000 from _amountDetailJson — none of
+    // which may influence the answer.
     LoanAmountDetail detail({int? topupExtra}) =>
         LoanAmountDetail.fromJson(<String, dynamic>{
           ..._amountDetailJson,
           'topup_extra': ?topupExtra,
         });
 
-    test('prefers topup_extra — the วงเงินเพิ่มเติม the card shows', () {
-      expect(detail(topupExtra: 20000).topupCardRequestAmount(), 20000);
-    });
-
-    test('falls back to the approved limit when topup_extra is 0', () {
-      // It is 0 far more often than not, so it cannot be the only source.
-      expect(detail(topupExtra: 0).topupCardRequestAmount(), 35000);
-      expect(detail().topupCardRequestAmount(), 35000);
-    });
-
-    test('falls through when topup_extra is out of the priced range', () {
-      // 1000 is below min_topup_amount; nobody asserted it, so move on rather
-      // than dead-end the deep link.
-      expect(detail(topupExtra: 1000).topupCardRequestAmount(), 35000);
-      expect(detail(topupExtra: 90000).topupCardRequestAmount(), 35000);
-    });
-
-    test('an amount the card passed wins, and is rounded like step 2', () {
-      expect(detail(topupExtra: 20000).topupCardRequestAmount(requested: 30099),
-          30000);
-    });
-
-    test('but an out-of-range passed amount is refused, not substituted', () {
-      // Reporting beats filing a different number than the card displayed.
-      final d = detail(topupExtra: 20000);
-      expect(d.topupCardRequestAmount(requested: 4000), isNull);
-      expect(d.topupCardRequestAmount(requested: 60000), isNull);
-    });
-
-    test('null when nothing is priceable at all', () {
-      final none = LoanAmountDetail.fromJson(const {
-        'code': '200',
-        'min_topup_amount': 5000,
-        'max_topup_amount': 50000,
-      });
-      expect(none.topupCardRequestAmount(), isNull);
-    });
-  });
-
-  group("step 2's Extra request amount", () {
-    // min 5000 / max 50000 / default 35000 from _amountDetailJson.
-    LoanAmountDetail detail({int? topupExtra, int? defaultTopupAmount}) =>
-        LoanAmountDetail.fromJson(<String, dynamic>{
-          ..._amountDetailJson,
-          'topup_extra': ?topupExtra,
-          'default_topup_amount': ?defaultTopupAmount,
-        });
-
-    test('prefers topup_extra — what the customer was shown they could borrow',
-        () {
+    test('is topup_extra, not default_topup_amount', () {
       expect(detail(topupExtra: 20000).extraRequestAmount, 20000);
     });
 
-    test('falls back to the approved limit when topup_extra is 0', () {
-      expect(detail(topupExtra: 0).extraRequestAmount, 35000);
-      expect(detail().extraRequestAmount, 35000);
+    test('ignores min/max_topup_amount — they bound the top-up product', () {
+      // Regression: MLOAN/ฮฮM680702003NF61X offers topup_extra 2,000 against a
+      // top-up floor of 8,000. Range-checking it filed the top-up total instead.
+      expect(detail(topupExtra: 2000).extraRequestAmount, 2000);
+      expect(detail(topupExtra: 90000).extraRequestAmount, 90000);
     });
 
-    test('falls through when topup_extra is out of the priced range', () {
-      expect(detail(topupExtra: 1000).extraRequestAmount, 35000);
-      expect(detail(topupExtra: 90000).extraRequestAmount, 35000);
-    });
-
-    test('still yields the approved limit when nothing is priceable', () {
-      // Where the deep link reports null, step 2 has a field to fill: show the
-      // limit and let the inline validation message explain why it won't do.
-      final d = detail(topupExtra: 0, defaultTopupAmount: 90000);
-      expect(d.preferredRequestAmount, isNull);
-      expect(d.extraRequestAmount, 90000);
-      expect(d.topupCardRequestAmount(), isNull);
-    });
-
-    test('step 2 and the top-up card agree on the same contract', () {
-      // The two entry points must not quote different amounts — that was the
-      // bug this preference order fixed.
-      for (final extra in [0, 20000, 1000, 90000]) {
-        final d = detail(topupExtra: extra);
-        expect(d.extraRequestAmount, d.topupCardRequestAmount(),
+    test('never substitutes the top-up total', () {
+      for (final extra in [1, 2000, 90000]) {
+        expect(detail(topupExtra: extra).extraRequestAmount, isNot(35000),
             reason: 'topup_extra=$extra');
       }
+    });
+
+    test('0 means no offer, and does not fall back', () {
+      expect(detail(topupExtra: 0).extraRequestAmount, 0);
+      expect(detail().extraRequestAmount, 0);
+      // The deep link reports it as "nothing to request" rather than sending 0.
+      expect(detail(topupExtra: 0).topupCardRequestAmount(), isNull);
+    });
+
+    test('the deep link requests the same offer step 2 does', () {
+      for (final extra in [1, 2000, 20000, 90000]) {
+        final d = detail(topupExtra: extra);
+        expect(d.topupCardRequestAmount(), d.extraRequestAmount,
+            reason: 'topup_extra=$extra');
+      }
+    });
+
+    test('an amount the card passed wins, rounded down to the nearest 100', () {
+      final d = detail(topupExtra: 20000);
+      expect(d.topupCardRequestAmount(requested: 30099), 30000);
+      // No longer refused for being outside min/max — there is no such range.
+      expect(d.topupCardRequestAmount(requested: 4000), 4000);
+      expect(d.topupCardRequestAmount(requested: 60000), 60000);
+      // But nothing is still nothing.
+      expect(d.topupCardRequestAmount(requested: 50), isNull);
     });
   });
 

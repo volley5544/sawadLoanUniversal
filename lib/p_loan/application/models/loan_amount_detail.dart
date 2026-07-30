@@ -113,55 +113,37 @@ class LoanAmountDetail {
   bool isAmountAllowed(int amount) =>
       amount >= minTopupAmount && amount <= maxTopupAmount;
 
-  /// The amount an **Extra** requests by default, or null when neither
-  /// candidate is one the calculator will price.
+  /// The amount a **P-Loan Extra** requests: [topupExtra], exactly.
   ///
-  /// Priority, and why:
+  /// **P-Loan Extra is not a top-up.** It reads the same `/topup/detail` payload
+  /// the top-up card is built from, but the figure it lends is `topup_extra`
+  /// ("วงเงินเพิ่มเติม") and that figure is **fixed** — the customer does not
+  /// choose it, and [defaultTopupAmount] ("วงเงินสินเชื่อใหม่", the top-up
+  /// total) is not a stand-in for it.
   ///
-  /// 1. [topupExtra] (`topup_extra`, "วงเงินเพิ่มเติม") — the headroom the
-  ///    top-up card shows the customer, so it is what they came here expecting
-  ///    to borrow. Often `0`, which is why it cannot be the only source.
-  /// 2. [defaultTopupAmount] ("วงเงินสินเชื่อใหม่") — the contract's approved
-  ///    limit, as the backstop.
+  /// [minTopupAmount] / [maxTopupAmount] are **deliberately not applied.** They
+  /// bound the *top-up* product, and this is a different one. Verified against
+  /// `MLOAN` / `ฮฮM680702003NF61X`: `topup_extra` 2,000 against a top-up floor
+  /// of 8,000, so range-checking the offer would reject every small one and
+  /// quietly file the top-up total (12,000) instead — which is what it did
+  /// before this was understood.
   ///
-  /// Either falls through to the next when out of the priced range: neither is
-  /// a figure the customer asserted, so there is nothing to contradict.
-  ///
-  /// **Both Extra entry points resolve through here** — step 2's pre-fill and
-  /// the top-up-card deep link — so the two can't quote different amounts for
-  /// the same contract.
-  int? get preferredRequestAmount {
-    for (final candidate in [topupExtra, defaultTopupAmount]) {
-      if (candidate > 0 && isAmountAllowed(candidate)) return candidate;
-    }
-    return null;
-  }
+  /// `0` means the contract carries **no offer**; callers gate on that rather
+  /// than request nothing. See [PLoanFlow.isRequestedAmountAllowed].
+  int get extraRequestAmount => topupExtra;
 
-  /// What **step 2** pre-fills and prices for an Extra.
+  /// The amount a **top-up-card deep link** should request, or null when the
+  /// contract carries no offer to request.
   ///
-  /// [preferredRequestAmount] with [defaultTopupAmount] as a last resort: the
-  /// field has to hold *something*, and an unpriceable approved limit still
-  /// renders the range guidance and the inline validation message that say why
-  /// it won't do. The deep link reports null instead — it has no field to show
-  /// and no one to correct it (see [topupCardRequestAmount]).
-  int get extraRequestAmount => preferredRequestAmount ?? defaultTopupAmount;
-
-  /// The amount a **top-up-card deep link** should request, or null when none
-  /// of the candidates is one the calculator will price.
-  ///
-  /// That entry point skips step 2, so the amount is chosen here instead of
-  /// typed. A [requested] figure the card passed explicitly wins, and is
-  /// honoured strictly: if it is out of range this returns null so the caller
-  /// can *report* it, rather than quietly filing a different number than the
-  /// card displayed. That is the opposite of how the
-  /// [preferredRequestAmount] candidates behave, and deliberately so — a
-  /// `requested` value is an assertion, they are defaults.
+  /// That entry point skips step 2, so nothing is typed: it is
+  /// [extraRequestAmount], unless the card passed an explicit [requested]
+  /// figure. That wins, rounded down to the nearest 100 the way step 2 rounds,
+  /// so what is filed is the number the card displayed. There is no range left
+  /// to refuse it against — see [extraRequestAmount] on why min/max don't apply.
   int? topupCardRequestAmount({int? requested}) {
-    if (requested != null) {
-      final rounded = requested - (requested % 100);
-      return isAmountAllowed(rounded) ? rounded : null;
-    }
-    return preferredRequestAmount;
+    final amount =
+        requested != null ? requested - (requested % 100) : extraRequestAmount;
+    return amount > 0 ? amount : null;
   }
 
   factory LoanAmountDetail.fromJson(Map<String, dynamic> json) =>

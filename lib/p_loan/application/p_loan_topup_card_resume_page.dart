@@ -45,8 +45,8 @@ class PLoanTopupCardResumePage extends StatefulWidget {
 
   /// Requested amount, when the card let the customer choose one.
   ///
-  /// Omitted, the amount comes from `/topup/detail` — `topup_extra` first (the
-  /// วงเงินเพิ่มเติม the card displays), then the approved limit. See
+  /// Omitted, the amount is `/topup/detail`'s `topup_extra` — the วงเงินเพิ่มเติม
+  /// the card displays, which is the fixed offer this product lends. See
   /// [LoanAmountDetail.topupCardRequestAmount].
   final int? amount;
 
@@ -133,17 +133,14 @@ class _PLoanTopupCardResumePageState extends State<PLoanTopupCardResumePage> {
         token: token,
       );
 
-      // Defaults to `topup_extra` — the วงเงินเพิ่มเติม the top-up card shows —
-      // falling back to the approved limit when it is 0. See
-      // [LoanAmountDetail.topupCardRequestAmount] for the full priority.
+      // `topup_extra` — the วงเงินเพิ่มเติม the top-up card shows — unless the
+      // card passed an amount. Null means there is no offer on this contract;
+      // min/max_topup_amount are not consulted, so there is no out-of-range
+      // case left to report. See [LoanAmountDetail.extraRequestAmount].
       final requested = detail.topupCardRequestAmount(requested: widget.amount);
       if (requested == null) {
-        setState(() => _error = widget.amount != null
-            ? 'ยอดที่ขอ ${formatMoney(widget.amount)} บาท '
-                'ไม่อยู่ในวงเงินที่อนุมัติ '
-                '(${formatMoney(detail.minTopupAmount)} - '
-                '${formatMoney(detail.maxTopupAmount)} บาท)'
-            : 'ไม่พบวงเงินที่สามารถขอสินเชื่อเพิ่มได้สำหรับสัญญานี้');
+        setState(() => _error =
+            'ไม่พบวงเงินที่สามารถขอสินเชื่อเพิ่มได้สำหรับสัญญานี้');
         return;
       }
 

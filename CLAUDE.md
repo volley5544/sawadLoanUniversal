@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 112 tests (models, payloads, mock-mode guard) — green
+flutter test               # 108 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -393,19 +393,13 @@ calls step 2 makes** from the minimal `db_name` + `contract_no` key, then
 - a refresh reproduces the state rather than resuming a stale copy;
 - it re-checks the three preconditions step 1 checks (`isSelectable`,
   `hasNoRequestYet`, `isEligible`) because it bypasses that screen;
-- the requested amount comes from `LoanAmountDetail.topupCardRequestAmount`,
-  which defers to the shared `preferredRequestAmount`: **`topup_extra`** (the
-  วงเงินเพิ่มเติม the top-up card displays) falling back to
-  `default_topup_amount` — `topup_extra` is `0` more often than not, so it can't
-  be the only source. A `?amount=` the card passes wins over both. **Step 2
-  resolves through the same getter** (`extraRequestAmount`), so the menu path
-  and the deep link cannot quote different amounts for one contract — pinned by
-  a test that compares the two;
-- **an `amount` the card passed is refused, not substituted**, when it is
-  outside `min/max_topup_amount`: step 2 is skipped, so the customer would
-  never see a different figure being filed. The two *derived* candidates do
-  fall through to the next when out of range — neither is a figure the customer
-  asserted, so there is nothing to contradict.
+- the requested amount is `LoanAmountDetail.extraRequestAmount` — **`topup_extra`
+  exactly** — reached via `topupCardRequestAmount`, which only adds the
+  `?amount=` override. Step 2 reads the same getter, so the menu path and the
+  deep link cannot quote different amounts for one contract;
+- **`0` means no offer** and is reported as such rather than requested. There is
+  no fallback to `default_topup_amount` and no range check — see
+  **P-Loan Extra's amount is not the top-up amount** below.
 
 **Native host side** (in the srisawad app, both changes made and **committed**):
 
@@ -481,8 +475,8 @@ Step 1 offers both, and everything after it is the same six screens:
 | --- | --- | --- |
 | What | more money against an existing contract | a fresh personal loan |
 | Step 1 | the contract carousel | the soft-orange card above it |
-| Amount | pre-filled with `topup_extra`, else the approved limit | **starts blank**, customer types it |
-| Bounds | `min/max_topup_amount` | none client-side (see below) |
+| Amount | **fixed** at `topup_extra`, field read-only | **starts blank**, customer types it |
+| Bounds | none — `min/max_topup_amount` are the *top-up* product's | none client-side (see below) |
 | Payout | request − old principal − duty | request − duty |
 | Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
 | Step 4 collateral | read off `/topup/detail` | **customer types it** (see below) |
@@ -522,6 +516,34 @@ customer's existing loan for an amount never approved against it.
 `PLoanFlow.toSubmissionJson()` **throws** for `newLoan` (pinned by
 `test/p_loan_flow_test.dart`) and `PLoanFlow.submitTarget` picks the endpoint;
 step 6 switches on it. A new P-Loan goes to the P-Loan save API below.
+
+**P-Loan Extra's amount is not the top-up amount.** Instructed 2026-07-30:
+*"p-loan extra use same data from topup card but request amount is fixed with
+topup_extra, ignore min max."* So an Extra reads the same `/topup/detail` payload
+the top-up card is built from, and then:
+
+- the request amount **is `topup_extra`**, exactly — `default_topup_amount`
+  ("วงเงินสินเชื่อใหม่", the top-up total) is never substituted for it;
+- it is **fixed**: step 2's field is `readOnly` for an Extra, and the source's
+  min/max range guidance is replaced with a "กำหนดไว้แล้ว" note. The old
+  prepaid-interest lock message went with it — `interest_paid_flag` is no longer
+  *why* the field is read-only, so stating that reason would be wrong;
+- **`min/max_topup_amount` are not applied.** They bound the *top-up* product.
+  `MLOAN` / `ฮฮM680702003NF61X` is the case that proved it: `topup_extra` 2,000
+  against `min_topup_amount` 8,000, so range-checking the offer rejected it and
+  quietly filed the top-up total (12,000) instead. Verified with the live
+  calculator that `/topup/calculator` prices 2,000 happily (6–36 งวด, ฿357/mo at
+  6). `LoanAmountDetail.isAmountAllowed` still exists but nothing in `lib/` gates
+  on it;
+- **`0` means no offer**, not "fall back to something": step 2 blocks with
+  ไม่พบวงเงินเพิ่มเติม and the deep link reports the same.
+
+`PLoanFlow.isRequestedAmountAllowed` therefore range-checks **neither** kind —
+an Extra needs `> 0`, a new loan `>= newLoanMinimumAmount`.
+
+> ⚠ **The payout formula was not changed to match** — see **Outstanding** #8.
+> `payoutAmount` still deducts the old contract's principal for an Extra, which
+> on the contract above gives `2,000 − 7,740 − 1 = −5,741`.
 
 **No invented amount limits.** For a new loan the only client-side rule is
 `PLoanFlow.newLoanMinimumAmount` (100 — the rounding unit). If the real product
@@ -1170,23 +1192,26 @@ reason recorded.
 7. **`branchID` / `branchId` has no source for a new P-Loan.** It comes from the
    contract's `branch_code` for an Extra. Left blank and reported rather than
    guessed; a `?branchId=` launch param or a branch picker would fill it.
-8. **⚠ Confirm `topup_extra` is the amount *any* Extra should request.**
-   Instructed for the deep link on 2026-07-29, then extended to **step 2** on
-   2026-07-30 — so this is now the whole Extra product, not one entry point.
-   Both resolve through `LoanAmountDetail.preferredRequestAmount`
-   (`topup_extra` → `default_topup_amount`), which is what closed the earlier
-   split where the menu path priced `default_topup_amount` and the card priced
-   `topup_extra`.
+8. **⚠ An Extra's payout still deducts the old principal, and now goes negative.**
+   The request amount is the fixed `topup_extra` offer (see **P-Loan Extra's
+   amount is not the top-up amount**), but `PLoanFlow.payoutAmount` was left as
+   `requested − closing_balance − fee_amount` — the *top-up* formula, where a
+   larger new loan closes the old contract. `topup_extra` is smaller than the
+   balance it would have to close, so on `MLOAN` / `ฮฮM680702003NF61X` step 2 and
+   step 6 show **`2,000 − 7,740 − 1 = −5,741`**.
 
-   The **labels still disagree** with the choice: `topup_extra` renders as
-   **วงเงินเพิ่มเติม** on all three screens that show it, while
-   `default_topup_amount` is **วงเงินสินเชื่อใหม่** — and step 2 now displays
-   both rows while pre-filling from the first. Payout stays
-   `requested − closing_balance − duty`, so if `topup_extra` is *additional
-   headroom* rather than the *total new loan*, every Extra now files a smaller
-   loan than it did before, and the payout can even go negative once the old
-   principal exceeds the headroom. Reverting is one line: drop `topupExtra` from
-   the candidate list in `preferredRequestAmount`.
+   Two things say the deduction should go, making it `requested − duty` (what a
+   **new** P-Loan already does):
+
+   - you cannot close a ฿7,740 balance with a ฿2,000 loan, so nothing is being
+     cleared;
+   - `/topup/calculator` prices the 2,000 as a standalone 6–36 งวด schedule
+     rather than as a replacement for the existing one.
+
+   Left unchanged pending confirmation because it moves a **submitted** figure
+   (`POST /topup`'s payout), not just a label. The fix is `payoutAmount` dropping
+   its `isNewPLoan` branch, plus hiding step 2's and step 6's old-principal
+   deduction rows.
 9. **LandAndHouseWeb's button is not built yet** — see **What LandAndHouseWeb
    has to do**. Until it navigates to `srisawad://ploan-extra?…`, the deep link
    is only reachable by typing the URL.
