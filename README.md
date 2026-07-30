@@ -24,7 +24,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 113 tests
+flutter test                                  # 115 tests
 flutter build web --release --pwa-strategy=none
 ```
 

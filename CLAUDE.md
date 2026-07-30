@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 113 tests (models, payloads, mock-mode guard) — green
+flutter test               # 115 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1138,6 +1138,18 @@ mixed content when the app is served over `https:`).
   Returning `null`/`''` = cancelled (resolves with `null`, no error). Requests
   and responses are correlated automatically (no manual id matching).
   `isSupported` is false in a plain browser (no `window.flutter_inappwebview`).
+- **⚠ The host only branches on one action, and it matches exactly.**
+  `_openCameraForAction` does `action.toLowerCase() == 'selfie'` → the
+  `idCardPlusSelfie` framing mask (in-app component) or the **front** camera
+  (`image_picker`); **every other action** — `idcard`, `collateral`,
+  `circleCamera`, the six vehicle angles, anything — falls through to the plain
+  `idCard` mask on the rear camera. So an action name is not free-form: the host
+  vocabulary is `collateral` / `idcard` / `selfie`, and a near-miss fails
+  silently with a wrong-looking camera rather than an error.
+  `PLoanPhoto.selfieWithIdCard` said `selfieCamera` until 2026-07-30 and was
+  getting the rear idCard mask because of it; `test/p_loan_flow_test.dart` now
+  pins the string. Fixing this **web-side** was deliberate — the host fix would
+  need an app release.
 - Compress the photo natively (≈1280px / JPEG ~80) before base64 so the bridge
   stays fast. The full handler code lives in the doc comment of
   `native_bridge.dart`.

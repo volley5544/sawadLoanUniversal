@@ -626,6 +626,22 @@ void main() {
     });
   });
 
+  group('camera actions the host has to recognise', () {
+    test('the selfie slot asks for the idCardPlusSelfie mask', () {
+      // The host compares this literally: `action.toLowerCase() == 'selfie'`
+      // selects the idCardPlusSelfie framing mask and the front camera.
+      // 'selfieCamera' did not match, so it silently got the rear-facing
+      // idCard mask instead.
+      expect(PLoanPhoto.selfieWithIdCard.cameraAction, 'selfie');
+    });
+
+    test('every slot names a non-empty action', () {
+      for (final slot in PLoanPhoto.values) {
+        expect(slot.cameraAction, isNotEmpty, reason: slot.name);
+      }
+    });
+  });
+
   group('NDID subject', () {
     test('the flow can drive the shared NDID screens', () {
       // The bank-select and verify pages take an NdidSubject, so both this flow

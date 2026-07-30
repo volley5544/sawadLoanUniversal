@@ -113,7 +113,13 @@ enum PLoanPhoto {
   selfieWithIdCard(
     payloadKey: 'customer_image_3',
     pLoanGroup: 'customerImage',
-    cameraAction: 'selfieCamera',
+    // Exactly `selfie`, not `selfieCamera`: the host matches this string
+    // literally (`action.toLowerCase() == 'selfie'`) to pick the
+    // `idCardPlusSelfie` framing mask and the **front** camera. Anything else
+    // falls through to the plain `idCard` mask on the rear camera, which is what
+    // `selfieCamera` was silently getting. Pinned by a test — the host's
+    // vocabulary is `collateral` / `idcard` / `selfie`.
+    cameraAction: 'selfie',
     label: 'บังคับถ่ายรูปภาพตนเองคู่กับบัตรประชาชน*',
     missingMessage: 'กรุณาถ่ายรูปตนเองคู่กับบัตรประชาชน',
   );
