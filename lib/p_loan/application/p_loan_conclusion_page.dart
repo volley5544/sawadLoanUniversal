@@ -513,7 +513,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
             ),
             if (detail.topupExtra != 0)
               PLoanAmountRow(
-                label: 'ยอดจัดสินเชื่อพิเศษ',
+                label: 'สินเชื่อวงเงินอเนกประสงค์',
                 value: formatMoney(detail.topupExtra),
                 emphasis: true,
               ),
