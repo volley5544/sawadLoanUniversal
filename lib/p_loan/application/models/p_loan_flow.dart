@@ -11,6 +11,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../../config/app_environment.dart';
 import '../../../models/customer_address.dart';
 import '../../../models/customer_detail.dart';
 import '../../../models/ndid_subject.dart';
@@ -508,15 +509,30 @@ class PLoanFlow implements NdidSubject {
   @override
   String? ndidIdpId;
 
-  /// [NdidSubject.ndidThaiId] — from the profile, which already holds bare
-  /// digits. Falls back to the id read off the card when the profile has none.
-  @override
-  String get ndidThaiId {
+  /// The applicant's own Thai ID, digits only — from the profile, falling back
+  /// to the id read off the card when the profile has none.
+  String get customerThaiIdDigits {
     final fromProfile = (customer?.thaiId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
     return fromProfile.isNotEmpty
         ? fromProfile
         : verifiedThaiId.replaceAll(RegExp(r'[^0-9]'), '');
   }
+
+  /// [NdidSubject.ndidThaiId] — [customerThaiIdDigits], unless a non-prod build
+  /// substitutes the NDID test identity.
+  ///
+  /// The DAP **uat** node only has an identity registered for
+  /// [kNdidTestThaiId], so verifying a real customer there fails for want of an
+  /// IdP rather than for any reason about them. On **prod**
+  /// [AppEnvironment.ndidThaiIdOverride] is null and this is always the
+  /// applicant's own id.
+  ///
+  /// Scoped to NDID deliberately: nothing else reads this getter, so the
+  /// substitution cannot reach `/vision/thai-id-validate` (which checks the
+  /// card against [customerThaiIdDigits]) or any submitted payload.
+  @override
+  String get ndidThaiId =>
+      AppEnvironment.current.ndidThaiIdOverride ?? customerThaiIdDigits;
 
   /// Device location captured at submit time.
   String latitude;

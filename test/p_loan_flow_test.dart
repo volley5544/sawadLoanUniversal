@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sawad_loan_universal/config/app_environment.dart';
 import 'package:sawad_loan_universal/models/customer_detail.dart';
 import 'package:sawad_loan_universal/models/ndid_subject.dart';
 import 'package:sawad_loan_universal/loan_register/models/loan_register_form.dart';
@@ -640,7 +641,27 @@ void main() {
     test('the Thai ID falls back to the card read when the profile has none',
         () {
       final flow = PLoanFlow(hashThaiId: 'H')..verifiedThaiId = '9876543210987';
-      expect(flow.ndidThaiId, '9876543210987');
+      expect(flow.customerThaiIdDigits, '9876543210987');
+    });
+
+    test('prod never substitutes the NDID test identity', () {
+      // The uat DAP node only has an identity for kNdidTestThaiId, so non-prod
+      // builds verify that instead. On prod the applicant's own id is the only
+      // thing NDID may ever be asked about — whatever the define says.
+      expect(AppEnvironment.prod.ndidThaiIdOverride, isNull);
+      expect(AppEnvironment.uat.ndidThaiIdOverride, kNdidTestThaiId);
+    });
+
+    test('the substitution cannot weaken the ID-card check', () {
+      // /vision/thai-id-validate is matched against the profile, not against
+      // ndidThaiId, so a card belonging to the NDID test identity still fails.
+      final flow = _completeFlow()
+        ..customer = CustomerDetail.fromJson(const {'thai_id': '9876543210987'})
+        ..verifiedThaiId = kNdidTestThaiId;
+      expect(flow.isThaiIdVerified, isFalse);
+
+      flow.verifiedThaiId = '9876543210987';
+      expect(flow.isThaiIdVerified, isTrue);
     });
 
     test('a formatted wizard Thai ID is reduced to digits', () {

@@ -81,7 +81,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 111 tests (models, payloads, mock-mode guard) — green
+flutter test               # 113 tests (models, payloads, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -888,6 +888,19 @@ section, mirroring the wizard's step 4: a `RegisterFieldRow` that opens the NDID
 flow and, on success, flips to a green check + banner + ดาวน์โหลดเอกสาร. It sets
 `PLoanFlow.ndidVerified`, which **gates `canSubmit`**.
 
+> ⚠ **Non-prod builds verify a test identity, not the applicant.** The DAP
+> **uat** node only has an identity registered for `1234567890123`, so a real
+> customer's id finds no IdP there and the hop can't be exercised at all. Since
+> 2026-07-30 `PLoanFlow.ndidThaiId` therefore returns
+> `AppEnvironment.current.ndidThaiIdOverride ?? customerThaiIdDigits`, where the
+> override is `kNdidTestThaiId` (`--dart-define=NDID_TEST_THAI_ID`, `''`
+> disables) and is **null on prod unconditionally**. Two tests pin that, and that
+> the substitution can't weaken the ID-card check —
+> `isThaiIdVerified` compares the scanned card to `customer.thaiId`, never to
+> `ndidThaiId`, and no payload carries `ndidThaiId` either. **Delete this once
+> the uat node has real test identities**; it is scaffolding. The wizard's
+> `LoanRegisterForm.ndidThaiId` is untouched (mock data, no backend).
+
 Two deliberate differences from step 4:
 
 - It goes **straight to `ndidBankSelect`**, skipping the wizard's
@@ -1226,6 +1239,14 @@ Credentials that ship in the web bundle, and therefore are **not** secret from
 anyone who opens the app: the Firebase web API key (fine — it grants nothing),
 `kNdidApiKey`, and `kPLoanSaveApiAuth` (**not** fine — a shared service account;
 see **P-Loan save API**).
+
+**One identity check is deliberately weakened off prod.** `kNdidTestThaiId`
+makes non-prod builds run NDID against `1234567890123` rather than the applicant,
+because the uat DAP node has no other registered identity (see **NDID signing**).
+It is env-gated, not define-gated: `AppEnvironment.prod.ndidThaiIdOverride` is
+null whatever the define says, and a test asserts it. The blast radius is NDID
+alone — the ID-card check and every payload still use the customer's own id.
+Remove it when uat gets real test identities.
 
 ## Outstanding (next session starts here)
 
