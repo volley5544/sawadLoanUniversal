@@ -1350,11 +1350,24 @@ minutes blind**. A status flipped on the NDID console during a throttled stretch
 cannot be seen until the window resets, which is the likeliest cause of the
 "status is success but it keeps counting down" report (DNS was the other half).
 
-**Not yet fixed.** The shape to use: 3 s for the first ~30 s (catches the fast
-accept), then ~15 s (≈70/window, safely under), and honour a 429 by waiting out
-`ratelimit-reset`/`Retry-After` instead of hammering. The `AppLifecycleListener`
-resume-poll and the ตรวจสอบสถานะ button already give instant detection at zero
-budget cost, so a longer interval costs much less than it looks.
+**Fixed 2026-07-31.** `ndid_verify_page.dart` now schedules each poll with a
+**single-shot timer that reschedules itself** (not `Timer.periodic`, so the
+interval can change): `_pollFast` 3 s for the first `_fastPhase` 30 s — where
+almost every real accept lands — then `_pollSteady` 15 s. That is ≈70 requests
+per window including `/idp/list` ×2 and the create call, under the limit for a
+full hour. An HTTP 429 sets `_pollAfter429` (60 s) for the next poll and says so
+on screen.
+
+The 429 delay is **fixed rather than read from `ratelimit-reset`**: the host's
+`httpRequest` bridge returns only `{status, body}`, so response headers never
+reach the app. Over-waiting is cheaper than being throttled again.
+
+The slower steady rate costs little because detection no longer depends on the
+timer: the resume-poll and ตรวจสอบสถานะ both check on demand. Note
+`_scheduleNextPoll` measures elapsed time from the **countdown**, not a wall
+clock, and the countdown-expiry branch gates on `_referenceId` rather than
+`_pollTimer.isActive` — a single-shot timer is legitimately inactive between
+polls, so the old check would have skipped the timeout message half the time.
 
 **`POST /rp/verify` sends no `request_type`** (settled 2026-07-31). The field is
 **optional on both gateways** — verified by posting without it to each, which got

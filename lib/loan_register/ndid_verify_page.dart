@@ -38,7 +38,36 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   /// Countdown for the customer to complete verification in their bank app.
   /// Matches the `request_timeout` sent on the real verify request.
   static const Duration _requestTimeout = Duration(hours: 1);
-  static const Duration _pollInterval = Duration(seconds: 3);
+
+  /// Poll cadence, **shaped by the gateway's rate limit**.
+  ///
+  /// The NDID gateway allows **100 requests per 900 s** (`ratelimit-policy:
+  /// 100;w=900`, shared across endpoints — `/rp/verify/{ref}` included). A flat
+  /// 3 s poll is 300 per window: it spent the whole budget in the first 5
+  /// minutes and was throttled for the remaining 10 of every window, leaving the
+  /// page blind for roughly 40 of the 60 countdown minutes. A status flipped
+  /// during a throttled stretch could not be seen until the window reset, which
+  /// is what made an accepted request look like it was still pending.
+  ///
+  /// So: 3 s for the first [_fastPhase] — almost every real accept lands there,
+  /// and a tester on the NDID console is quick — then 15 s. That is ~10 + 60 ≈ 70
+  /// requests per window including `/idp/list` and the create call, comfortably
+  /// under the limit for a full hour.
+  ///
+  /// The slower steady rate costs little, because detection no longer depends on
+  /// the timer alone: [_lifecycle] polls the moment the page is visible again and
+  /// ตรวจสอบสถานะ polls on demand.
+  static const Duration _pollFast = Duration(seconds: 3);
+  static const Duration _pollSteady = Duration(seconds: 15);
+  static const Duration _fastPhase = Duration(seconds: 30);
+
+  /// Cool-off after an HTTP 429.
+  ///
+  /// Fixed rather than read from `ratelimit-reset`: the host's `httpRequest`
+  /// bridge returns only `{status, body}`, so response headers are not available
+  /// to us inside the app. A minute is longer than the window's remainder
+  /// usually is, and over-waiting is cheaper than being throttled again.
+  static const Duration _pollAfter429 = Duration(seconds: 60);
 
   Duration _remaining = _requestTimeout;
   Timer? _timer;
@@ -70,6 +99,10 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
 
   /// Set while a manual ตรวจสอบสถานะ is running.
   bool _checkingNow = false;
+
+  /// Delay to use for the *next* poll instead of the normal cadence, set when a
+  /// poll came back 429.
+  Duration? _nextPollDelay;
 
   String get _citizenId =>
       widget.form?.ndidThaiId ?? '';
@@ -113,15 +146,17 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
         // The two timers used to be independent, so polling outlived the
         // countdown and only stopped if NDID happened to report TIMEOUT. Say so
         // ourselves and stop asking.
-        if (_pollTimer?.isActive ?? false) {
+        //
+        // Gated on _referenceId, not `_pollTimer.isActive`: the poll timer is
+        // single-shot now, so it is legitimately inactive between polls and that
+        // check would have skipped the message half the time.
+        if (_referenceId != null && !_verified) {
           _pollTimer?.cancel();
-          if (!_verified) {
-            setState(() {
-              _pollWarning = null;
-              _error = 'หมดเวลาการยืนยันตัวตน กรุณาทำรายการใหม่';
-              _referenceId = null;
-            });
-          }
+          setState(() {
+            _pollWarning = null;
+            _error = 'หมดเวลาการยืนยันตัวตน กรุณาทำรายการใหม่';
+            _referenceId = null;
+          });
         }
         return;
       }
@@ -148,8 +183,7 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
         _ndidRequestId = req.ndidRequestId;
       });
       _startCountdown();
-      _pollTimer?.cancel();
-      _pollTimer = Timer.periodic(_pollInterval, (_) => _pollStatus());
+      _scheduleNextPoll();
     } on NdidApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -171,6 +205,16 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
       // stop hiding it. A silent failure here is indistinguishable from a
       // customer who hasn't approved yet, which is how a stalled check can look
       // like a normal countdown for a whole hour.
+      if (e.statusCode == 429) {
+        // Rate-limited: the gateway allows 100 requests per 900 s. Slow right
+        // down instead of spending the rest of the window on refusals.
+        _nextPollDelay = _pollAfter429;
+        if (mounted) {
+          setState(() => _pollWarning =
+              'ระบบจำกัดจำนวนการตรวจสอบ กำลังรอสักครู่แล้วลองใหม่...');
+        }
+        return;
+      }
       _pollFailures++;
       if (mounted && _pollFailures >= _pollFailureThreshold) {
         setState(() => _pollWarning =
@@ -207,12 +251,35 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
     }
   }
 
-  /// Check now, rather than at the next 3 s tick.
+  /// Queues the next poll, choosing its own delay.
+  ///
+  /// A single-shot timer that reschedules itself, rather than `Timer.periodic`,
+  /// so the interval can change: fast at first, then steady, and backed off after
+  /// a 429. Elapsed time comes from the countdown rather than a wall clock, since
+  /// the countdown is already the authority on how long this request has run.
+  void _scheduleNextPoll() {
+    _pollTimer?.cancel();
+    if (!mounted || _verified || _referenceId == null) return;
+    final elapsed = _requestTimeout - _remaining;
+    final delay = _nextPollDelay ??
+        (elapsed < _fastPhase ? _pollFast : _pollSteady);
+    _nextPollDelay = null;
+    _pollTimer = Timer(delay, () async {
+      await _pollStatus();
+      _scheduleNextPoll();
+    });
+  }
+
+  /// Check now, rather than waiting for the next scheduled poll.
   Future<void> _checkNow() async {
     if (_checkingNow) return;
     setState(() => _checkingNow = true);
     await _pollStatus();
-    if (mounted) setState(() => _checkingNow = false);
+    if (!mounted) return;
+    setState(() => _checkingNow = false);
+    // Restart the cadence from here, so a manual check doesn't land right on top
+    // of a scheduled one and spend two requests for one answer.
+    _scheduleNextPoll();
   }
 
   void _cancel() {
