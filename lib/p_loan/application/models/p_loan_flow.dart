@@ -731,14 +731,30 @@ class PLoanFlow implements NdidSubject {
         : requestedAmount > 0;
   }
 
-  /// Where a completed application of this kind is filed.
+  /// Where a completed application is filed: **`POST /SavePloanContract`, for
+  /// both kinds** (instructed 2026-07-31 — *"in p-loan extra step 4 we will save
+  /// to https://dev.swpfin.com:8082/SavePloanContract"*).
   ///
-  /// An Extra draws against [contract], which is exactly what `POST /topup`
-  /// books. A new P-Loan does not, so it goes to the P-Loan save API instead —
-  /// see [toSubmissionJson], which refuses to build a top-up body for it.
-  PLoanSubmitTarget get submitTarget => isNewPLoan
-      ? PLoanSubmitTarget.pLoanSaveApi
-      : PLoanSubmitTarget.topup;
+  /// An Extra used to go to `POST /topup`, inherited from the FlutterFlow source
+  /// this flow was forked from — where the whole feature was a top-up request
+  /// wearing P-Loan naming. That was always the open question in this port
+  /// (*"Rename it if that's wrong"*), and the answer is that a P-Loan Extra is a
+  /// **P-Loan contract**, not a top-up of the contract it references: it draws a
+  /// separate `topup_extra` line rather than closing the old loan out. So both
+  /// kinds file with the P-Loan save API and only `refContractNo` distinguishes
+  /// them.
+  ///
+  /// [toSubmissionJson] — the `/topup` body — is therefore no longer on any
+  /// submit path. It is kept, with its tests, because it is the only record of
+  /// that wire format and reverting is one line here.
+  ///
+  /// ⚠ **Two host-side prerequisites, both needing an app release.** The save API
+  /// sends no CORS headers and takes `multipart/form-data`, so inside the app it
+  /// needs (1) the **`httpMultipart` bridge handler**, which the host does not
+  /// implement yet, and (2) `https://dev.swpfin.com:8082/` added to
+  /// `_kHttpRequestAllowedPrefixes`. Until both ship, an Extra submit fails with
+  /// a message naming the missing handler — see `p_loan_contract_api.dart`.
+  PLoanSubmitTarget get submitTarget => PLoanSubmitTarget.pLoanSaveApi;
 
   /// Whether [verifiedThaiId] matches the profile.
   ///

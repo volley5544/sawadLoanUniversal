@@ -153,15 +153,18 @@ class PLoanApi {
     );
   }
 
-  /// Files a **new P-Loan** with the P-Loan save API
-  /// (`POST /SavePloanContract`).
+  /// Files a completed P-Loan application — **either kind** — with the P-Loan
+  /// save API (`POST /SavePloanContract`).
   ///
-  /// A P-Loan Extra uses [submit] instead: it draws against an existing
-  /// contract, which is what `POST /topup` books. Both are real submissions —
-  /// the split is about which product is being filed, not which one works.
+  /// Renamed from `saveNewLoan` on 2026-07-31, when an Extra moved here from
+  /// `POST /topup`: a P-Loan Extra is a P-Loan contract that *references* an
+  /// existing one, not a top-up of it. `refContractNo` is the only field that
+  /// distinguishes the two. See `PLoanFlow.submitTarget`.
+  ///
+  /// [submit] (`POST /topup`) is consequently no longer on any submit path.
   ///
   /// In mock mode **nothing is sent**; a `MOCK-` prefixed reference comes back.
-  static Future<String> saveNewLoan({
+  static Future<String> savePLoanContract({
     required PLoanContractSubmission submission,
   }) {
     if (kPLoanUseMockData) return _mock(mockTransNo());

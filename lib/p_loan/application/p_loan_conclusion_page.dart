@@ -343,11 +343,12 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
 
     setState(() => _submitting = true);
     try {
-      // Two products, two endpoints. An Extra is a top-up of the contract it
-      // was raised against; a new P-Loan is filed with the P-Loan save API,
-      // which is why toSubmissionJson() refuses to build a /topup body for it.
+      // Both kinds file with the P-Loan save API since 2026-07-31 — a P-Loan
+      // Extra is a P-Loan contract referencing an existing one, not a top-up of
+      // it. The `topup` arm is unreachable today; kept so the switch stays
+      // exhaustive and reverting is a one-line change in submitTarget.
       final transNo = switch (_flow.submitTarget) {
-        PLoanSubmitTarget.pLoanSaveApi => await PLoanApi.saveNewLoan(
+        PLoanSubmitTarget.pLoanSaveApi => await PLoanApi.savePLoanContract(
             submission: PLoanContractSubmission.fromFlow(_flow),
           ),
         PLoanSubmitTarget.topup => await PLoanApi.submit(
@@ -407,27 +408,22 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
 
   /// Shows the payload this flow would send.
   ///
-  /// Kind-aware, because the two products post different bodies: a new P-Loan
-  /// is filed with `POST /SavePloanContract` ([PLoanContractSubmission]), an
-  /// Extra with `POST /topup`. For the Extra this previews the
-  /// `regmast_ploan.php` mapping instead, which is what it was written for.
+  /// **No longer kind-aware**: since 2026-07-31 both kinds file with
+  /// `POST /SavePloanContract`, so this previews [PLoanContractSubmission] for
+  /// either. It used to show the `regmast_ploan.php` mapping for an Extra, which
+  /// would now be a preview of a body nothing sends — worse than no preview,
+  /// because a QA check against it would pass while the real payload differed.
   ///
   /// A QA affordance, mirroring the submit form's ดู Payload button, so the
   /// field mapping can be checked against the API's own sample. Only offered in
   /// mock mode — it is not something a customer should see.
   void _previewPLoanPayload() {
-    final isNew = _flow.isNewPLoan;
-    final fields = isNew
-        ? PLoanContractSubmission.fromFlow(_flow).fields
-        : PLoanSubmission.fromFlow(_flow).fields;
-    final images = isNew
-        ? PLoanContractSubmission.fromFlow(_flow).imageGroups
-        : PLoanSubmission.fromFlow(_flow).imageGroups;
-    final unresolved = isNew
-        ? PLoanContractSubmission.fromFlow(_flow).unresolvedFields
-        : PLoanSubmission.fromFlow(_flow).unresolvedFields;
+    final submission = PLoanContractSubmission.fromFlow(_flow);
+    final fields = submission.fields;
+    final images = submission.imageGroups;
+    final unresolved = submission.unresolvedFields;
     final lines = [
-      isNew ? 'POST /SavePloanContract' : 'regmast_ploan.php',
+      'POST /SavePloanContract  (${_flow.kind.shortLabel})',
       '',
       for (final e in fields.entries) '${e.key}: ${e.value}',
       '',

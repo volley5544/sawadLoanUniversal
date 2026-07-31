@@ -260,18 +260,23 @@ void main() {
       expect(fresh.isRequestedAmountAllowed, isTrue);
     });
 
-    test('a new P-Loan refuses to be posted as a top-up', () {
-      // POST /topup books against contract_no. For a new P-Loan that contract
-      // is only a data reference, so building this body would file a top-up of
-      // the customer's existing loan for an amount never approved against it.
-      // It goes to the P-Loan save API instead.
-      final fresh = _completeFlow(kind: PLoanKind.newLoan);
-      expect(fresh.submitTarget, PLoanSubmitTarget.pLoanSaveApi);
-      expect(fresh.toSubmissionJson, throwsStateError);
+    test('both kinds file with the P-Loan save API', () {
+      // Changed 2026-07-31: an Extra used to POST /topup, inherited from the
+      // FlutterFlow source where this flow was a top-up wearing P-Loan naming.
+      // A P-Loan Extra is a P-Loan contract that references an existing one, so
+      // both kinds go to POST /SavePloanContract and only refContractNo differs.
+      expect(_completeFlow().submitTarget, PLoanSubmitTarget.pLoanSaveApi);
+      expect(_completeFlow(kind: PLoanKind.newLoan).submitTarget,
+          PLoanSubmitTarget.pLoanSaveApi);
+    });
 
-      final extra = _completeFlow();
-      expect(extra.submitTarget, PLoanSubmitTarget.topup);
-      expect(extra.toSubmissionJson()['contract_no'], isNotEmpty);
+    test('the /topup body still refuses to be built for a new P-Loan', () {
+      // toSubmissionJson is off the submit path now but kept as the record of
+      // that wire format. Its guard stays: it must never be possible to file a
+      // new P-Loan as a top-up of a contract it was never approved against.
+      expect(_completeFlow(kind: PLoanKind.newLoan).toSubmissionJson,
+          throwsStateError);
+      expect(_completeFlow().toSubmissionJson()['contract_no'], isNotEmpty);
     });
   });
 
@@ -533,11 +538,13 @@ void main() {
           reason: 'but step 4 was skipped on purpose, so they must not gate');
     });
 
-    test('it is an Extra, so it keeps the contract and posts to /topup', () {
+    test('it is an Extra, so it keeps the contract it references', () {
       final card = fromCard();
       expect(card.kind, PLoanKind.extra);
       expect(card.isNewPLoan, isFalse);
-      expect(card.submitTarget, PLoanSubmitTarget.topup);
+      // Files with the P-Loan save API like a new loan; the contract survives
+      // because refContractNo names it and /pdf/loan is keyed by it.
+      expect(card.submitTarget, PLoanSubmitTarget.pLoanSaveApi);
       expect(card.canGenerateDocuments, isTrue,
           reason: 'an Extra has the contract /pdf/loan is keyed by');
     });

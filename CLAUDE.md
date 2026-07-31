@@ -12,7 +12,7 @@ before changing anything:
 | | 5-step loan-register wizard (`lib/loan_register/`) | P-Loan application (`lib/p_loan/application/`) |
 | --- | --- | --- |
 | State | **UI-only.** Renders from `LoanRegisterForm.mock()` | **Live end to end**, no mock fallback |
-| Submits | nowhere — final ถัดไป is a SnackBar | `POST /topup` (Extra) / `POST /SavePloanContract` (new) |
+| Submits | nowhere — final ถัดไป is a SnackBar | `POST /SavePloanContract` (**both** kinds) |
 | Reads | a customer profile + address book | `/user/detail`, `/loan/list`, `/topup/*`, `/pdf/loan`, `/vision/thai-id-validate` |
 
 There is still **no Firebase SDK** in the app — but Firebase is no longer only
@@ -24,15 +24,19 @@ projects, `prod` and `uat` (see Deploy below).
 ## Current state (read this first)
 
 - **The P-Loan application flow is the live one.** Its screens have no mock
-  fallback (fixtures exist behind a default-off define — see **Mock mode**). Both
-  products post to a real endpoint, but only the **Extra** path can currently
-  complete. A **new P-Loan** is blocked on **two** things, both because that
-  product has **no contract** (see *A new P-Loan has no contract at all*):
-  `POST /pdf/loan` can't produce the documents its submit gate needs, and the
-  save endpoint needs a native-host handler that does not exist yet (see
-  **Outstanding** #2). It also **prices steps 2–3 with an interim client-side
-  estimate** — no calculator API yet, and the top-up one can't stand in (see
-  **New-P-Loan pricing (interim)**).
+  fallback (fixtures exist behind a default-off define — see **Mock mode**).
+  **Both kinds now file with `POST /SavePloanContract`** (changed 2026-07-31 — an
+  Extra is a P-Loan contract referencing an existing one, not a top-up of it),
+  and consequently **neither can complete in the app yet**: that endpoint sends
+  no CORS headers, so it needs the host's `httpMultipart` handler, which does not
+  exist (**Outstanding** #2). The Extra path could previously complete via
+  `POST /topup`, so this is a step back until the host ships — a deliberate one,
+  since filing Extras as top-ups was the wrong record.
+  A **new P-Loan** is additionally blocked because it has **no contract** (see
+  *A new P-Loan has no contract at all*): `POST /pdf/loan` can't produce the
+  documents its submit gate needs. It also **prices steps 2–3 with an interim
+  client-side estimate** — no calculator API yet, and the top-up one can't stand
+  in (see **New-P-Loan pricing (interim)**).
 - **The P-Loan Extra has two entry points.** The home menu runs all six steps.
   The **LandAndHouseWeb top-up card** deep-links to `/pLoan/resume`, which
   rebuilds the flow and runs only **3 → 5 → 6** (see **Two entry points**).
@@ -398,7 +402,7 @@ project at `D:\FlutterProject\land_and_house_web_new`. Don't confuse them:
 | --- | --- | --- |
 | What | Internal 34-field data-entry form | Customer-facing 6-step wizard |
 | Source folder | its `lib/p_loan_form_page/` | its `lib/p_loan/` |
-| Submits to | `regmast_ploan.php` (internal IP) | `POST /topup` (Extra) / `POST /SavePloanContract` (new) |
+| Submits to | `regmast_ploan.php` (internal IP) | `POST /SavePloanContract` (both kinds) |
 | Home-menu card | สมัครสินเชื่อ P-Loan | ขอสินเชื่อส่วนบุคคล |
 | Data | Sample/mock values | Live API, no mock fallback |
 
@@ -594,7 +598,7 @@ Step 1 offers both, and everything after it is the same six screens:
 | Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
 | Step 4 collateral | read off `/topup/detail` | **customer types it** (see below) |
 | Step 5 payout account | read off the contract | **customer types it** (see below) |
-| Submits to | `POST /topup` | `POST /SavePloanContract` |
+| Submits to | `POST /SavePloanContract` | `POST /SavePloanContract` |
 
 `PLoanFlow.kind` is set on step 1 and read by every screen after it. The Extra
 path is byte-for-byte what it was; only the new path is new, and only it shows
@@ -623,12 +627,36 @@ Consequences, all load-bearing:
   not a field the flow failed to fill. `branchID`/`branchId` *is* reported —
   the application is filed by some branch, we just have no source for which.
 
-**The two kinds submit to different endpoints, and must.** `POST /topup` books
-against `contract_no`, so posting a new P-Loan there would file a top-up of the
-customer's existing loan for an amount never approved against it.
-`PLoanFlow.toSubmissionJson()` **throws** for `newLoan` (pinned by
-`test/p_loan_flow_test.dart`) and `PLoanFlow.submitTarget` picks the endpoint;
-step 6 switches on it. A new P-Loan goes to the P-Loan save API below.
+**Both kinds submit to `POST /SavePloanContract`** — changed 2026-07-31 on
+instruction (*"in p-loan extra step 4 we will save to
+https://dev.swpfin.com:8082/SavePloanContract"*; step 4 there is the Extra
+numbering, i.e. `p_loan_conclusion_page`).
+
+This settles the question this port was left holding. An Extra went to
+`POST /topup` because the FlutterFlow source it was forked from was a **top-up
+request wearing P-Loan naming** — the note here used to read *"Rename it if
+that's wrong"*. It was wrong: a P-Loan Extra is a **P-Loan contract that
+references an existing one**, not a top-up of it. It draws a separate
+`topup_extra` line rather than closing the old loan out — which is also why
+`payoutAmount` stopped deducting the old principal on 2026-07-30. Now
+`refContractNo` is the only field that separates the two kinds.
+
+`PLoanFlow.submitTarget` returns `pLoanSaveApi` unconditionally, and
+`PLoanApi.saveNewLoan` was renamed **`savePLoanContract`**. Step 6's `switch`
+keeps its unreachable `topup` arm so it stays exhaustive and reverting is one
+line. `toSubmissionJson()` (the `/topup` body) is off every submit path but kept
+with its tests as the record of that wire format — including its guard, which
+still **throws** for `newLoan` so that body can never be built for a product it
+would misfile.
+
+⚠ **Two host prerequisites, both needing an app release** (Outstanding #2): the
+save API sends no CORS headers and takes `multipart/form-data`, so in-app it
+needs the **`httpMultipart` bridge handler** — still not implemented, verified
+2026-07-31 — and `https://dev.swpfin.com:8082/` in
+`_kHttpRequestAllowedPrefixes` (added in the host working tree, uncommitted).
+Until both ship, **an Extra submit fails** with a message naming the handler.
+This is a bigger regression than it looks: the Extra path *could* previously
+complete via `/topup`, and now nothing can submit until the host catches up.
 
 **P-Loan Extra's amount is not the top-up amount.** Instructed 2026-07-30:
 *"p-loan extra use same data from topup card but request amount is fixed with
@@ -1543,12 +1571,17 @@ reason recorded.
 1. **Rotate `agent_web_api_token` and `agent_web_api_token_uat`.** They were
    readable by anyone while the uat rules were open. Closing the rules does not
    un-leak them.
-2. **Implement the `httpMultipart` bridge handler in the host app**
+2. **🚧 Implement the `httpMultipart` bridge handler in the host app**
    (`loan_universal_web_widget.dart`; full snippet in `native_bridge.dart`).
-   Until then **a new-P-Loan submit cannot succeed** — the save endpoint sends no
-   CORS headers, so the browser blocks the upload. The app already fails with a
-   message naming the handler. CORS headers on the endpoint would fix it from the
-   other side instead.
+   **Now blocks *every* submit, not just a new loan** — since 2026-07-31 an Extra
+   files with `POST /SavePloanContract` too, and that endpoint sends no CORS
+   headers, so the browser blocks the upload and the bridge is the only route.
+   Verified still absent 2026-07-31. The app fails with a message naming the
+   handler. Also needs `https://dev.swpfin.com:8082/` in
+   `_kHttpRequestAllowedPrefixes` — added in that repo's working tree,
+   **uncommitted**. CORS headers on the endpoint (or proxying it behind the
+   mobile API, see #3) would fix it from the other side instead, without an app
+   release.
 3. **Do something about `kPLoanSaveApiAuth`.** Proxy `SavePloanContract` behind
    the mobile API, or issue a client-scoped credential. A `--dart-define` moved
    where the value comes from, not who can read it.
@@ -1588,19 +1621,17 @@ reason recorded.
 
 **Open in this repo, deliberately not done:**
 
-11. **🐞 `POST /topup` hardcodes both PDPA consents to `'Y'`.** Found
-    2026-07-30, **not fixed** — it is a behaviour change to a submitted field and
-    was raised rather than slipped in. `toSubmissionJson()`
-    (`p_loan_flow.dart:791-792`) sends `'marketing_consent': 'Y'` and
-    `'sensitive_consent': 'Y'` literally, while step 6's checkboxes write
-    `flow.marketingConsent` / `flow.sensitiveConsent` — which only
-    `PLoanSubmission` and `PLoanContractSubmission` read, and **neither is on the
-    Extra path**. So an Extra files `Y` for **ยินยอมการตลาด** even when the
-    customer declined it. `sensitive_consent` is harmless in practice
-    (`canSubmit` requires it, so it is always true), but marketing is a genuine
-    opt-in, which makes this a PDPA-relevant defect, not a cosmetic one. Fix is
-    two lines: `_yesNo(marketingConsent)` / `_yesNo(sensitiveConsent)`, the same
-    mapping the other two payloads already use.
+11. ~~**🐞 `POST /topup` hardcodes both PDPA consents to `'Y'`.**~~ **No longer
+    reaches a customer**, as of the 2026-07-31 retarget: `toSubmissionJson()` is
+    off every submit path, and `PLoanContractSubmission` — which both kinds now
+    use — maps `marketingConsent`/`sensitiveConsent` through `_yesNo`, so a
+    declined ยินยอมการตลาด goes out as `N` (verified: a dumped Extra payload shows
+    `marketingConsent: "N"`, `sensitiveConsent: "Y"`).
+    The literal `'Y'`s **are still in the code** at
+    `p_loan_flow.dart:791-792`. Left as-is deliberately: that method is the record
+    of the `/topup` wire format, and "fixing" a body nothing sends would only
+    disguise the fact that it is dead. If `/topup` is ever revived, fix it *then* —
+    or delete the method and this note together.
 12. **No live `SavePloanContract` submit has ever run.** Auth, routing and the
     CORS behaviour were verified by probing; the field mapping is verified
     against the API's sample and by tests. One real submit is still needed — it
