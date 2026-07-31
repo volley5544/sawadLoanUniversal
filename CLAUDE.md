@@ -135,12 +135,26 @@ firebase deploy --only hosting -P prod
 
 ### Auto-deploy to uat (`tools/deploy-uat.sh`)
 
-A `Stop` hook in `.claude/settings.local.json` runs `tools/deploy-uat.sh` when
-Claude finishes a turn, so code changes reach uat without asking. Run it by hand
-any time — `tools/deploy-uat.sh [--force]`.
+⚠ **The `Stop` hook this section used to describe is no longer configured.**
+`.claude/settings.local.json` currently holds a `permissions` block and nothing
+else — no `hooks` key — so finishing a turn deploys **nothing**. Verified
+2026-07-31. What actually ships uat today is **CI**: any push to the `uat` branch
+runs `.github/workflows/deploy-uat.yml`, which is why the deployed `WEB_VERSION`
+tracks the GitHub Actions **run number** rather than this script's counter. Run
+`tools/deploy-uat.sh [--force]` by hand when you want a deploy without a push.
 
-Deliberately **not** a `PostToolUse`/`Write|Edit` hook: that fires after every
-single edit and would push dozens of half-finished refactors per task.
+If the hook is restored, note it was deliberately **not** a
+`PostToolUse`/`Write|Edit` hook: that fires after every single edit and would
+push dozens of half-finished refactors per task.
+
+Two consequences of CI owning the deploy, both seen on 2026-07-31:
+
+- **Rapid consecutive pushes cancel each other.** Runs #49 and #50 were 23 s
+  apart; #49 was cancelled and only #50 (the branch tip) shipped. Harmless when
+  the later commit is a superset, which it was — but "cancelled" in the run list
+  is not a failure to chase.
+- The version stamp jumps to whatever the run number is, so `WEB_VERSION` is not
+  contiguous with what `.deploy-version-uat` last recorded.
 
 The script declines to deploy when:
 
@@ -1419,7 +1433,7 @@ reason recorded.
    the mobile API, or issue a client-scoped credential. A `--dart-define` moved
    where the value comes from, not who can read it.
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
-   to match the deployed `WEB_VERSION` (35 as of 2026-07-29), or the host's
+   to match the deployed `WEB_VERSION` (**50** as of 2026-07-31), or the host's
    stale-cache auto-reload never fires.
 5. **`empId` / `mktChannel` / `customerSource`** reach the payload only if the
    host appends them as launch params. They are blank otherwise and reported.
