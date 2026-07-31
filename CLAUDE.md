@@ -1520,8 +1520,9 @@ reason recorded.
     headers (verified — so the `httpRequest` bridge is mandatory and a plain
     browser cannot substitute for it). `_kHttpRequestAllowedPrefixes` in the
     srisawad host's `loan_universal_web_widget.dart` **has been updated**
-    (2026-07-31, committed on `uat` there, *not pushed*) — but like #10 it only
-    reaches a tester in a **new Android/iOS build**. Until that build exists,
+    (2026-07-31) — but it is an **uncommitted working-tree edit on `main`** in
+    that repo, and like #10 it only reaches a tester in a **new Android/iOS
+    build**. Commit/branch it there before it gets lost. Until that build exists,
     every in-app NDID call returns
     `{'status': 0, 'error': 'URL not allowed: …'}`. Two ways to unblock without a
     release: point `ndid_url_base` back at `https://dev.swpfin.com/dap`, or delete
