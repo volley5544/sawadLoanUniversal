@@ -304,6 +304,29 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   full list minus those → not registered) with loading/retry states; a plain
   browser keeps the hardcoded mock banks. The picked IdP node id is stored on
   `form.ndidIdpId` and passed to the verify page.
+
+  **Tiles show the gateway's own logo** (`logo_url` / `has_logo` on `NdidIdp`,
+  added 2026-07-31) via `Image.network(..., webHtmlElementStrategy:
+  WebHtmlElementStrategy.prefer)`. That argument is **load-bearing, not a
+  preference**: the gateway serves logos with no `access-control-allow-*` header
+  *and* its placeholder is an **SVG**, so Flutter web's default byte-fetch path
+  fails twice over — CORS blocks it and `dart:ui` has no SVG decoder. `prefer`
+  puts the image in an HTML `<img>` element, which needs neither. The
+  `httpRequest` bridge cannot substitute: it returns its body as a UTF-8 string,
+  which can't carry a JPEG.
+
+  `has_logo: false` means the shared `_default.svg` (a neutral grey bank glyph) —
+  still displayed, being better than a bare code.
+
+  **The fallback mark is initials, not the node id.** `_toBank` used
+  `idp.id.toUpperCase()`, which read fine on the DAP node (`idp1`) and broke on
+  the uat gateway, whose ids are **UUIDs**: 36 characters in a 44×44 box, clipped
+  across three lines — seen on a real device, and on the *only tappable tile* the
+  test customer had. `_initials()` now takes up to three word-initials from the
+  English name (`Mock Auto 1` → `MA1`), else a 3-grapheme prefix of the Thai name
+  minus the `ธนาคาร` prefix, and the text is `maxLines: 1` + ellipsis so no future
+  value can overflow again. `_knownBankStyles` still supplies the colour/short
+  code for the seven big banks.
 - `ndid_verify_page.dart` — **ยืนยันตัวตน** countdown screen → **ยืนยันตัวตน
   สำเร็จ** (slide 8 frame 5 + final frame). One page, two phases. The bank's own
   app (K+ PIN pad, NDID consent) is **third-party — not rebuilt**. Inside the

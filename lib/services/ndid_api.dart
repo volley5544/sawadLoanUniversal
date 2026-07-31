@@ -216,11 +216,26 @@ class NdidIdp {
     required this.id,
     required this.displayNameTh,
     required this.displayNameEn,
+    this.logoUrl = '',
+    this.hasLogo = false,
   });
 
   final String id;
   final String displayNameTh;
   final String displayNameEn;
+
+  /// Absolute URL of the IdP's logo, served by the gateway itself.
+  ///
+  /// Two things about it decide how the bank grid renders it: the gateway sends
+  /// **no CORS headers**, and when [hasLogo] is false this points at a shared
+  /// `_default.svg` — so it can be an **SVG**. Byte-fetching handles neither,
+  /// which is why the tile displays it through an HTML `<img>` element (see
+  /// `ndid_bank_select_page.dart`).
+  final String logoUrl;
+
+  /// False when [logoUrl] is the gateway's generic placeholder glyph rather than
+  /// this IdP's own artwork. Still worth displaying — it is a clean neutral mark.
+  final bool hasLogo;
 
   factory NdidIdp.fromJson(Map<String, dynamic> json) {
     final en = (json['display_name'] ?? '').toString();
@@ -229,6 +244,8 @@ class NdidIdp {
       id: (json['id'] ?? json['node_id'] ?? '').toString(),
       displayNameTh: th.isNotEmpty ? th : en,
       displayNameEn: en,
+      logoUrl: (json['logo_url'] ?? '').toString(),
+      hasLogo: json['has_logo'] == true,
     );
   }
 }

@@ -35,13 +35,20 @@ class NdidBankSelectPage extends StatefulWidget {
 }
 
 class _NdidBank {
-  const _NdidBank(this.code, this.name, this.color, {this.idpId});
+  const _NdidBank(this.code, this.name, this.color,
+      {this.idpId, this.logoUrl = ''});
+
+  /// Short mark shown when there is no [logoUrl] (or it fails to load). Kept
+  /// deliberately short — it sits in a 44×44 box.
   final String code;
   final String name;
   final Color color;
 
   /// Real NDID node id (e.g. `idp1`) — null for the mock browser-only banks.
   final String? idpId;
+
+  /// Logo served by the NDID gateway; empty for the mock browser-only banks.
+  final String logoUrl;
 }
 
 class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
@@ -121,15 +128,43 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     final haystack = '${idp.displayNameTh} ${idp.displayNameEn}'.toLowerCase();
     for (final s in _knownBankStyles) {
       if (s.keywords.any(haystack.contains)) {
-        return _NdidBank(s.code, name, s.color, idpId: idp.id);
+        return _NdidBank(s.code, name, s.color,
+            idpId: idp.id, logoUrl: idp.logoUrl);
       }
     }
     return _NdidBank(
-      idp.id.toUpperCase(),
+      _initials(idp),
       name,
       LoanRegisterStyles.primary,
       idpId: idp.id,
+      logoUrl: idp.logoUrl,
     );
+  }
+
+  /// Short mark for an IdP outside [_knownBankStyles], used when its logo is
+  /// missing or fails to load.
+  ///
+  /// This used to be `idp.id.toUpperCase()`, which was fine on the DAP node
+  /// (`idp1`, `idp2`) and broke on the uat gateway, whose ids are **UUIDs**: a
+  /// 36-character string in a 44×44 box overflowed its tile. Initials come from
+  /// the name instead, which is what a reader can actually match to the label
+  /// underneath.
+  static String _initials(NdidIdp idp) {
+    final en = idp.displayNameEn.trim();
+    if (RegExp(r'[A-Za-z]').hasMatch(en)) {
+      final letters = en
+          .split(RegExp(r'[\s.()\-]+'))
+          .where((w) => w.isNotEmpty && RegExp(r'^[A-Za-z0-9]').hasMatch(w))
+          .take(3)
+          .map((w) => w[0].toUpperCase())
+          .join();
+      if (letters.isNotEmpty) return letters;
+    }
+    // Thai names have no word breaks to take initials from, so a short prefix
+    // of the name is the best available mark.
+    final th = idp.displayNameTh.replaceFirst('ธนาคาร', '').trim();
+    if (th.isNotEmpty) return th.characters.take(3).toString();
+    return '—';
   }
 
   static const List<_BankStyle> _knownBankStyles = [
@@ -268,6 +303,62 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     );
   }
 
+  /// The 44×44 square at the top of a tile: the IdP's own logo when the gateway
+  /// gives one, else a coloured box with [_NdidBank.code].
+  ///
+  /// **Why `webHtmlElementStrategy: prefer`.** The gateway serves these logos
+  /// with **no** `access-control-allow-*` headers, and the placeholder one is an
+  /// **SVG** — so Flutter web's default byte-fetch path fails twice over (CORS
+  /// blocks it, and there is no SVG decoder in `dart:ui`). `prefer` displays the
+  /// image in an HTML `<img>` element instead, which needs no CORS and renders
+  /// SVG natively. The bridge is no help here: `httpRequest` returns its body as
+  /// a UTF-8 string, which cannot carry a JPEG.
+  ///
+  /// Off web, and if the element approach fails too, [_codeMark] takes over —
+  /// so a tile is never blank.
+  Widget _bankMark(_NdidBank bank) {
+    if (bank.logoUrl.isEmpty) return _codeMark(bank);
+    return Container(
+      width: 44,
+      height: 44,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: LoanRegisterStyles.cardBorder),
+      ),
+      child: Image.network(
+        bank.logoUrl,
+        fit: BoxFit.contain,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+        errorBuilder: (_, _, _) => _codeMark(bank),
+      ),
+    );
+  }
+
+  Widget _codeMark(_NdidBank bank) {
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bank.color,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        bank.code,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.notoSansThai(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
   Widget _bankTile(_NdidBank bank, {required bool enabled}) {
     final bool isSelected = enabled && identical(_selected, bank);
     return Opacity(
@@ -290,24 +381,7 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
           ),
           child: Column(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: bank.color,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  bank.code,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              _bankMark(bank),
               const SizedBox(height: 6),
               Text(
                 bank.name,
