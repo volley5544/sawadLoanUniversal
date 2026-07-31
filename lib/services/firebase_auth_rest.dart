@@ -89,6 +89,9 @@ class FirebaseAuthRest {
         Uri.parse('$_signUpUrl?key=$key'),
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'returnSecureToken': true}),
+        // Google's identity endpoint is CORS-enabled and is not on the host's
+        // bridge allowlist, so the bridge would reject it — see sendApiRequest.
+        bypassHostBridge: true,
       );
     } on ApiTransportException catch (e) {
       lastError = 'anonymous sign-in unreachable: ${e.message}';

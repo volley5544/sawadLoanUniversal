@@ -84,6 +84,11 @@ class AppConfigApi {
         'GET',
         url,
         headers: {'Authorization': 'Bearer $idToken'},
+        // Firestore's REST API is CORS-enabled (it allows the `authorization`
+        // header on preflight) and is not on the host's bridge allowlist, so
+        // going through the bridge made this read fail inside the app and the
+        // config resolve empty — see sendApiRequest.
+        bypassHostBridge: true,
       );
     } on ApiTransportException catch (e) {
       lastError = 'config unreachable: ${e.message}';

@@ -9,6 +9,8 @@ import 'router/app_router.dart';
 import 'router/url_strategy.dart';
 import 'services/app_config_api.dart';
 import 'services/native_bridge.dart';
+import 'services/ndid_api.dart';
+import 'services/srisawad_api.dart';
 import 'services/user_api.dart';
 
 late AppState appState;
@@ -83,11 +85,22 @@ Future<void> _loadRuntimeConfig() async {
     // ignore: avoid_print — intentional: surface in the WebView console.
     print('[SawadLoanUniversal] app config: $error '
         '(falling back to ${AppEnvironment.current.mobileApiBase})');
-    return;
+  } else {
+    // ignore: avoid_print
+    print('[SawadLoanUniversal] app config loaded from $kAppConfigPath');
   }
+
+  // Log the endpoints as *resolved*, not just the raw config, and label whether
+  // each came from the document or the compile-time default. A silent fallback
+  // to the built-in gateway is what let NDID keep talking to the old node for a
+  // whole uat cycle: the config read was being rejected by the host bridge, but
+  // nothing on screen or in the console said which URL was actually in use.
   // ignore: avoid_print
-  print('[SawadLoanUniversal] app config loaded from $kAppConfigPath — '
-      'api base ${config.apiUrlBase}');
+  print('[SawadLoanUniversal] endpoints: '
+      'mobile=${await SrisawadApi.baseUrl()}'
+      '${config.apiUrlBase == null ? ' (default)' : ' (config)'} '
+      'ndid=${await NdidApi.baseUrl()}'
+      '${config.ndidUrlBase == null ? ' (default)' : ' (config)'}');
 }
 
 /// Loads the customer profile (`/user/detail`) and address book

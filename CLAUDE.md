@@ -1081,6 +1081,24 @@ value first, compile-time define as the degrade-to:
 as `https://host/` can't produce `//idp/list`. Any other key in the map is
 reachable through `urlFor` without a code change.
 
+- ⚠ **The config read and its sign-in deliberately bypass the host bridge**
+  (`bypassHostBridge: true`, added 2026-07-31). This is the fix for a bug worth
+  understanding, because the failure mode was **silence**: `sendApiRequest` routes
+  everything through the host's `httpRequest` handler when
+  `NativeCameraBridge.isSupported`, and that handler only calls allowlisted
+  prefixes — which never included `firestore.googleapis.com` or
+  `identitytoolkit.googleapis.com`. So **inside the app the config had never
+  loaded at all**: sign-in was rejected, `idToken()` returned null, `AppConfig`
+  resolved empty, and every caller silently used its compile-time endpoint.
+  Nothing looked wrong for days because uat's `api_url_base` *equals*
+  `AppEnvironment.uat.mobileApiBase`. It only surfaced when `ndid_url_base` named
+  a **different** host and the NDID bank grid kept showing the old DAP node's
+  `idp1/idp2/idp4`. Google's APIs are CORS-enabled (their preflight allows the
+  `authorization` header — verified), so a direct fetch is the right transport and
+  needed no app release. **Never set that flag for the NDID gateway or the P-Loan
+  save API** — neither sends CORS headers, so for those the bridge is the only
+  way. `main.dart` now also logs the **resolved** endpoints with a
+  `(config)`/`(default)` label, which is what would have caught this on day one.
 - **No Firebase SDK** — it's a plain `GET` against the Firestore REST API
   through the usual `sendApiRequest` transport, with
   `services/firestore_rest.dart` unwrapping the typed-value format
@@ -1528,21 +1546,27 @@ reason recorded.
     (`[12,24,36,48,60]`) live at the top of it.
 21. **A new P-Loan's ID-card expiry check uses the device clock**, since the
     server clock it should use rides on the contract. See `_isExpired`.
-22. **🚧 An app release is what now stands between uat and a real NDID test.**
-    The uat config points NDID at `https://uat.ndid.srisawadpower.com`, which the
-    host must allowlist because the gateway sends **no** `access-control-allow-*`
-    headers (verified — so the `httpRequest` bridge is mandatory and a plain
-    browser cannot substitute for it). `_kHttpRequestAllowedPrefixes` in the
-    srisawad host's `loan_universal_web_widget.dart` **has been updated**
-    (2026-07-31) — but it is an **uncommitted working-tree edit on `main`** in
-    that repo, and like #10 it only reaches a tester in a **new Android/iOS
-    build**. Commit/branch it there before it gets lost. Until that build exists,
-    every in-app NDID call returns
-    `{'status': 0, 'error': 'URL not allowed: …'}`. Two ways to unblock without a
-    release: point `ndid_url_base` back at `https://dev.swpfin.com/dap`, or delete
-    the key (the build then falls back to `kNdidApiBase`, the same host) — but
-    note the DAP node no longer has an identity this build will ask about, since
-    the test-identity substitution is gone.
+22. **🚧 An app release is what stands between uat and a real NDID test — and
+    in-app NDID is unusable until then.** The uat config points NDID at
+    `https://uat.ndid.srisawadpower.com`, which the host **must** allowlist
+    because that gateway sends no `access-control-allow-*` headers (verified), so
+    the bridge is mandatory and a plain browser cannot substitute — outside the
+    host the bank-select page loads its **mock** grid, not the real API.
+    `_kHttpRequestAllowedPrefixes` in the srisawad host's
+    `loan_universal_web_widget.dart` has been updated with that host plus the two
+    Google API hosts, but it is an **uncommitted working-tree edit on `main`** in
+    that repo — commit/branch it before it is lost, and note only a new
+    Android/iOS build carries it (same constraint as #10).
+
+    Meanwhile the current state, confirmed on a real device 2026-07-31 with
+    `1160200006026`: the app falls back to the DAP gateway, whose full list at
+    2.3/2.2 is `idp1/idp2/idp4`, and the registered grid is **empty** because the
+    real customer id is now sent and DAP only ever knew `1234567890123`. So
+    **no** customer can complete NDID in the app right now. That is the cost of
+    retiring the test identity before the new gateway became reachable; it was
+    accepted knowingly. A stopgap, if testing can't wait for the build: point
+    `ndid_url_base` back at `https://dev.swpfin.com/dap` **and** reinstate a
+    test-identity path — both, since either alone still fails.
 
 ## Conventions
 

@@ -31,14 +31,34 @@ class ApiTransportException implements Exception {
 /// URLs it will call, see `native_bridge.dart`). In a plain browser it falls
 /// back to a regular `http` fetch, which works only against CORS-enabled
 /// endpoints.
+///
+/// Set [bypassHostBridge] to skip the bridge even inside the host, for an
+/// endpoint that is **known CORS-enabled and not on the host's allowlist**.
+///
+/// That combination is not hypothetical: the runtime-config read
+/// (`firestore.googleapis.com`) and the anonymous sign-in it needs
+/// (`identitytoolkit.googleapis.com`) are both absent from
+/// `_kHttpRequestAllowedPrefixes`, so routing them through the bridge returned
+/// `URL not allowed` and the config silently resolved **empty** — every caller
+/// then fell back to its compile-time endpoint. That went unnoticed for days
+/// because uat's `api_url_base` equals the compile-time `mobileApiBase`; it only
+/// surfaced when `ndid_url_base` named a *different* host and NDID kept talking
+/// to the old gateway. Google's APIs answer preflights with
+/// `access-control-allow-origin` + `access-control-allow-headers: authorization`
+/// (verified), so a direct fetch is the correct transport for them and needs no
+/// host release to start working.
+///
+/// Do **not** set this for the NDID gateway or the P-Loan save API — neither
+/// sends CORS headers, so the bridge is the only way to reach them.
 Future<ApiHttpResult> sendApiRequest(
   String method,
   Uri url, {
   Map<String, String>? headers,
   String? body,
   Duration timeout = const Duration(seconds: 30),
+  bool bypassHostBridge = false,
 }) async {
-  if (NativeCameraBridge.isSupported) {
+  if (NativeCameraBridge.isSupported && !bypassHostBridge) {
     final Map<String, dynamic>? res;
     try {
       res = await NativeCameraBridge.sendHttpRequest(
