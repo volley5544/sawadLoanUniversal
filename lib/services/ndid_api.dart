@@ -67,11 +67,12 @@ class NdidApi {
   static Future<Uri> _uri(String path) async =>
       Uri.parse('${await baseUrl()}$path');
 
-  /// `request_type` for [createVerifyRequest]: the Firestore config's
-  /// `ndid_request_type`, else [kNdidRequestType].
+  /// Optional `request_type` for [createVerifyRequest]: the Firestore config's
+  /// `ndid_request_type`, else [kNdidRequestType]. **Empty means send no
+  /// `request_type` at all**, which is the default and what uat wants.
   ///
-  /// Resolved the same way — and from the same document — as [baseUrl], because
-  /// the two must move together: each gateway publishes its own valid set at
+  /// Resolved from the same document as [baseUrl] because, when set, the two must
+  /// move together: each gateway publishes its own valid set at
   /// `GET /request-types` and they don't overlap.
   static Future<String> requestType() async {
     final config = await AppConfigApi.ensureLoaded();
@@ -132,6 +133,8 @@ class NdidApi {
   /// Asks for [NdidApi.minIal] / [NdidApi.minAal] — the same levels [listIdps]
   /// filtered the chosen IdP by, so the bank is verified at the bar it was
   /// offered under.
+  ///
+  /// Sends **no `request_type`** unless one is configured — see [requestType].
   static Future<NdidVerifyRequest> createVerifyRequest({
     required String identifier,
     required String idpId,
@@ -151,7 +154,9 @@ class NdidApi {
       'mode': 2,
       'bypass_identity_check': false,
       'request_timeout': requestTimeoutSeconds,
-      'request_type': type,
+      // Omitted unless configured — neither gateway requires it, and uat does
+      // not use it. See [kNdidRequestType].
+      if (type.isNotEmpty) 'request_type': type,
     });
     if (json is! Map<String, dynamic> || json['reference_id'] == null) {
       throw NdidApiException('Unexpected /rp/verify response: $json');

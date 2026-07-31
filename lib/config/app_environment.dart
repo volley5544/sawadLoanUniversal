@@ -52,37 +52,39 @@ const String kNdidApiBase = String.fromEnvironment(
   defaultValue: 'https://dev.swpfin.com/dap',
 );
 
-/// `request_type` sent with `POST /rp/verify`.
+/// Optional `request_type` for `POST /rp/verify`. **Empty means omit the field**,
+/// which is the default.
 ///
-/// **This is per-gateway, and the valid sets do not overlap.** Each NDID
-/// environment publishes its own list at `GET /request-types`, and a value
-/// outside it is refused with `20091 - Invalid request type`:
+/// The field is not required by either gateway — verified 2026-07-31 by posting
+/// without it to both, which got past validation to `20005 - No IdP found` in
+/// each case. UAT does not use it, so we don't send it.
+///
+/// It stays configurable because when it *is* sent it must match the gateway:
+/// each NDID environment publishes its own list at `GET /request-types`
+/// (`NdidApi.listRequestTypes()`), the sets do **not** overlap, and a value
+/// outside them is refused with `20091 - Invalid request type`:
 ///
 /// | Gateway | Valid values |
 /// | --- | --- |
 /// | `dev.swpfin.com/dap` (SIT) | `Authen Only`, `TestRequestType`, `dContract` |
 /// | `uat.ndid.srisawadpower.com` | `dsign.accountopening`, `dsign.dcontract`, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
 ///
-/// The default suits the current uat gateway and our purpose — the customer is
-/// signing a loan contract, so `dsign.dcontract`. It moved from a hardcoded
-/// `'Authen Only'` on 2026-07-31, which the SIT node accepted and this one
-/// rejects.
+/// That mismatch is exactly what broke the hop earlier the same day: the body
+/// carried a hardcoded `'Authen Only'`, which SIT accepts and uat rejects.
 ///
 /// Overridable per build, and at runtime by `ndid_request_type` in the Firestore
-/// config, because it has to track whatever [kNdidApiBase] / `ndid_url_base`
-/// points at:
+/// config, so it can track whatever [kNdidApiBase] / `ndid_url_base` points at:
 ///
 /// ```sh
-/// flutter build web ... --dart-define=NDID_REQUEST_TYPE='Authen Only'
+/// flutter build web ... --dart-define=NDID_REQUEST_TYPE='Authen Only'   # SIT
 /// ```
 ///
-/// ⚠ Passing validation is not the same as being the *right* type: it selects an
-/// NDID service, so it can affect the consent wording the IdP shows and how the
-/// request is billed. Confirm `dsign.dcontract` vs `dsign.dcontract.public` with
-/// the DAP/NDID team — this is now a one-value change either way.
+/// ⚠ Setting one is not free: `request_type` names an NDID service, so it can
+/// change the consent wording the IdP shows and how the request is billed. Get
+/// the value from the DAP/NDID team rather than picking a plausible-looking one.
 const String kNdidRequestType = String.fromEnvironment(
   'NDID_REQUEST_TYPE',
-  defaultValue: 'dsign.dcontract',
+  defaultValue: '',
 );
 
 /// API key for the NDID local-node API, sent as an `X-API-Key` header on

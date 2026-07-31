@@ -1285,31 +1285,34 @@ node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
 web build can't keep it secret from clients anyway).
 
-**`request_type` is per-gateway and config-driven too** (2026-07-31).
-`POST /rp/verify` sent a hardcoded `'Authen Only'`, which the SIT node accepts
-and the uat gateway refuses with **`20091 - Invalid request type`** — hit on a
-real device right after the bank grid started working. Each environment
-publishes its own set at **`GET /request-types`** (wired as
-`NdidApi.listRequestTypes()`, kept purely as the diagnostic for a 20091), and the
+**`POST /rp/verify` sends no `request_type`** (settled 2026-07-31). The field is
+**optional on both gateways** — verified by posting without it to each, which got
+past validation to `20005 - No IdP found` in both cases — and uat does not use
+it, so it is omitted.
+
+It got here the hard way. The body carried a hardcoded `'Authen Only'`, which the
+SIT node accepts and the uat gateway refuses with **`20091 - Invalid request
+type`** (hit on a real device right after the bank grid started working). Each
+environment publishes its own set at **`GET /request-types`** — wired as
+`NdidApi.listRequestTypes()`, kept purely as the diagnostic for a 20091 — and the
 sets are **disjoint**:
 
 | Gateway | Valid values |
 | --- | --- |
 | `dev.swpfin.com/dap` (SIT) | `Authen Only`, `TestRequestType`, `dContract` |
-| `uat.ndid.srisawadpower.com` | `dsign.accountopening`, **`dsign.dcontract`**, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
+| `uat.ndid.srisawadpower.com` | `dsign.accountopening`, `dsign.dcontract`, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
 
-So it resolves like the base URL and **must move with it**: `ndid_request_type`
-(top level of the config document, *not* inside `api_url` — it isn't a URL) →
-`kNdidRequestType` (`--dart-define=NDID_REQUEST_TYPE`, default
-`dsign.dcontract`). Pointing `ndid_url_base` at a different gateway without
-changing this earns a 20091.
+Because those don't overlap, the seam is **kept but opt-in** rather than deleted:
+`ndid_request_type` (top level of the config document, *not* inside `api_url` — it
+isn't a URL) → `kNdidRequestType` (`--dart-define=NDID_REQUEST_TYPE`), and
+**empty — the default — omits the key entirely**. So SIT stays reachable by
+setting one value, with no code change, and pointing `ndid_url_base` at a gateway
+whose list differs can't silently send a wrong type.
 
-⚠ Validation passing is not the same as the type being *right*: it names an NDID
-service, so it can change the consent wording the IdP shows and how the request
-is billed. **`dsign.dcontract` vs `dsign.dcontract.public` is unconfirmed** with
-the DAP/NDID team — chosen because the customer is signing a loan contract, and
-verified only insofar as `POST /rp/verify` accepted it (it then failed at
-`20005 - No IdP found`, which is the expected error for an identity with no IdP).
+⚠ If you ever do set one, get it from the DAP/NDID team. `request_type` names an
+NDID service, so it can change the consent wording the IdP shows the customer and
+how the request is billed — "the gateway accepted it" is not evidence it is the
+right one.
 
 **Base URL is config-driven** (since 2026-07-31), the same shape as
 `SrisawadApi.baseUrl()`: `NdidApi.baseUrl()` resolves

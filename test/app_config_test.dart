@@ -123,9 +123,10 @@ void main() {
     });
 
     test('absent or blank falls through to the compile-time default', () {
-      // NdidApi.requestType() resolves `ndidRequestType ?? kNdidRequestType`.
-      // Getting this wrong is a 20091 - Invalid request type, not a fallback to
-      // something harmless.
+      // NdidApi.requestType() resolves `ndidRequestType ?? kNdidRequestType`,
+      // whose default is '' — and an empty value omits `request_type` from the
+      // /rp/verify body entirely, which is what uat wants. Sending the wrong one
+      // is a 20091 - Invalid request type, so silence beats a guess.
       expect(const AppConfig().ndidRequestType, isNull);
       expect(
         AppConfig.fromDecoded(const {'ndid_request_type': '  '})
