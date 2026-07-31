@@ -763,6 +763,13 @@ Structure:
   `lastest_date` (latest), `car_chassisNo`/`car_engineNo` mixed case, and
   camelCase keys inside `installments[]` while everything around them is
   snake_case. `/pdf/loan` also wants `x-srisawad: x1_c3Jpc2F3YWQ`, not `x1`.
+- **Step 5 (Extra 3) leads with `ข้อมูลส่วนตัว` → `ชื่อ-สกุล`** (added
+  2026-07-31), above the `ข้อมูลโทรศัพท์` section. Its own header rather than a
+  second row under the phone one, since a name is not phone data. The value is
+  `CustomerDetail.fullName` — first + last, **no `คำนำหน้า`**, matching the label
+  — and it is the same getter the new-loan payout-holder default and
+  `PLoanFlow.bankAccountName` read, so one customer cannot render two ways on
+  the same flow. Read-only for both kinds, like the phone and addresses.
 - `components/p_loan_components.dart` — money/date formatters, **`formatPhone`**
   (groups a phone as `###-###-####` for the เบอร์โทรศัพท์ row on step 5 —
   `0863652156` → `086-365-2156`. Only a bare 10-digit run is touched; a 9-digit

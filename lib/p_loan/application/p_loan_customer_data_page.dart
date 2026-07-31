@@ -15,12 +15,13 @@ import '../../services/user_api.dart';
 import 'components/p_loan_components.dart';
 import 'models/p_loan_flow.dart';
 
-/// **Step 5 — ตรวจสอบข้อมูลส่วนตัว.** Review of the payout account, phone
-/// number and the four registered addresses, then a confirmation sheet.
+/// **Step 5 — ตรวจสอบข้อมูลส่วนตัว** (step **3** on the Extra path).
+/// Review of the name, payout account, phone number and the four registered
+/// addresses, then a confirmation sheet.
 ///
-/// The phone and addresses are the customer's own record and stay read-only
-/// for both products — "ไม่ถูกต้อง" points at the branch, which is what can
-/// actually change them.
+/// The name, phone and addresses are the customer's own record and stay
+/// read-only for both products — "ไม่ถูกต้อง" points at the branch, which is
+/// what can actually change them.
 ///
 /// **The payout account is read-only for an Extra and editable for a new
 /// P-Loan.** An Extra pays into the account already registered against the
@@ -209,6 +210,16 @@ class _PLoanCustomerDataPageState extends State<PLoanCustomerDataPage> {
               logoBytes: decodeBase64Image(_flow.bankLogoBase64),
             ),
           ],
+          const PLoanSectionHeader('ข้อมูลส่วนตัว'),
+          PLoanAmountRow(
+            label: 'ชื่อ-สกุล',
+            // firstName + lastName, matching the label — the คำนำหน้า
+            // (`customer.title`) is deliberately left out, and `fullName` is the
+            // same getter step 5's payout-holder default and `PLoanFlow
+            // .bankAccountName` use, so one customer can't read two ways.
+            value: customer?.fullName ?? '',
+            showDivider: false,
+          ),
           const PLoanSectionHeader('ข้อมูลโทรศัพท์'),
           PLoanAmountRow(
             label: 'เบอร์โทรศัพท์',
