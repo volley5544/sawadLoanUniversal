@@ -11,7 +11,6 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../../../config/app_environment.dart';
 import '../../../models/customer_address.dart';
 import '../../../models/customer_detail.dart';
 import '../../../models/ndid_subject.dart';
@@ -524,21 +523,19 @@ class PLoanFlow implements NdidSubject {
         : verifiedThaiId.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
-  /// [NdidSubject.ndidThaiId] — [customerThaiIdDigits], unless a non-prod build
-  /// substitutes the NDID test identity.
+  /// [NdidSubject.ndidThaiId] — **always the applicant's own id**.
   ///
-  /// The DAP **uat** node only has an identity registered for
-  /// [kNdidTestThaiId], so verifying a real customer there fails for want of an
-  /// IdP rather than for any reason about them. On **prod**
-  /// [AppEnvironment.ndidThaiIdOverride] is null and this is always the
-  /// applicant's own id.
+  /// Until 2026-07-31 non-prod builds substituted a fixed test identity here,
+  /// because the DAP uat node had an identity registered for only one Thai ID
+  /// and a real customer therefore found no IdP to verify against. The uat NDID
+  /// gateway now carries real identities, so the substitution is gone: every
+  /// environment asks NDID about the person in front of it.
   ///
-  /// Scoped to NDID deliberately: nothing else reads this getter, so the
-  /// substitution cannot reach `/vision/thai-id-validate` (which checks the
-  /// card against [customerThaiIdDigits]) or any submitted payload.
+  /// Consequence worth expecting on uat: a customer who has not onboarded with
+  /// any IdP gets **empty bank grids** rather than a mock one. That is the node
+  /// answering truthfully, not a bug in this flow.
   @override
-  String get ndidThaiId =>
-      AppEnvironment.current.ndidThaiIdOverride ?? customerThaiIdDigits;
+  String get ndidThaiId => customerThaiIdDigits;
 
   /// Device location captured at submit time.
   String latitude;

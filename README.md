@@ -208,9 +208,10 @@ It then ends with an **NDID** hop — the customer signs the contract documents
 with their bank identity, reusing the wizard's own NDID screens (they take a
 `NdidSubject`, which both flows implement). It gates the submit. `/idp/list` and
 `/rp/verify` share one pair of assurance levels (`NdidApi.minIal` 2.3 /
-`minAal` 2.2), and **non-prod builds verify a test identity** rather than the
-applicant, because the uat DAP node has no other registered one — prod always
-uses the customer's own id.
+`minAal` 2.2), and **every environment verifies the applicant's own Thai ID**.
+The non-prod test-identity substitution was deleted on 2026-07-31 once the uat
+gateway gained real identities; a customer who has onboarded with no IdP now
+correctly gets an empty "registered" bank grid instead of a usable mock one.
 
 API endpoints are read at startup from the Firestore document
 **`application/public_config`** — the mobile API from `api_url.api_url_base` and

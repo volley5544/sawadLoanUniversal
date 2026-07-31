@@ -60,27 +60,16 @@ const String kNdidApiKey = String.fromEnvironment(
   defaultValue: 'ndid_Gl_dI1z8JCeHebNbnyzICvpCep3KHLYY1oeDHjfNTXI',
 );
 
-/// Thai ID the **DAP NDID uat node** has a registered identity for.
-///
-/// That environment only knows `1234567890123`. Verifying a real customer's id
-/// against it can't work — `POST /idp/list` returns no IdP holding that identity
-/// and `POST /rp/verify` has nobody to ask — so the NDID hop could not be
-/// exercised on uat at all. The P-Loan flow substitutes this id so it can be.
-///
-/// ```sh
-/// flutter build web ... --dart-define=NDID_TEST_THAI_ID=''      # disable
-/// flutter build web ... --dart-define=NDID_TEST_THAI_ID=1234... # a different one
-/// ```
-///
-/// **⚠ This makes NDID verify a different person than the applicant.** It is
-/// therefore gated to non-prod by [AppEnvironment.ndidThaiIdOverride], which
-/// returns null on prod whatever this is set to, and
-/// `test/p_loan_flow_test.dart` pins that. Delete this the day the uat node has
-/// real test identities — it is scaffolding, not a feature.
-const String kNdidTestThaiId = String.fromEnvironment(
-  'NDID_TEST_THAI_ID',
-  defaultValue: '1234567890123',
-);
+// Removed 2026-07-31: `kNdidTestThaiId` / `NDID_TEST_THAI_ID`.
+//
+// It made non-prod builds run NDID against a fixed test id (`1234567890123`)
+// instead of the applicant, because the DAP uat node had a registered identity
+// for only that one Thai ID. The uat NDID gateway now carries real identities
+// (`api_url.ndid_url_base`), so `PLoanFlow.ndidThaiId` is the customer's own id
+// in every environment and the scaffolding — plus its prod-only gate — is gone.
+//
+// Passing `--dart-define=NDID_TEST_THAI_ID=...` is now silently ignored; drop it
+// from any build script that still sets it.
 
 /// Base URL of the **P-Loan save API** — `POST <base>/SavePloanContract`, the
 /// endpoint a completed P-Loan application is filed to.
@@ -227,13 +216,4 @@ enum AppEnvironment {
 
   bool get isProd => this == AppEnvironment.prod;
   bool get isUat => this == AppEnvironment.uat;
-
-  /// Thai ID the NDID screens should verify instead of the customer's own, or
-  /// null to use the customer's.
-  ///
-  /// **Non-prod only.** Returns null on [prod] unconditionally, so a production
-  /// build can never verify anyone but the customer in front of it — see
-  /// [kNdidTestThaiId] for why the substitution exists at all.
-  String? get ndidThaiIdOverride =>
-      isProd || kNdidTestThaiId.isEmpty ? null : kNdidTestThaiId;
 }

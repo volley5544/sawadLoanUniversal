@@ -951,18 +951,34 @@ section, mirroring the wizard's step 4: a `RegisterFieldRow` that opens the NDID
 flow and, on success, flips to a green check + banner + ดาวน์โหลดเอกสาร. It sets
 `PLoanFlow.ndidVerified`, which **gates `canSubmit`**.
 
-> ⚠ **Non-prod builds verify a test identity, not the applicant.** The DAP
-> **uat** node only has an identity registered for `1234567890123`, so a real
-> customer's id finds no IdP there and the hop can't be exercised at all. Since
-> 2026-07-30 `PLoanFlow.ndidThaiId` therefore returns
-> `AppEnvironment.current.ndidThaiIdOverride ?? customerThaiIdDigits`, where the
-> override is `kNdidTestThaiId` (`--dart-define=NDID_TEST_THAI_ID`, `''`
-> disables) and is **null on prod unconditionally**. Two tests pin that, and that
-> the substitution can't weaken the ID-card check —
-> `isThaiIdVerified` compares the scanned card to `customer.thaiId`, never to
-> `ndidThaiId`, and no payload carries `ndidThaiId` either. **Delete this once
-> the uat node has real test identities**; it is scaffolding. The wizard's
-> `LoanRegisterForm.ndidThaiId` is untouched (mock data, no backend).
+**Every environment verifies the applicant's own Thai ID.**
+`PLoanFlow.ndidThaiId` is simply `customerThaiIdDigits`.
+
+> **Retired 2026-07-31: the non-prod test-identity substitution.** Between
+> 2026-07-30 and 2026-07-31 non-prod builds asked NDID about `1234567890123`
+> instead of the customer, via `kNdidTestThaiId` /
+> `AppEnvironment.ndidThaiIdOverride`. The reason was the **DAP** uat node, which
+> had a registered identity for that one id only, so a real customer found no IdP
+> and the hop couldn't be exercised at all. The uat gateway
+> (`api_url.ndid_url_base`, now `uat.ndid.srisawadpower.com`) carries **real**
+> identities, so the define, the getter and its prod-only gate are all **deleted**
+> — not defaulted to empty — and `--dart-define=NDID_TEST_THAI_ID` is now
+> ignored. Don't reintroduce it: the whole point of UAT here is verifying real
+> people.
+
+What that changes for testing: a customer who has not onboarded with any IdP now
+gets an **empty registered grid** — `ndid_bank_select_page` already renders
+"ไม่พบผู้ให้บริการที่ท่านเคยลงทะเบียน NDID" and leaves the not-registered grid
+unselectable — rather than a usable mock bank. That is the node answering
+truthfully; pick a test customer who *is* onboarded.
+
+`isThaiIdVerified` still compares the scanned card to `customer.thaiId` and
+**not** to `ndidThaiId`; the two now coincide, but a test pins them as separate
+concerns (NDID asserts "this person authenticated", the card check asserts "this
+card is theirs"). No payload carries `ndidThaiId`. The wizard's
+`LoanRegisterForm.ndidThaiId` was never overridden and still just strips its
+formatted `thaiId` to digits — which is the **real** customer's id whenever step 1
+was seeded from the profile.
 
 Two deliberate differences from step 4:
 
@@ -1228,10 +1244,12 @@ uat is in right now, see **Outstanding** #22.
 The uat document currently holds **`https://uat.ndid.srisawadpower.com`**, which
 is a *different node* from the DAP dev gateway the define defaults to: it returns
 **real banks** (ธนาคารเกียรตินาคินภัทร, เจ เวนเจอร์ส, …) with `logo_url`s, not the
-DAP node's `idp1/idp2/idp4`. Two consequences to check when it becomes reachable:
-the `kNdidTestThaiId` scaffolding may be unnecessary there (it exists because the
-DAP uat node only knows `1234567890123`), and the bank grids will render
-unfamiliar ids.
+DAP node's `idp1/idp2/idp4`. Because it has **real identities**, the
+`kNdidTestThaiId` substitution was deleted on 2026-07-31 (see **NDID signing**) —
+the flow now asks about the actual customer everywhere. Note the node also sends
+`logo_url` + `has_logo`, which `NdidIdp`/`_toBank` ignore: bank tiles are still
+drawn from the hardcoded `_knownBankStyles` colour list, and an IdP outside it
+falls back to an orange tile with its id upper-cased.
 
 ### Web ↔ native bridge (`lib/services/`)
 
@@ -1368,13 +1386,17 @@ anyone who opens the app: the Firebase web API key (fine — it grants nothing),
 `kNdidApiKey`, and `kPLoanSaveApiAuth` (**not** fine — a shared service account;
 see **P-Loan save API**).
 
-**One identity check is deliberately weakened off prod.** `kNdidTestThaiId`
-makes non-prod builds run NDID against `1234567890123` rather than the applicant,
-because the uat DAP node has no other registered identity (see **NDID signing**).
-It is env-gated, not define-gated: `AppEnvironment.prod.ndidThaiIdOverride` is
-null whatever the define says, and a test asserts it. The blast radius is NDID
-alone — the ID-card check and every payload still use the customer's own id.
-Remove it when uat gets real test identities.
+~~**One identity check is deliberately weakened off prod.**~~ **Closed
+2026-07-31.** `kNdidTestThaiId` made non-prod builds run NDID against
+`1234567890123` rather than the applicant, because the DAP uat node had no other
+registered identity. The uat gateway now has real ones, so the define and its
+`ndidThaiIdOverride` gate are **deleted** and no environment substitutes an
+identity — `PLoanFlow.ndidThaiId` is the customer's own id, pinned by a test. No
+build flag can bring the substitution back.
+
+**No identity check is weakened anywhere now.** Keep it that way: if a future
+environment lacks test identities, the answer is to register them on that node,
+not to point the client at somebody else's id.
 
 ## Outstanding (next session starts here)
 
@@ -1492,20 +1514,20 @@ reason recorded.
     (`[12,24,36,48,60]`) live at the top of it.
 21. **A new P-Loan's ID-card expiry check uses the device clock**, since the
     server clock it should use rides on the contract. See `_isExpired`.
-22. **🚧 The host must allowlist `https://uat.ndid.srisawadpower.com/` before
-    in-app NDID works again.** Added 2026-07-31 with the `ndid_url_base` wiring,
-    and it is a **regression until done**: the uat config points NDID at that
-    host, the host's `_kHttpRequestAllowedPrefixes`
-    (`loan_universal_web_widget.dart`) still lists only
-    `https://dev.swpfin.com/dap/` + the two mobile-API hosts, so every NDID call
-    inside the app now returns `{'status': 0, 'error': 'URL not allowed: …'}`.
-    One line in the host, but it needs an **app release** (same constraint as
-    #10). Verified: the new gateway answers `POST /idp/list` `200` with real
-    banks, and sends **no** `access-control-allow-*` headers — so the bridge is
-    still mandatory and a plain browser cannot substitute for it. Two ways to
-    unblock without a release: point `ndid_url_base` back at
-    `https://dev.swpfin.com/dap`, or delete the key (the build then uses
-    `kNdidApiBase`, which is the same thing).
+22. **🚧 An app release is what now stands between uat and a real NDID test.**
+    The uat config points NDID at `https://uat.ndid.srisawadpower.com`, which the
+    host must allowlist because the gateway sends **no** `access-control-allow-*`
+    headers (verified — so the `httpRequest` bridge is mandatory and a plain
+    browser cannot substitute for it). `_kHttpRequestAllowedPrefixes` in the
+    srisawad host's `loan_universal_web_widget.dart` **has been updated**
+    (2026-07-31, committed on `uat` there, *not pushed*) — but like #10 it only
+    reaches a tester in a **new Android/iOS build**. Until that build exists,
+    every in-app NDID call returns
+    `{'status': 0, 'error': 'URL not allowed: …'}`. Two ways to unblock without a
+    release: point `ndid_url_base` back at `https://dev.swpfin.com/dap`, or delete
+    the key (the build then falls back to `kNdidApiBase`, the same host) — but
+    note the DAP node no longer has an identity this build will ask about, since
+    the test-identity substitution is gone.
 
 ## Conventions
 

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sawad_loan_universal/config/app_environment.dart';
 import 'package:sawad_loan_universal/models/customer_detail.dart';
 import 'package:sawad_loan_universal/models/ndid_subject.dart';
 import 'package:sawad_loan_universal/loan_register/models/loan_register_form.dart';
@@ -646,12 +645,17 @@ void main() {
     test('the flow can drive the shared NDID screens', () {
       // The bank-select and verify pages take an NdidSubject, so both this flow
       // and the wizard's LoanRegisterForm can push to them.
-      final NdidSubject subject = _completeFlow();
-      expect(subject.ndidThaiId, '1234567890123');
+      // A customer id deliberately unlike the retired test identity, so this
+      // asserts "the applicant's own id" rather than passing by coincidence —
+      // _completeFlow's fixture id happens to be that old value.
+      final flow = _completeFlow()
+        ..customer = CustomerDetail.fromJson(const {'thai_id': '1670200003359'});
+      final NdidSubject subject = flow;
+      expect(subject.ndidThaiId, '1670200003359');
       expect(subject.ndidIdpId, isNull);
 
       subject.ndidIdpId = 'idp1';
-      expect((subject as PLoanFlow).ndidIdpId, 'idp1');
+      expect(flow.ndidIdpId, 'idp1');
     });
 
     test('the Thai ID falls back to the card read when the profile has none',
@@ -660,20 +664,25 @@ void main() {
       expect(flow.customerThaiIdDigits, '9876543210987');
     });
 
-    test('prod never substitutes the NDID test identity', () {
-      // The uat DAP node only has an identity for kNdidTestThaiId, so non-prod
-      // builds verify that instead. On prod the applicant's own id is the only
-      // thing NDID may ever be asked about — whatever the define says.
-      expect(AppEnvironment.prod.ndidThaiIdOverride, isNull);
-      expect(AppEnvironment.uat.ndidThaiIdOverride, kNdidTestThaiId);
+    test('NDID always asks about the applicant, in every environment', () {
+      // Removed 2026-07-31: non-prod builds used to substitute a fixed test id
+      // (kNdidTestThaiId) because the DAP uat node knew only that one identity.
+      // The uat gateway now has real ones, so no environment may quietly verify
+      // somebody other than the customer in front of the app.
+      final flow = _completeFlow()
+        ..customer = CustomerDetail.fromJson(const {'thai_id': '9876543210987'});
+      expect(flow.ndidThaiId, '9876543210987');
+      expect(flow.ndidThaiId, flow.customerThaiIdDigits);
     });
 
-    test('the substitution cannot weaken the ID-card check', () {
-      // /vision/thai-id-validate is matched against the profile, not against
-      // ndidThaiId, so a card belonging to the NDID test identity still fails.
+    test('the ID-card check is still independent of the NDID id', () {
+      // /vision/thai-id-validate is matched against the profile, never against
+      // ndidThaiId. They coincide now, but the two must not become one field:
+      // NDID says "this person authenticated", the card check says "this card
+      // belongs to them", and only the second is about the scan.
       final flow = _completeFlow()
         ..customer = CustomerDetail.fromJson(const {'thai_id': '9876543210987'})
-        ..verifiedThaiId = kNdidTestThaiId;
+        ..verifiedThaiId = '1234567890123';
       expect(flow.isThaiIdVerified, isFalse);
 
       flow.verifiedThaiId = '9876543210987';
