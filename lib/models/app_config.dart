@@ -13,7 +13,8 @@ class AppConfig {
     this.apiUrl = const {},
     this.webVersionProd,
     this.webVersionUat,
-  });
+    String? ndidRequestType,
+  }) : _ndidRequestType = ndidRequestType;
 
   /// The whole `api_url` map, decoded. Kept raw so a newly-added key is usable
   /// without a code change (via [urlFor]).
@@ -50,6 +51,23 @@ class AppConfig {
   /// [NdidApi.baseUrl].
   String? get ndidUrlBase => urlFor('ndid_url_base');
 
+  /// `request_type` for `POST /rp/verify`, if the document overrides it.
+  ///
+  /// Config-driven for the same reason as [ndidUrlBase], and it must move *with*
+  /// it: each NDID gateway publishes its own valid set at `GET /request-types`
+  /// and the sets don't overlap, so a gateway change without a matching request
+  /// type earns `20091 - Invalid request type`. Null falls back to
+  /// [kNdidRequestType].
+  ///
+  /// Read from the **top level** of the document, not the `api_url` map — it
+  /// isn't a URL, and [urlFor] would strip a trailing character it shouldn't.
+  String? get ndidRequestType {
+    final raw = _ndidRequestType?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  final String? _ndidRequestType;
+
   /// Any `api_url` entry, trimmed and with a trailing slash removed so callers
   /// can append `/loan/list` without producing a double slash. Returns null
   /// when absent or blank.
@@ -74,6 +92,7 @@ class AppConfig {
           : const {},
       webVersionProd: _asInt(decoded['sawad_loan_universal_version']),
       webVersionUat: _asInt(decoded['sawad_loan_universal_version_uat']),
+      ndidRequestType: decoded['ndid_request_type']?.toString(),
     );
   }
 

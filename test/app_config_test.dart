@@ -113,6 +113,33 @@ void main() {
     });
   });
 
+  group('NDID request type', () {
+    test('reads ndid_request_type from the document top level', () {
+      // Top level, not inside api_url — it is not a URL.
+      final config = AppConfig.fromDecoded(const {
+        'ndid_request_type': 'dsign.dcontract.public',
+      });
+      expect(config.ndidRequestType, 'dsign.dcontract.public');
+    });
+
+    test('absent or blank falls through to the compile-time default', () {
+      // NdidApi.requestType() resolves `ndidRequestType ?? kNdidRequestType`.
+      // Getting this wrong is a 20091 - Invalid request type, not a fallback to
+      // something harmless.
+      expect(const AppConfig().ndidRequestType, isNull);
+      expect(
+        AppConfig.fromDecoded(const {'ndid_request_type': '  '})
+            .ndidRequestType,
+        isNull,
+      );
+      expect(
+        AppConfig.fromDecoded(decodeFirestoreFields(_document['fields']))
+            .ndidRequestType,
+        isNull,
+      );
+    });
+  });
+
   group('NDID gateway base URL', () {
     test('reads ndid_url_base out of the api_url map', () {
       final config =

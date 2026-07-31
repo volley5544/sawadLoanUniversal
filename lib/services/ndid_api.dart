@@ -67,6 +67,27 @@ class NdidApi {
   static Future<Uri> _uri(String path) async =>
       Uri.parse('${await baseUrl()}$path');
 
+  /// `request_type` for [createVerifyRequest]: the Firestore config's
+  /// `ndid_request_type`, else [kNdidRequestType].
+  ///
+  /// Resolved the same way — and from the same document — as [baseUrl], because
+  /// the two must move together: each gateway publishes its own valid set at
+  /// `GET /request-types` and they don't overlap.
+  static Future<String> requestType() async {
+    final config = await AppConfigApi.ensureLoaded();
+    return config.ndidRequestType ?? kNdidRequestType;
+  }
+
+  /// The gateway's own list of valid `request_type` values.
+  ///
+  /// Not called by the flow — it is the diagnostic for a
+  /// `20091 - Invalid request type`, which means [requestType] is not in here.
+  static Future<List<String>> listRequestTypes() async {
+    final json = await _get('/request-types');
+    if (json is! List) return const [];
+    return json.map((e) => e.toString()).toList(growable: false);
+  }
+
   static Map<String, String> _headers({bool json = false}) => {
         if (json) 'Content-Type': 'application/json',
         if (kNdidApiKey.isNotEmpty) 'X-API-Key': kNdidApiKey,
@@ -116,7 +137,9 @@ class NdidApi {
     required String idpId,
     String requestMessage = 'ขอยืนยันตัวตนเพื่อสมัครสินเชื่อกับ ศรีสวัสดิ์',
     int requestTimeoutSeconds = 3600,
+    String? requestType,
   }) async {
+    final type = requestType ?? await NdidApi.requestType();
     final json = await _post('/rp/verify', {
       'namespace': citizenIdNamespace,
       'identifier': identifier,
@@ -128,7 +151,7 @@ class NdidApi {
       'mode': 2,
       'bypass_identity_check': false,
       'request_timeout': requestTimeoutSeconds,
-      'request_type': 'Authen Only',
+      'request_type': type,
     });
     if (json is! Map<String, dynamic> || json['reference_id'] == null) {
       throw NdidApiException('Unexpected /rp/verify response: $json');

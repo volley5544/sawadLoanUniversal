@@ -1262,7 +1262,7 @@ failures throw `ApiTransportException`.
 `localhost:7088` wrapper; Postman collection + proxy spec live in the
 untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
 `listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
-mode 2 / "Authen Only"), `getVerifyStatus()`
+mode 2, `request_type` per **gateway** — see below), `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body).
@@ -1284,6 +1284,32 @@ plain-browser/dev fallback. The
 node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
 web build can't keep it secret from clients anyway).
+
+**`request_type` is per-gateway and config-driven too** (2026-07-31).
+`POST /rp/verify` sent a hardcoded `'Authen Only'`, which the SIT node accepts
+and the uat gateway refuses with **`20091 - Invalid request type`** — hit on a
+real device right after the bank grid started working. Each environment
+publishes its own set at **`GET /request-types`** (wired as
+`NdidApi.listRequestTypes()`, kept purely as the diagnostic for a 20091), and the
+sets are **disjoint**:
+
+| Gateway | Valid values |
+| --- | --- |
+| `dev.swpfin.com/dap` (SIT) | `Authen Only`, `TestRequestType`, `dContract` |
+| `uat.ndid.srisawadpower.com` | `dsign.accountopening`, **`dsign.dcontract`**, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
+
+So it resolves like the base URL and **must move with it**: `ndid_request_type`
+(top level of the config document, *not* inside `api_url` — it isn't a URL) →
+`kNdidRequestType` (`--dart-define=NDID_REQUEST_TYPE`, default
+`dsign.dcontract`). Pointing `ndid_url_base` at a different gateway without
+changing this earns a 20091.
+
+⚠ Validation passing is not the same as the type being *right*: it names an NDID
+service, so it can change the consent wording the IdP shows and how the request
+is billed. **`dsign.dcontract` vs `dsign.dcontract.public` is unconfirmed** with
+the DAP/NDID team — chosen because the customer is signing a loan contract, and
+verified only insofar as `POST /rp/verify` accepted it (it then failed at
+`20005 - No IdP found`, which is the expected error for an identity with no IdP).
 
 **Base URL is config-driven** (since 2026-07-31), the same shape as
 `SrisawadApi.baseUrl()`: `NdidApi.baseUrl()` resolves
