@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../config/app_environment.dart';
 import 'api_transport.dart';
+import 'app_config_api.dart';
 
 /// Client for the **NDID local-node API** (the `localhost:7088` wrapper in
 /// `ndid_doc/NDID_Local_API.postman_collection.json`; it fronts the NDID
@@ -15,8 +16,9 @@ import 'api_transport.dart';
 ///   4. `POST /rp/verify/{referenceId}/close` — cancel (best effort)
 ///
 /// The node manages the NDID token itself (its `/token` endpoint); client
-/// auth is an `X-API-Key` header ([kNdidApiKey]). Base URL comes from
-/// [kNdidApiBase] (`--dart-define=NDID_API_BASE`).
+/// auth is an `X-API-Key` header ([kNdidApiKey]). Base URL is resolved per call
+/// by [baseUrl] — the Firestore runtime config first, [kNdidApiBase] as the
+/// compile-time fallback.
 class NdidApi {
   NdidApi._();
 
@@ -37,7 +39,33 @@ class NdidApi {
   static const double minIal = 2.3;
   static const num minAal = 2.2;
 
-  static Uri _uri(String path) => Uri.parse('$kNdidApiBase$path');
+  /// Gateway endpoint every path below hangs off. No trailing slash.
+  ///
+  /// Resolved at call time, mirroring `SrisawadApi.baseUrl`:
+  ///
+  ///   1. `api_url['ndid_url_base']` from the Firestore config document — the
+  ///      per-project value, so the uat project's copy holds the uat node. This
+  ///      is the authoritative one.
+  ///   2. [kNdidApiBase] (`--dart-define=NDID_API_BASE`), the compile-time
+  ///      default, so a config outage degrades to the built-in gateway rather
+  ///      than leaving NDID with no endpoint at all.
+  ///
+  /// Awaits the memoised config load, so only the first call can wait on that
+  /// one request.
+  ///
+  /// ⚠ **Whatever this resolves to must be allowlisted by the native host.**
+  /// The gateway sends no CORS headers, so inside the app every request goes
+  /// through the host's `httpRequest` bridge, which refuses any URL outside
+  /// `_kHttpRequestAllowedPrefixes` in `loan_universal_web_widget.dart`. Moving
+  /// this key to a new host therefore needs a matching host change *and an app
+  /// release* — a config edit alone will fail with `URL not allowed`.
+  static Future<String> baseUrl() async {
+    final config = await AppConfigApi.ensureLoaded();
+    return config.ndidUrlBase ?? kNdidApiBase;
+  }
+
+  static Future<Uri> _uri(String path) async =>
+      Uri.parse('${await baseUrl()}$path');
 
   static Map<String, String> _headers({bool json = false}) => {
         if (json) 'Content-Type': 'application/json',
@@ -144,7 +172,7 @@ class NdidApi {
     try {
       res = await sendApiRequest(
         method,
-        _uri(path),
+        await _uri(path),
         headers: _headers(json: body != null),
         body: body,
         timeout: _timeout,

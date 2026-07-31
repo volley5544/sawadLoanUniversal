@@ -68,11 +68,11 @@
 ///
 /// ## `httpRequest` — CORS-free HTTP proxy (NDID API)
 ///
-/// The NDID gateway (`kNdidApiBase`) sends no CORS headers and 401s browser
-/// preflights, so the web can't fetch it directly. Inside the host, `NdidApi`
-/// sends every request through this handler instead; the host performs it
-/// with native HTTP and returns the result. The single argument and the
-/// return value are **JSON strings**:
+/// The NDID gateway sends no CORS headers and 401s browser preflights, so the
+/// web can't fetch it directly. Inside the host, `NdidApi` sends every request
+/// through this handler instead; the host performs it with native HTTP and
+/// returns the result. The single argument and the return value are **JSON
+/// strings**:
 ///
 /// ```dart
 /// webViewController.addJavaScriptHandler(
@@ -92,6 +92,14 @@
 /// ```
 ///
 /// (Implemented in the srisawad host's `loan_universal_web_widget.dart`.)
+///
+/// ⚠ **The allowlist and the NDID gateway URL are coupled across two repos.**
+/// `NdidApi.baseUrl()` now takes the gateway from `api_url['ndid_url_base']` in
+/// the Firestore config, which anyone can edit without a build — but the host's
+/// `_kHttpRequestAllowedPrefixes` is compiled into the **app**. Pointing that
+/// key at a host the app doesn't allowlist makes every NDID call fail with
+/// `URL not allowed`, and fixing it needs an app release, not a web deploy.
+/// Keep the two in step.
 ///
 /// ## `httpMultipart` — CORS-free multipart upload (P-Loan save API)
 ///

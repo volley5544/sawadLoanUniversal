@@ -1036,7 +1036,20 @@ the Firestore document **`application/public_config`** (path overridable with
 `--dart-define=APP_CONFIG_PATH=collection/doc`) from the project in
 `AppEnvironment.current.firebaseProjectId`, and publishes it on
 `AppState.appConfig`. Verified working on uat: it resolves
-`api_url.api_url_base` = `https://dev.swpfin.com:7076`.
+`api_url.api_url_base` = `https://dev.swpfin.com:7076` and (since 2026-07-31)
+`api_url.ndid_url_base` = `https://uat.ndid.srisawadpower.com`.
+
+**Two endpoints now come from this document**, both by the same rule — config
+value first, compile-time define as the degrade-to:
+
+| `api_url` key | Read by | Falls back to |
+| --- | --- | --- |
+| `api_url_base` (then `api_url_prod`/`api_url_dev`) | `SrisawadApi.baseUrl()` | `AppEnvironment.mobileApiBase` |
+| `ndid_url_base` | `NdidApi.baseUrl()` | `kNdidApiBase` |
+
+`AppConfig.urlFor` trims and strips a trailing slash for both, so a value saved
+as `https://host/` can't produce `//idp/list`. Any other key in the map is
+reachable through `urlFor` without a code change.
 
 - **No Firebase SDK** — it's a plain `GET` against the Firestore REST API
   through the usual `sendApiRequest` transport, with
@@ -1087,6 +1100,10 @@ because it is **per-project**: the uat Firebase project's copy holds the uat hos
 (`https://dev.swpfin.com:7076`) and prod's holds prod, so it can't cross
 environments the way the absolute `api_url_prod` key would. Trailing slashes are
 stripped, so a value like `https://mobile-api.swpfin.com/` won't produce `//`.
+
+`NdidApi.baseUrl()` follows the same pattern against `ndid_url_base` — see
+**NDID API client** — so the NDID gateway is not in the table above but is
+config-driven too.
 
 When P-Loan gets its own endpoints, only the delegating methods in `PLoanApi`
 change — no screen is touched.
@@ -1188,11 +1205,33 @@ srisawad app's `loan_universal_web_widget.dart`); plain `http` is only the
 plain-browser/dev fallback. The
 node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
-web build can't keep it secret from clients anyway). Base URL: `kNdidApiBase` in
-`app_environment.dart` (`--dart-define=NDID_API_BASE`, default
-`https://dev.swpfin.com/dap`; point it at `http://localhost:7088` to hit a
-locally-run node — an `http:` URL additionally needs the WebView to allow
-mixed content when the app is served over `https:`).
+web build can't keep it secret from clients anyway).
+
+**Base URL is config-driven** (since 2026-07-31), the same shape as
+`SrisawadApi.baseUrl()`: `NdidApi.baseUrl()` resolves
+`api_url['ndid_url_base']` from the Firestore runtime config →
+`kNdidApiBase` (`--dart-define=NDID_API_BASE`, default
+`https://dev.swpfin.com/dap`). Config first because the key is **per-project**,
+so the uat document points at the uat node and prod's at prod without a rebuild;
+the define stays as the degrade-to value when the document can't be read. It's
+awaited per request, so `_uri` is `Future<Uri>` now. Point the define at
+`http://localhost:7088` to hit a locally-run node — an `http:` URL additionally
+needs the WebView to allow mixed content when the app is served over `https:`.
+
+⚠ **The gateway URL and the host's allowlist are coupled across two repos, and
+only one of them is editable without an app release.** The host proxies NDID
+through `httpRequest` and refuses any URL outside its compiled-in
+`_kHttpRequestAllowedPrefixes`. So a Firestore edit can point this build at a
+gateway the app then rejects with `URL not allowed` — which is exactly the state
+uat is in right now, see **Outstanding** #22.
+
+The uat document currently holds **`https://uat.ndid.srisawadpower.com`**, which
+is a *different node* from the DAP dev gateway the define defaults to: it returns
+**real banks** (ธนาคารเกียรตินาคินภัทร, เจ เวนเจอร์ส, …) with `logo_url`s, not the
+DAP node's `idp1/idp2/idp4`. Two consequences to check when it becomes reachable:
+the `kNdidTestThaiId` scaffolding may be unnecessary there (it exists because the
+DAP uat node only knows `1234567890123`), and the bank grids will render
+unfamiliar ids.
 
 ### Web ↔ native bridge (`lib/services/`)
 
@@ -1453,6 +1492,20 @@ reason recorded.
     (`[12,24,36,48,60]`) live at the top of it.
 21. **A new P-Loan's ID-card expiry check uses the device clock**, since the
     server clock it should use rides on the contract. See `_isExpired`.
+22. **🚧 The host must allowlist `https://uat.ndid.srisawadpower.com/` before
+    in-app NDID works again.** Added 2026-07-31 with the `ndid_url_base` wiring,
+    and it is a **regression until done**: the uat config points NDID at that
+    host, the host's `_kHttpRequestAllowedPrefixes`
+    (`loan_universal_web_widget.dart`) still lists only
+    `https://dev.swpfin.com/dap/` + the two mobile-API hosts, so every NDID call
+    inside the app now returns `{'status': 0, 'error': 'URL not allowed: …'}`.
+    One line in the host, but it needs an **app release** (same constraint as
+    #10). Verified: the new gateway answers `POST /idp/list` `200` with real
+    banks, and sends **no** `access-control-allow-*` headers — so the bridge is
+    still mandatory and a plain browser cannot substitute for it. Two ways to
+    unblock without a release: point `ndid_url_base` back at
+    `https://dev.swpfin.com/dap`, or delete the key (the build then uses
+    `kNdidApiBase`, which is the same thing).
 
 ## Conventions
 

@@ -14,6 +14,9 @@ const _document = <String, dynamic>{
           'api_url_base': {'stringValue': 'https://dev.swpfin.com:7076'},
           'api_url_prod': {'stringValue': 'https://mobile-api.swpfin.com'},
           'api_url_dev': {'stringValue': 'https://dev.swpfin.com:7076'},
+          'ndid_url_base': {
+            'stringValue': 'https://uat.ndid.srisawadpower.com',
+          },
           'mgm_user_manual_url': {'stringValue': ''},
         },
       },
@@ -107,6 +110,34 @@ void main() {
       final config =
           AppConfig.fromDecoded(decodeFirestoreFields(_document['fields']));
       expect(config.urlFor('api_url_dev'), 'https://dev.swpfin.com:7076');
+    });
+  });
+
+  group('NDID gateway base URL', () {
+    test('reads ndid_url_base out of the api_url map', () {
+      final config =
+          AppConfig.fromDecoded(decodeFirestoreFields(_document['fields']));
+
+      // The key name is the contract with the Firestore document — a typo here
+      // silently falls back to the compile-time gateway instead of failing.
+      expect(config.ndidUrlBase, 'https://uat.ndid.srisawadpower.com');
+    });
+
+    test('trailing slash is stripped so /idp/list does not double up', () {
+      final config = AppConfig(
+        apiUrl: const {'ndid_url_base': 'https://uat.ndid.srisawadpower.com/'},
+      );
+      expect(config.ndidUrlBase, 'https://uat.ndid.srisawadpower.com');
+    });
+
+    test('absent or blank falls through to the compile-time default', () {
+      // NdidApi.baseUrl() resolves `ndidUrlBase ?? kNdidApiBase`, so null here
+      // is what keeps NDID working when the config document is unreadable.
+      expect(const AppConfig().ndidUrlBase, isNull);
+      expect(
+        AppConfig(apiUrl: const {'ndid_url_base': '  '}).ndidUrlBase,
+        isNull,
+      );
     });
   });
 }

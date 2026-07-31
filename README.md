@@ -213,12 +213,18 @@ applicant, because the uat DAP node has no other registered one — prod always
 uses the customer's own id.
 
 API endpoints are read at startup from the Firestore document
-**`application/public_config`** (`api_url.api_url_base`), authenticated with an
-**anonymous** Firebase identity minted over REST — there is no Firebase SDK in
-the app. It falls back to the compile-time `AppEnvironment` value if that read
-fails, and never blocks boot. The secrets live in a *separate*
-`application/config` document that no client rule grants access to; `firestore.rules`
-is checked in and deployed to both projects.
+**`application/public_config`** — the mobile API from `api_url.api_url_base` and
+the **NDID gateway** from `api_url.ndid_url_base` — authenticated with an
+**anonymous** Firebase identity minted over REST; there is no Firebase SDK in
+the app. Each falls back to its compile-time value (`AppEnvironment.mobileApiBase`
+/ `kNdidApiBase`) if that read fails, and it never blocks boot. The secrets live
+in a *separate* `application/config` document that no client rule grants access
+to; `firestore.rules` is checked in and deployed to both projects.
+
+⚠ Moving `ndid_url_base` needs a matching change in the **host app**: NDID is
+proxied through its `httpRequest` bridge, which only calls allowlisted hosts. See
+Outstanding #22 in `CLAUDE.md` — uat currently points at a gateway the shipped app
+still rejects.
 
 Payload mapping: `PLoanContractSubmission.fromFlow(flow)` builds the 30 fields
 `SavePloanContract` takes, and `PLoanSubmission.fromFlow(flow)` the 34 that

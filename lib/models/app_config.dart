@@ -38,6 +38,18 @@ class AppConfig {
   String? get apiUrlProd => urlFor('api_url_prod');
   String? get apiUrlDev => urlFor('api_url_dev');
 
+  /// Base URL of the **NDID gateway** (`services/ndid_api.dart`).
+  ///
+  /// Config-driven for the same reason as [apiUrlBase]: the key is per-project,
+  /// so the uat document points at the uat node and prod's at prod, and the
+  /// gateway can be moved without a rebuild. Null falls back to [kNdidApiBase].
+  ///
+  /// ⚠ Inside the native host every NDID call goes through the `httpRequest`
+  /// bridge, which only proxies **allowlisted URL prefixes**. Changing this
+  /// value to a host the app doesn't allowlist breaks NDID in the app — see
+  /// [NdidApi.baseUrl].
+  String? get ndidUrlBase => urlFor('ndid_url_base');
+
   /// Any `api_url` entry, trimmed and with a trailing slash removed so callers
   /// can append `/loan/list` without producing a double slash. Returns null
   /// when absent or blank.

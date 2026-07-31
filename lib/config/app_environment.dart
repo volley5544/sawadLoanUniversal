@@ -31,8 +31,9 @@ const String kWebVersion = String.fromEnvironment(
   defaultValue: '0',
 );
 
-/// Base URL of the **NDID local-node API** (the node wrapper from the NDID
-/// Postman collection, hosted on the dev gateway). Override at build time:
+/// **Fallback** base URL of the **NDID local-node API** (the node wrapper from
+/// the NDID Postman collection, hosted on the dev gateway). Override at build
+/// time:
 ///
 /// ```sh
 /// flutter build web ... --dart-define=NDID_API_BASE=http://localhost:7088
@@ -41,6 +42,11 @@ const String kWebVersion = String.fromEnvironment(
 /// Used by `lib/services/ndid_api.dart`, and only when running inside the
 /// native host (plain-browser builds keep the simulated NDID flow). No
 /// trailing slash — paths are appended as `/idp/list`, `/rp/verify`, ….
+///
+/// ⚠ **This is no longer the primary source.** `NdidApi.baseUrl()` prefers
+/// `api_url['ndid_url_base']` from the Firestore runtime config, which is
+/// per-project and needs no rebuild; this value is what it degrades to when
+/// that document can't be read or omits the key.
 const String kNdidApiBase = String.fromEnvironment(
   'NDID_API_BASE',
   defaultValue: 'https://dev.swpfin.com/dap',
