@@ -331,7 +331,31 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   สำเร็จ** (slide 8 frame 5 + final frame). One page, two phases. The bank's own
   app (K+ PIN pad, NDID consent) is **third-party — not rebuilt**. Inside the
   host it creates the real request (`NdidApi.createVerifyRequest`, 1 h
-  `request_timeout` matching the countdown) and polls every 3 s; `ACCEPTED` →
+  `request_timeout` matching the countdown) and polls every 3 s.
+
+  **Polling only runs while this page is visible**, and verifying means leaving
+  it — the bank's app for a customer, the **NDID UAT console** for a tester
+  (enter the ref, set the status to success). A backgrounded WebView has its JS
+  timers throttled or suspended, so the 3 s poll is not running while you are
+  away, and returning meant waiting on whatever the timer did next. Reported
+  2026-07-31 as "status is success but the page keeps counting down". Fixed with
+  four changes, all in `ndid_verify_page.dart`:
+
+  - an `AppLifecycleListener(onResume:)` **polls immediately** when the page
+    becomes visible again — this is what turns "eventually" into "at once";
+  - a **ตรวจสอบสถานะ** button, so a tester never depends on the timer;
+  - **poll failures are no longer silent.** They are still ignored individually
+    (one flaky response must not kill a live request) but after 3 consecutive
+    ones a warning names the error and says it is retrying. Silence here made a
+    check that could not reach the gateway look exactly like a customer who
+    hadn't approved yet — which is how the DNS outage stayed invisible;
+  - the countdown hitting 00:00 now **cancels the poll** and shows the timeout.
+    The two timers were independent, so polling outlived the countdown and only
+    stopped if NDID happened to report `TIMEOUT`.
+
+  A `_polling` guard also stops overlapping requests piling up, since
+  `Timer.periodic` fires regardless of whether the previous poll finished and one
+  can take up to the 30 s API timeout. `ACCEPTED` →
   success phase, `REJECTED`/`TIMEOUT`/`CANCELLED` → error + ลองใหม่; ยกเลิก
   best-effort closes the request. In a plain browser a
   "จำลองยืนยันตัวตนสำเร็จ" button simulates the IDP callback. Pops `true`.

@@ -54,20 +54,52 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   String? _referenceId;
   String? _ndidRequestId;
 
+  /// True while a [_pollStatus] call is in flight, so overlapping polls can't
+  /// pile up — `Timer.periodic` fires on schedule regardless of whether the last
+  /// request finished, and a slow poll (up to the 30 s API timeout) would
+  /// otherwise stack ten deep.
+  bool _polling = false;
+
+  /// Consecutive failed polls. Surfaced in the UI from [_pollFailureThreshold]
+  /// so a check that cannot reach the gateway stops looking exactly like a
+  /// customer who has not approved yet — a single failure is still ignored,
+  /// because one flaky response must not kill a live request.
+  int _pollFailures = 0;
+  static const int _pollFailureThreshold = 3;
+  String? _pollWarning;
+
+  /// Set while a manual ตรวจสอบสถานะ is running.
+  bool _checkingNow = false;
+
   String get _citizenId =>
       widget.form?.ndidThaiId ?? '';
+
+  /// Polls once the moment the page becomes visible again.
+  ///
+  /// **This is the difference between "immediate" and "eventually" in practice.**
+  /// Verifying means leaving this page — the bank's app for a customer, the NDID
+  /// UAT console for a tester — and a backgrounded WebView has its JS timers
+  /// throttled or suspended, so [_pollTimer] is not running while you are away.
+  /// Without this, coming back means waiting on whatever the timer does next.
+  AppLifecycleListener? _lifecycle;
 
   @override
   void initState() {
     super.initState();
     _startCountdown();
-    if (_useRealApi) _startVerification();
+    if (_useRealApi) {
+      _startVerification();
+      _lifecycle = AppLifecycleListener(onResume: () {
+        if (_referenceId != null && !_verified) _pollStatus();
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _pollTimer?.cancel();
+    _lifecycle?.dispose();
     super.dispose();
   }
 
@@ -78,6 +110,19 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
       if (!mounted) return;
       if (_remaining.inSeconds <= 0) {
         t.cancel();
+        // The two timers used to be independent, so polling outlived the
+        // countdown and only stopped if NDID happened to report TIMEOUT. Say so
+        // ourselves and stop asking.
+        if (_pollTimer?.isActive ?? false) {
+          _pollTimer?.cancel();
+          if (!_verified) {
+            setState(() {
+              _pollWarning = null;
+              _error = 'หมดเวลาการยืนยันตัวตน กรุณาทำรายการใหม่';
+              _referenceId = null;
+            });
+          }
+        }
         return;
       }
       setState(() => _remaining -= const Duration(seconds: 1));
@@ -116,14 +161,33 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
 
   Future<void> _pollStatus() async {
     final ref = _referenceId;
-    if (ref == null || _verified) return;
+    if (ref == null || _verified || _polling) return;
+    _polling = true;
     final NdidVerifyStatus status;
     try {
       status = await NdidApi.getVerifyStatus(ref);
-    } on NdidApiException {
-      return; // transient poll failure — keep polling
+    } on NdidApiException catch (e) {
+      // Keep polling — one flaky response must not kill a live request — but
+      // stop hiding it. A silent failure here is indistinguishable from a
+      // customer who hasn't approved yet, which is how a stalled check can look
+      // like a normal countdown for a whole hour.
+      _pollFailures++;
+      if (mounted && _pollFailures >= _pollFailureThreshold) {
+        setState(() => _pollWarning =
+            'ไม่สามารถตรวจสอบสถานะได้ (${e.message}) กำลังลองใหม่...');
+      }
+      return;
+    } finally {
+      _polling = false;
     }
-    if (!mounted || status.isPending) return;
+    if (!mounted) return;
+    if (_pollFailures != 0 || _pollWarning != null) {
+      setState(() {
+        _pollFailures = 0;
+        _pollWarning = null;
+      });
+    }
+    if (status.isPending) return;
     _pollTimer?.cancel();
     if (status.isAccepted) {
       setState(() {
@@ -141,6 +205,14 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
         _referenceId = null;
       });
     }
+  }
+
+  /// Check now, rather than at the next 3 s tick.
+  Future<void> _checkNow() async {
+    if (_checkingNow) return;
+    setState(() => _checkingNow = true);
+    await _pollStatus();
+    if (mounted) setState(() => _checkingNow = false);
   }
 
   void _cancel() {
@@ -241,6 +313,18 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
                   ),
                   const SizedBox(height: 8),
                   Text('เวลาคงเหลือ', style: LoanRegisterStyles.labelStyle()),
+                  if (_pollWarning != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _pollWarning!,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSansThai(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -254,8 +338,21 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
             child: Column(
               children: [
                 if (_useRealApi) ...[
-                  // Result arrives from the bank app via the NDID poll; the
-                  // only action while waiting is retrying after a failure.
+                  // The result normally arrives on its own from the 3 s poll.
+                  // This is for when it doesn't: the poll only runs while this
+                  // page is visible, and verifying means leaving it — so anyone
+                  // returning from the bank app (or from flipping the status on
+                  // the NDID UAT console) can force a check instead of waiting.
+                  if (_error == null && !_creating && _referenceId != null) ...[
+                    _Button(
+                      label: _checkingNow
+                          ? 'กำลังตรวจสอบสถานะ...'
+                          : 'ตรวจสอบสถานะ',
+                      filled: false,
+                      onTap: _checkingNow ? null : _checkNow,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   if (_error != null) ...[
                     _Button(
                       label: 'ลองใหม่',
@@ -357,7 +454,9 @@ class _Button extends StatelessWidget {
 
   final String label;
   final bool filled;
-  final VoidCallback onTap;
+
+  /// Null disables the button (used while a manual status check is running).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
