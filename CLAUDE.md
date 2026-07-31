@@ -1309,6 +1309,25 @@ node manages its own NDID token; client auth is an `X-API-Key` header
 (`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
 web build can't keep it secret from clients anyway).
 
+**⚠ The gateway rate-limits to 100 requests per 900 s, and the 3 s poll blows
+it.** Found 2026-07-31 in the response headers (`ratelimit-policy: 100;w=900`,
+`ratelimit-limit`/`-remaining`/`-reset`); the counter is **shared across
+endpoints**, `/rp/verify/{ref}` included. The uat gateway is an Express app
+behind an AWS ALB in `ap-southeast-7`.
+
+`ndid_verify_page.dart` polls every 3 s = 20/min = **300 per window against a
+limit of 100**. So it spends the budget in the first 5 minutes and is throttled
+for the remaining 10 of every 15-minute window — roughly **40 of the 60 countdown
+minutes blind**. A status flipped on the NDID console during a throttled stretch
+cannot be seen until the window resets, which is the likeliest cause of the
+"status is success but it keeps counting down" report (DNS was the other half).
+
+**Not yet fixed.** The shape to use: 3 s for the first ~30 s (catches the fast
+accept), then ~15 s (≈70/window, safely under), and honour a 429 by waiting out
+`ratelimit-reset`/`Retry-After` instead of hammering. The `AppLifecycleListener`
+resume-poll and the ตรวจสอบสถานะ button already give instant detection at zero
+budget cost, so a longer interval costs much less than it looks.
+
 **`POST /rp/verify` sends no `request_type`** (settled 2026-07-31). The field is
 **optional on both gateways** — verified by posting without it to each, which got
 past validation to `20005 - No IdP found` in both cases — and uat does not use
