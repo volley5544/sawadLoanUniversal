@@ -15,16 +15,17 @@ scaffolding still exists, but the **web build is what ships**.
 > API, with no mock fallback. UI text/data is Thai; code comments are English.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
-> whom — most notably a **new-P-Loan submit**, which needs a document endpoint
-> for a contractless loan *and* an `httpMultipart` handler in the native host
-> before it can succeed. The P-Loan **Extra** path completes today.
+> whom. As of **2026-07-31 no P-Loan submit can complete in the app**, either
+> kind: both now file with `POST /SavePloanContract`, which needs an
+> `httpMultipart` handler the native host does not implement. A new P-Loan is
+> additionally blocked on a document endpoint for a contractless loan.
 
 ## Build & run
 
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 115 tests
+flutter test                                  # 125 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -141,9 +142,10 @@ https://sawad-loan-universal-uat.web.app/pLoan/resume?hashThaiId=<HASH>&token=<J
 ```
 
 It spans three projects, all **built** as of 2026-07-30: this one, the native
-host (committed — needs an app release to reach testers), and LandAndHouseWeb's
-`openPLoanExtra` custom action. The real chain was walked on a device that day as
-far as step 4; **no live `POST /topup` has been made yet**.
+host (needs an app release to reach testers), and LandAndHouseWeb's
+`openPLoanExtra` custom action. The real chain has been walked on a device
+through NDID signing; **no live submit has been made yet** — see the blocker
+below.
 
 Inside the app there are now **two triggers** for the same `/pLoan/resume`:
 LandAndHouseWeb's top-up card (via `srisawad://ploan-extra`, which the host
@@ -188,11 +190,17 @@ unavailable:
   keyed by a contract too. Step 6 says so in place and **a new-loan submit
   cannot complete yet**; the Extra path is unaffected.
 
-The two kinds **submit to different endpoints**, because `POST /topup` books
-against a contract: an Extra goes there, a new P-Loan goes to the P-Loan save
-API (`POST /SavePloanContract`, `lib/services/p_loan_contract_api.dart`).
-⚠ That endpoint sends no CORS headers, so it also needs an `httpMultipart`
-handler on the native bridge that **the host app does not implement yet**.
+**Both kinds submit to `POST /SavePloanContract`** (`lib/services/
+p_loan_contract_api.dart`) since 2026-07-31. An Extra used to post `/topup`,
+inherited from the FlutterFlow source where the whole feature was a top-up
+wearing P-Loan naming — but a P-Loan Extra is a P-Loan *contract* that
+references an existing one, not a top-up of it. `refContractNo` is now the only
+field separating the two kinds.
+⚠ That endpoint sends no CORS headers and takes multipart, so it needs an
+`httpMultipart` handler on the native bridge that **the host app does not
+implement yet** — which means **no P-Loan submit of either kind can complete in
+the app today**. The Extra path could previously complete via `/topup`, so this
+is a deliberate step back until the host ships.
 
 See [CLAUDE.md](CLAUDE.md) → *A new P-Loan has no contract at all* for all of
 this, plus the Basic credential that ships in the web bundle.
@@ -334,8 +342,60 @@ lib/
                                 top-up card; rebuilds the flow, opens step 3
 firestore.rules                 deny-by-default + one client-readable document
 tools/firestore-import/         seeds appConfig from a console-export dump
-tools/deploy-uat.sh             Stop-hook auto-deploy to uat
+tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
+                                ran it no longer exists — CI owns uat now)
 ```
+
+## Recent changes — 2026-07-31
+
+A session spent getting the NDID hop working against the **real** uat gateway,
+plus one product decision. Full detail in [CLAUDE.md](CLAUDE.md); the headlines:
+
+**NDID**
+
+- **Gateway URL is config-driven.** `NdidApi.baseUrl()` reads
+  `api_url.ndid_url_base` from the Firestore runtime config, falling back to
+  `kNdidApiBase`. The uat document now points at a real NDID node with real banks
+  and real identities.
+- **Every environment verifies the applicant's own Thai ID.** The non-prod
+  test-identity substitution (`kNdidTestThaiId`) is **deleted**, not disabled —
+  the literal no longer appears in the bundle.
+- **`request_type` is no longer sent.** It is optional on both gateways and their
+  valid sets are disjoint, so a hardcoded value was a `20091` waiting to happen.
+  Still settable via `ndid_request_type` / `--dart-define=NDID_REQUEST_TYPE`.
+- **Bank tiles show the gateway's logos** (`logo_url`), rendered through an HTML
+  `<img>` because the gateway sends no CORS headers and its placeholder is an
+  SVG. The no-logo fallback is initials, not the node id — this node's ids are
+  UUIDs, which overflowed the 44×44 tile.
+- **The verify page detects results reliably now**: it re-polls on resume (a
+  backgrounded WebView suspends timers), has a manual ตรวจสอบสถานะ button,
+  surfaces poll failures instead of swallowing them, stops polling when the
+  countdown ends, and **stays inside the gateway's 100-requests-per-900s limit**
+  (3 s for 30 s, then 15 s; 60 s back-off on 429). The old flat 3 s poll was 3×
+  over and went blind for ~40 of the 60 countdown minutes.
+
+**Config**
+
+- 🐞 **The Firestore runtime config had never loaded inside the app.** Every
+  request went through the host's `httpRequest` bridge, whose allowlist omits
+  Google's hosts, so sign-in was rejected and the config silently resolved empty.
+  Nobody noticed because uat's `api_url_base` equals the compile-time default —
+  it only surfaced when `ndid_url_base` named a different host. Those two calls
+  now bypass the bridge (they are CORS-enabled), and `main.dart` logs the
+  **resolved** endpoints with a `(config)`/`(default)` label.
+
+**P-Loan**
+
+- **Both kinds now file with `POST /SavePloanContract`.** An Extra is a P-Loan
+  contract that *references* an existing one, not a top-up of it — which settles
+  the "rename it if that's wrong" note this port carried from the FlutterFlow
+  source. Side effect: the hardcoded `'Y'` PDPA consents in the dead `/topup`
+  body no longer reach anyone.
+- Step 5 (Extra 3) shows **ชื่อ-สกุล** above เบอร์โทรศัพท์.
+
+**Still blocked on the host app** — `httpMultipart` handler plus the allowlist
+entries, both needing an app release. Until then no submit completes.
+
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture notes, conventions, and
 known quirks.
