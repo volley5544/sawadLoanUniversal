@@ -13,9 +13,13 @@ import '../models/ndid_subject.dart';
 /// for NDID verification (screens #3–#4 on slide 8).
 ///
 /// Shows banks the customer has already registered with NDID, and those they
-/// have not. Picking a registered bank and tapping ถัดไป continues to
-/// [NdidVerifyPage]. (The bank's own app — K+ PIN pad, NDID consent — is a
-/// third-party screen handled outside this build.)
+/// have not. **Both grids are selectable** — picking any bank and tapping ถัดไป
+/// continues to [NdidVerifyPage] with that IdP's node id. The two groups are
+/// only a hint about what happens next: a registered bank verifies straight
+/// away, an unregistered one first walks the customer through NDID sign-up in
+/// the bank's own app, then verifies — the same request either way, so this
+/// build does not branch on it. (The bank's own app — K+ PIN pad, NDID consent,
+/// sign-up — is a third-party screen handled outside this build.)
 ///
 /// **Data source:** inside the native host ([NativeCameraBridge.isSupported])
 /// the two grids come from the real NDID local-node API (`POST /idp/list`,
@@ -268,10 +272,11 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
             _bankGrid(_registered, enabled: true),
           const SizedBox(height: 20),
           _groupTitle('ผู้ให้บริการที่ยังไม่ลงทะเบียน NDID'),
-          _bankGrid(_notRegistered, enabled: false),
+          _bankGrid(_notRegistered, enabled: true),
           const SizedBox(height: 8),
           Text(
-            'หากยังไม่ได้ลงทะเบียน NDID กรุณาลงทะเบียนกับธนาคารก่อน',
+            'หากเลือกผู้ให้บริการที่ยังไม่ได้ลงทะเบียน '
+            'ท่านจะต้องลงทะเบียน NDID กับธนาคารนั้นในแอปของธนาคารก่อนจึงจะยืนยันตัวตนได้',
             style: LoanRegisterStyles.labelStyle(),
           ),
         ],

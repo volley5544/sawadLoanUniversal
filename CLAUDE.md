@@ -308,6 +308,14 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   full list minus those → not registered) with loading/retry states; a plain
   browser keeps the hardcoded mock banks. The picked IdP node id is stored on
   `form.ndidIdpId` and passed to the verify page.
+  **Both grids are selectable** (changed 2026-08-04). The not-registered grid
+  used to render at 0.45 opacity with `onTap: null`; it now passes
+  `enabled: true` like the registered one. `_next` never branched on which grid
+  a bank came from — it only reads `bank.idpId` — so an unregistered IdP goes
+  through the identical `POST /rp/verify`; the NDID gateway/bank app then walks
+  the customer through sign-up before verifying. The two headers stay as a hint
+  about what happens next, and a note under the second grid says an unregistered
+  pick must register in the bank's app first.
 
   **Tiles show the gateway's own logo** (`logo_url` / `has_logo` on `NdidIdp`,
   added 2026-07-31) via `Image.network(..., webHtmlElementStrategy:
@@ -1063,10 +1071,13 @@ flow and, on success, flips to a green check + banner + ดาวน์โหล
 > people.
 
 What that changes for testing: a customer who has not onboarded with any IdP now
-gets an **empty registered grid** — `ndid_bank_select_page` already renders
-"ไม่พบผู้ให้บริการที่ท่านเคยลงทะเบียน NDID" and leaves the not-registered grid
-unselectable — rather than a usable mock bank. That is the node answering
-truthfully; pick a test customer who *is* onboarded.
+gets an **empty registered grid** — `ndid_bank_select_page` renders
+"ไม่พบผู้ให้บริการที่ท่านเคยลงทะเบียน NDID" — rather than a usable mock bank. That
+is the node answering truthfully. Since 2026-08-04 the **not-registered grid is
+selectable**, so such a customer is no longer stuck: they can pick an
+unregistered provider and register with it in the bank's app as part of the
+verify hop. To exercise the fast (already-registered) path, still pick a test
+customer who *is* onboarded.
 
 `isThaiIdVerified` still compares the scanned card to `customer.thaiId` and
 **not** to `ndidThaiId`; the two now coincide, but a test pins them as separate
