@@ -17,7 +17,8 @@ import 'srisawad_api.dart';
 ///   - **Auth** = the customer's own Firebase **bearer token** (the `?token=`
 ///     launch param), so no service credential ships in the bundle — this is
 ///     what closed that pentest finding;
-///   - **Header** `x-srisawad: x1`, matching the endpoint's sample call;
+///   - **Header** `x-srisawad` from [SrisawadApi.headers] like every other
+///     mobile-API call (`x1` on both prod and the new uat gateway);
 ///   - **Body** = JSON, exactly [PLoanContractSubmission.fields] (30 keys). The
 ///     endpoint takes **no files**, so the collateral/identity photos are no
 ///     longer part of this request.
@@ -30,11 +31,6 @@ class PLoanContractApi {
 
   /// Path appended to [SrisawadApi.baseUrl].
   static const String path = '/ploan';
-
-  /// `x-srisawad` header the endpoint's sample call sends. Forced on every
-  /// environment (the mobile API's own header is empty on uat), so it matches
-  /// the documented request rather than the per-env value.
-  static const String _srisawadHeader = 'x1';
 
   /// Files the endpoint's own sample call populates. Used only to make a
   /// rejection legible: if the server refuses and one of these went out empty,
@@ -73,11 +69,7 @@ class PLoanContractApi {
       res = await sendApiRequest(
         'POST',
         url,
-        headers: SrisawadApi.headers(
-          token,
-          contentType: 'application/json',
-          extra: const {'x-srisawad': _srisawadHeader},
-        ),
+        headers: SrisawadApi.headers(token, contentType: 'application/json'),
         body: jsonEncode(submission.fields),
       );
     } on ApiTransportException catch (e) {

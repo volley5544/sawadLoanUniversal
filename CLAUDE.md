@@ -920,8 +920,9 @@ since the 2026-07-31 retarget), is filed.
   uses. There is no separate host/port define any more.
 - **Auth** = the customer's own Firebase **bearer token** (the `?token=` launch
   param, `PLoanFlow.authToken`). **No service credential ships in the bundle.**
-- **Header** `x-srisawad: x1` (`_srisawadHeader`), forced on every env since the
-  mobile API's own header is empty on uat.
+- **Header** `x-srisawad: x1` from `SrisawadApi.headers` like every other
+  mobile-API call — `AppEnvironment.current.srisawadHeader` is `x1` on both prod
+  and the new uat gateway (uat was empty until 2026-08-04; see below).
 - **Body** = JSON, exactly `PLoanContractSubmission.fields` (30 keys, matching
   the supplied `api_data/new-api-ploan.txt` curl). **No files** — the endpoint
   takes none, so the collateral/identity photos are collected for the flow but
@@ -1321,8 +1322,9 @@ under `results` with its own `code`/`message` — non-200 code throws) and
 `Authorization: Bearer` token from the `?token=` launch param). Base URL +
 `x-srisawad` header are per-environment on `AppEnvironment`
 (prod `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
-uat `https://dev.swpfin.com:7076`, no header). Errors throw
-`UserApiException`. Models: `models/customer_detail.dart` (profile) and
+uat `https://dev.swpfin.com:7076` + `x-srisawad: x1` — the new uat gateway
+requires the header on **every** `api_url_base` call, changed 2026-08-04; it was
+empty before). Errors throw `UserApiException`. Models: `models/customer_detail.dart` (profile) and
 `models/customer_address.dart` (`AddressInfo` ×4 + `data_date`;
 `AddressInfo.oneLine` renders the display string used on step 1 — id_card →
 idCardAddress, current → currentAddress, other → workAddress).

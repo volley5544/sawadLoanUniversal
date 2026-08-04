@@ -167,7 +167,9 @@ enum AppEnvironment {
     firebaseProjectId: 'sawad-loan-universal-uat',
     firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
     mobileApiBase: 'https://dev.swpfin.com:7076',
-    srisawadHeader: '', // UAT doesn't require the x-srisawad header
+    // The new UAT gateway requires it on every api_url_base call, same as prod
+    // (was empty for the old uat host — changed 2026-08-04).
+    srisawadHeader: 'x1',
   );
 
   const AppEnvironment({
@@ -202,8 +204,10 @@ enum AppEnvironment {
   /// slash.
   final String mobileApiBase;
 
-  /// Value for the `x-srisawad` request header the mobile API expects; empty
-  /// means "don't send the header" (UAT).
+  /// Value for the `x-srisawad` request header the mobile API expects, sent on
+  /// every `api_url_base` call via [SrisawadApi.headers]. `x1` on both prod and
+  /// the new uat gateway. Empty means "don't send the header" — no environment
+  /// is empty today, but the mechanism is kept.
   final String srisawadHeader;
 
   /// The `ENV` value baked in at build time. Empty for local runs.

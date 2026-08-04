@@ -15,7 +15,8 @@ import 'srisawad_api.dart';
 ///
 /// Base URL + `x-srisawad` header come from [AppEnvironment.current]
 /// (prod: `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
-/// uat: `https://dev.swpfin.com:7076`, header not required). Transport goes
+/// uat: `https://dev.swpfin.com:7076` + `x-srisawad: x1` — the new uat gateway
+/// requires it too, as of 2026-08-04). Transport goes
 /// through [sendApiRequest] (host `httpRequest` bridge inside the WebView,
 /// plain `http` in a browser — these endpoints do send CORS headers).
 class UserApi {
