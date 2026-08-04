@@ -15,10 +15,12 @@ scaffolding still exists, but the **web build is what ships**.
 > API, with no mock fallback. UI text/data is Thai; code comments are English.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
-> whom. As of **2026-07-31 no P-Loan submit can complete in the app**, either
-> kind: both now file with `POST /SavePloanContract`, which needs an
-> `httpMultipart` handler the native host does not implement. A new P-Loan is
-> additionally blocked on a document endpoint for a contractless loan.
+> whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
+> bearer-authenticated JSON call on the mobile API base — so the **P-Loan Extra
+> is no longer blocked** (the old `httpMultipart`/Basic-credential/`:8082`
+> requirements are gone); one live submit is still needed to confirm it end to
+> end. A **new P-Loan** remains blocked on a document endpoint for a contractless
+> loan.
 
 ## Build & run
 
@@ -190,20 +192,21 @@ unavailable:
   keyed by a contract too. Step 6 says so in place and **a new-loan submit
   cannot complete yet**; the Extra path is unaffected.
 
-**Both kinds submit to `POST /SavePloanContract`** (`lib/services/
-p_loan_contract_api.dart`) since 2026-07-31. An Extra used to post `/topup`,
-inherited from the FlutterFlow source where the whole feature was a top-up
-wearing P-Loan naming — but a P-Loan Extra is a P-Loan *contract* that
+**Both kinds submit to `POST /ploan`** (`lib/services/p_loan_contract_api.dart`)
+since 2026-07-31 (unified endpoint), **retargeted 2026-08-04** to a
+mobile-API-style call: base from `api_url['api_url_base']`, the customer's
+Firebase **bearer token** for auth, `x-srisawad: x1`, JSON body. An Extra used to
+post `/topup`, inherited from the FlutterFlow source where the whole feature was
+a top-up wearing P-Loan naming — but a P-Loan Extra is a P-Loan *contract* that
 references an existing one, not a top-up of it. `refContractNo` is now the only
 field separating the two kinds.
-⚠ That endpoint sends no CORS headers and takes multipart, so it needs an
-`httpMultipart` handler on the native bridge that **the host app does not
-implement yet** — which means **no P-Loan submit of either kind can complete in
-the app today**. The Extra path could previously complete via `/topup`, so this
-is a deliberate step back until the host ships.
 
-See [CLAUDE.md](CLAUDE.md) → *A new P-Loan has no contract at all* for all of
-this, plus the Basic credential that ships in the web bundle.
+The retarget **unblocked the Extra**: the old endpoint's multipart body, missing
+CORS, `httpMultipart` bridge requirement and baked-in Basic credential are all
+gone. One live `/ploan` submit is still needed to confirm it end to end.
+
+See [CLAUDE.md](CLAUDE.md) → **P-Loan save API** and *A new P-Loan has no
+contract at all* for the full picture.
 
 Step 6 shows the three contract PDFs from `POST /pdf/loan` **inline**, rendered
 by `pdfx` through pdf.js (loaded in `web/index.html`) rather than by the
@@ -326,7 +329,7 @@ lib/
     srisawad_api.dart           shared base URL / headers / GET /loan/list
     topup_api.dart              top-up API group (/topup/*)
     p_loan_api.dart             P-Loan API group (the flow's single seam)
-    p_loan_contract_api.dart    P-Loan save API (POST /SavePloanContract)
+    p_loan_contract_api.dart    P-Loan save API (POST /ploan, bearer + JSON)
     app_config_api.dart         Firestore runtime config (REST, no SDK)
     firebase_auth_rest.dart     anonymous sign-in over REST (no SDK)
     firestore_rest.dart         typed-value decoder for the REST format
@@ -345,6 +348,55 @@ tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
+
+## Recent changes — 2026-08-04
+
+A session aimed at pentest-readiness and pointing the P-Loan save at the new uat
+gateway. Full detail in [CLAUDE.md](CLAUDE.md); the headlines:
+
+**P-Loan save endpoint → `POST /ploan`**
+
+- **Retargeted** from `<:8082>/SavePloanContract` (multipart, a shared HTTP Basic
+  credential baked into the bundle) to a **mobile-API-style call**: base from
+  `api_url['api_url_base']` in the Firestore config (uat: `dev.swpfin.com:7076`),
+  the customer's **Firebase bearer token** for auth, `x-srisawad: x1`, and a JSON
+  body — the 30 fields, unchanged, matching the supplied curl.
+- This **deleted the shared Basic credential** (`kPLoanSaveApiAuth`) and the
+  `:8082` host define from the source — no shared secret ships in the bundle now,
+  closing that pentest finding (verified gone from the live `main.dart.js`).
+- It also **removed the submit blocker**: the never-built `httpMultipart` bridge
+  handler and the `:8082` allowlist entry are no longer needed, so the **Extra
+  can complete**. (One live `/ploan` submit still needed to confirm reachability
+  and CORS.)
+
+**uat API headers & timeout**
+
+- **`x-srisawad: x1` on every `api_url_base` call.** The new uat gateway requires
+  it (the old host did not); set once at `AppEnvironment.uat.srisawadHeader`, the
+  single chokepoint `SrisawadApi.headers()` reads. `pdf/loan` keeps its own
+  `x1_c3Jpc2F3YWQ` override.
+- **`sendApiRequest` timeout 30 s → 60 s**, giving the `/ploan` contract-filing
+  POST headroom (it no longer rides the old 120 s multipart path). NDID keeps its
+  own separate 30 s timeout.
+
+**NDID bank select**
+
+- **The "ยังไม่ลงทะเบียน NDID" grid is now selectable**, like the registered one.
+  `_next` never branched on which grid a bank came from, so an unregistered IdP
+  goes through the identical `POST /rp/verify`; the bank app then walks the
+  customer through sign-up before verifying. A customer with no onboarded IdP is
+  no longer stuck at a dead end.
+
+**Pentest prep (LandAndHouseWeb, the sibling FlutterFlow project)**
+
+- Removed **all debug `print`/`debugPrint`** from that project (99 statements
+  across 45 files), **keeping** the `Volley5544`-marked console prints the native
+  host parses as its web↔app bridge. Analyzer stayed at 0 errors.
+
+**Docs**
+
+- The **P-Loan Extra user manual** (`docs/`) was re-shot on a real device against
+  live uat and given three new screens; identifiers are pixelated throughout.
 
 ## Recent changes — 2026-07-31
 
@@ -395,6 +447,8 @@ plus one product decision. Full detail in [CLAUDE.md](CLAUDE.md); the headlines:
 
 **Still blocked on the host app** — `httpMultipart` handler plus the allowlist
 entries, both needing an app release. Until then no submit completes.
+*(Superseded 2026-08-04: the save endpoint moved to `POST /ploan`, which needs
+neither — see the 2026-08-04 section above.)*
 
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture notes, conventions, and
