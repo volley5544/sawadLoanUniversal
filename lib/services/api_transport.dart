@@ -55,7 +55,10 @@ Future<ApiHttpResult> sendApiRequest(
   Uri url, {
   Map<String, String>? headers,
   String? body,
-  Duration timeout = const Duration(seconds: 30),
+  // 60 s so the P-Loan `/ploan` submit (and any other slow mobile-API write) has
+  // headroom — it was 30 s, which is tight for a contract-filing POST. Raised
+  // 2026-08-04.
+  Duration timeout = const Duration(seconds: 60),
   bool bypassHostBridge = false,
 }) async {
   if (NativeCameraBridge.isSupported && !bypassHostBridge) {
