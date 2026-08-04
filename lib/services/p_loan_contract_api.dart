@@ -3,17 +3,20 @@ import 'dart:convert';
 import '../config/app_environment.dart';
 import '../p_loan/application/models/p_loan_submission.dart';
 import 'api_transport.dart';
+import 'app_config_api.dart';
 import 'native_bridge.dart';
 import 'srisawad_api.dart';
 
 /// Client for the **P-Loan save API** — `POST /SavePloanContract`, where a
 /// completed P-Loan application is filed.
 ///
-/// This is a different service from the mobile API the rest of the flow reads
-/// from: its own host and port ([kPLoanSaveApiBase]), HTTP **Basic** auth
-/// instead of a bearer token ([kPLoanSaveApiAuth]), and a
-/// `multipart/form-data` body with repeated `group[]` file parts — the same
-/// shape `regmast_ploan.php` takes.
+/// Auth and body still differ from the mobile API: HTTP **Basic** auth instead
+/// of a bearer token ([kPLoanSaveApiAuth]), and a `multipart/form-data` body
+/// with repeated `group[]` file parts — the same shape `regmast_ploan.php`
+/// takes. **The base URL, however, now comes from the same place the mobile API
+/// does** (changed 2026-08-04): `api_url['api_url_base']` in the Firestore
+/// config document `application/public_config`, with [kPLoanSaveApiBase] kept
+/// only as the compile-time degrade-to. See [_base].
 ///
 /// ## ⚠ Transport: this needs the native host
 ///
@@ -33,7 +36,7 @@ import 'srisawad_api.dart';
 class PLoanContractApi {
   PLoanContractApi._();
 
-  /// Path appended to [kPLoanSaveApiBase].
+  /// Path appended to the resolved base (see [_base]).
   static const String path = '/SavePloanContract';
 
   /// Files the endpoint's own sample call populates. Used only to make a
@@ -61,7 +64,7 @@ class PLoanContractApi {
   /// Throws [SrisawadApiException] with the server's own message on refusal, so
   /// callers render the API's wording rather than a substitute.
   static Future<String> save(PLoanContractSubmission submission) async {
-    final url = Uri.parse('${_base()}$path');
+    final url = Uri.parse('${await _base()}$path');
 
     final files = <MultipartFilePart>[];
     submission.imageGroups.forEach((group, images) {
@@ -113,8 +116,17 @@ class PLoanContractApi {
     );
   }
 
-  static String _base() {
-    final base = kPLoanSaveApiBase.trim();
+  /// Base for the POST, resolved at call time.
+  ///
+  /// `api_url['api_url_base']` from the Firestore config document
+  /// (`application/public_config`) is authoritative — the same per-project base
+  /// [SrisawadApi.baseUrl] uses, so this call now lands on whatever host the
+  /// mobile API does (uat: `https://dev.swpfin.com:7076`). [kPLoanSaveApiBase]
+  /// (`:8082`) is only the degrade-to when the config can't be read, so a config
+  /// outage still reaches the previously-working host rather than failing.
+  static Future<String> _base() async {
+    final config = await AppConfigApi.ensureLoaded();
+    final base = (config.apiUrlBase ?? kPLoanSaveApiBase).trim();
     return base.endsWith('/') ? base.substring(0, base.length - 1) : base;
   }
 

@@ -908,11 +908,26 @@ await PLoanApiService().submit(fields: s.fields, imageGroups: s.imageGroups);
 
 ### P-Loan save API (`services/p_loan_contract_api.dart`)
 
-`POST /SavePloanContract` on `https://dev.swpfin.com:8082` — where a **new
-P-Loan** is filed. A separate service from the mobile API: different host and
-port (`kPLoanSaveApiBase`), HTTP **Basic** auth instead of a bearer token
+`POST /SavePloanContract` — where a **new P-Loan**, and (since the 2026-07-31
+retarget) an Extra, are filed. HTTP **Basic** auth instead of a bearer token
 (`kPLoanSaveApiAuth`), and a `multipart/form-data` body with repeated `group[]`
-file parts. Both defines are overridable per build.
+file parts.
+
+**Base URL: config-driven since 2026-08-04.** `PLoanContractApi._base()` now
+resolves `api_url['api_url_base']` from the Firestore config document
+(`application/public_config`) — the **same per-project base `SrisawadApi.baseUrl`
+uses**, so on uat the save call lands on `https://dev.swpfin.com:7076` (the
+mobile API host), not the old dedicated `:8082`. `kPLoanSaveApiBase` (default
+`https://dev.swpfin.com:8082`) is kept **only as the compile-time degrade-to**
+when the config can't be read, so a config outage still reaches the
+previously-working host. This was requested to route the save through the mobile
+API base rather than a separate host — note it changes only the base, **not** the
+auth (still Basic) or the multipart transport. ⚠ Whether `:7076` actually serves
+`/SavePloanContract` (and whether it sends CORS headers / needs Basic auth once
+proxied) is a **backend fact to confirm** — if it is proxied behind the mobile
+API, Outstanding #2 (the missing `httpMultipart` bridge / CORS) may be moot and
+the Basic credential may no longer be needed. Both `kPLoanSaveApiBase` and
+`kPLoanSaveApiAuth` remain overridable per build.
 
 `PLoanContractSubmission.fromFlow(flow)` builds it — a **second** mapper beside
 `PLoanSubmission`, because the field set is close to `regmast_ploan.php` but not
