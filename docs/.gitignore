@@ -1,0 +1,14 @@
+# Original, UNMASKED captures. Since the 2026-08-04 re-shoot these are live UAT
+# screens carrying one real person's name, national ID, bank account, contract
+# no., plate, phone and addresses — so the originals stay local while
+# docs/screenshots/ holds the pixelated versions that ship.
+#
+# Keep them: an unmasked or re-cropped rebuild is one `annotate_shots.py` run.
+raw/
+
+# Where the user drops fresh device captures before they are copied into raw/.
+# Same PII, same rule.
+new screenshots/
+
+__pycache__/
+.DS_Store

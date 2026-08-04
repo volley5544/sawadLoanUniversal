@@ -1,0 +1,225 @@
+{
+  "source_dir": "docs/raw",
+  "output_dir": "docs/screenshots",
+  "_note": [
+    "Callout labels are ASCII on purpose - the annotator's bundled font does not",
+    "cover Thai (see references/annotate-and-redact.md). The Thai wording lives",
+    "in content.py.",
+    "Re-captured 2026-08-04 on a real device against live UAT (web build 61/62),",
+    "replacing the browser captures that ran on p_loan_mock.dart fixtures. Because",
+    "they are live, EVERY identifier is pixelated: customer name, Thai ID, phone,",
+    "bank account no., contract no., plate, and all four addresses. Money figures",
+    "are left readable in chapter 2 - they are what the manual explains and they",
+    "identify nobody once the name and contract are gone - but are masked on the",
+    "two entry screens (1.1/1.2), which show this customer's existing position.",
+    "Six screens still come from the older browser build and keep their old raw:",
+    "10-installment, 34-ready-to-submit, 35-identity-done, 43-ndid-done,",
+    "45-declaration, 50-submitted. See appendix A2/A3 in content.py."
+  ],
+  "shots": [
+    {
+      "src": "n-home.jpg",
+      "out": "01-home.png",
+      "redact": [
+        [298, 288, 488, 344],
+        [572, 1100, 806, 1150],
+        [594, 1146, 806, 1194],
+        [84, 1434, 264, 1486]
+      ],
+      "annots": [
+        {"box": [55, 400, 284, 578], "label": "Top up credit"},
+        {"box": [98, 1284, 414, 1342], "label": "Multi-purpose line"}
+      ]
+    },
+    {
+      "src": "n-topup.jpg",
+      "out": "02-topup-card.png",
+      "block": 18,
+      "redact": [
+        [576, 478, 882, 514],
+        [696, 522, 872, 560],
+        [738, 664, 876, 700],
+        [734, 712, 876, 746],
+        [726, 758, 876, 796],
+        [736, 810, 876, 846],
+        [596, 912, 878, 968],
+        [300, 1044, 452, 1088],
+        [740, 1046, 876, 1084],
+        [700, 1138, 866, 1188]
+      ],
+      "annots": [
+        {"box": [120, 1398, 356, 1606], "label": "Multi-purpose line"}
+      ]
+    },
+    {
+      "src": "10-installment.png",
+      "out": "10-installment.png",
+      "annots": [
+        {"box": [22, 114, 392, 178], "label": "New loan amount"},
+        {"box": [22, 220, 392, 528], "label": "Pick a term"},
+        {"box": [22, 820, 392, 876], "label": "Confirm"}
+      ]
+    },
+    {
+      "src": "n-step3-1.png",
+      "out": "20-customer-data.png",
+      "redact": [
+        [202, 552, 386, 598],
+        [540, 752, 748, 800],
+        [532, 946, 748, 996],
+        [158, 1194, 648, 1242]
+      ],
+      "annots": [
+        {"box": [45, 476, 739, 630], "label": "Payout account"},
+        {"box": [45, 748, 742, 998], "label": "Name and phone"},
+        {"box": [40, 1266, 742, 1380], "label": "Reject or confirm"}
+      ]
+    },
+    {
+      "src": "n-step3-2.png",
+      "out": "21-addresses.png",
+      "redact": [
+        [528, 198, 748, 254],
+        [158, 446, 648, 528],
+        [158, 650, 648, 732],
+        [158, 855, 648, 937],
+        [158, 1059, 648, 1141]
+      ],
+      "annots": [
+        {"box": [45, 370, 737, 552], "label": "Current address"},
+        {"box": [45, 576, 737, 958], "label": "Home and ID card"},
+        {"box": [45, 986, 737, 1164], "label": "Work or other"}
+      ]
+    },
+    {
+      "src": "n-step3-3.png",
+      "out": "25-confirm-account.png",
+      "redact": [
+        [528, 198, 748, 254],
+        [158, 448, 648, 530],
+        [158, 652, 648, 734],
+        [198, 1128, 382, 1178]
+      ],
+      "annots": [
+        {"box": [38, 1040, 744, 1214], "label": "Account checked"},
+        {"box": [396, 1256, 746, 1372], "label": "Confirm"}
+      ]
+    },
+    {
+      "src": "n-step4-1.png",
+      "out": "30-summary.png",
+      "redact": [
+        [144, 798, 438, 842]
+      ],
+      "annots": [
+        {"box": [40, 268, 742, 506], "label": "Amount and duty"},
+        {"box": [40, 556, 742, 942], "label": "Repayment terms"},
+        {"box": [40, 988, 742, 1044], "label": "You receive"}
+      ]
+    },
+    {
+      "src": "n-step4-2.png",
+      "out": "31-identity-empty.png",
+      "redact": [
+        [198, 354, 386, 402]
+      ],
+      "annots": [
+        {"box": [42, 470, 740, 704], "label": "ID card photo"},
+        {"box": [42, 740, 740, 914], "label": "Selfie with ID"},
+        {"box": [42, 990, 740, 1178], "label": "Contract documents"}
+      ]
+    },
+    {
+      "src": "n-step4-3.png",
+      "out": "32-documents-ndid.png",
+      "annots": [
+        {"box": [42, 240, 738, 724], "label": "Three documents"},
+        {"box": [42, 805, 738, 1032], "label": "Sign with NDID"},
+        {"box": [42, 1110, 738, 1252], "label": "Consents"}
+      ]
+    },
+    {
+      "src": "n-step4-5.png",
+      "out": "33-document-view.png",
+      "block": 10,
+      "redact": [
+        [188, 430, 308, 462],
+        [450, 430, 574, 462]
+      ],
+      "annots": [
+        {"box": [38, 300, 744, 700], "label": "Read it here"},
+        {"box": [50, 1192, 744, 1252], "label": "Tick to accept"},
+        {"box": [35, 1288, 744, 1384], "label": "Accept"}
+      ]
+    },
+    {
+      "src": "34-conclusion-ready.png",
+      "out": "34-ready-to-submit.png",
+      "annots": [
+        {"box": [22, 170, 392, 374], "label": "All accepted"},
+        {"box": [22, 408, 392, 604], "label": "NDID signed"},
+        {"box": [22, 662, 392, 792], "label": "Consents"}
+      ]
+    },
+    {
+      "src": "35-conclusion-identity.png",
+      "out": "35-identity-done.png",
+      "annots": [
+        {"box": [22, 314, 392, 520], "label": "ID card attached"},
+        {"box": [22, 560, 392, 772], "label": "Selfie attached"},
+        {"box": [352, 322, 390, 358], "label": "Remove"}
+      ]
+    },
+    {
+      "src": "n-step4-4.png",
+      "out": "36-consents.png",
+      "annots": [
+        {"box": [48, 830, 742, 1072], "label": "Two consents"},
+        {"box": [38, 1146, 742, 1200], "label": "Why it is off"}
+      ]
+    },
+    {
+      "src": "n-ndid1.jpg",
+      "out": "40-ndid-banks.png",
+      "annots": [
+        {"box": [45, 252, 812, 600], "label": "Your NDID banks"},
+        {"box": [45, 662, 812, 1000], "label": "Not registered"},
+        {"box": [438, 1748, 812, 1864], "label": "Next"}
+      ]
+    },
+    {
+      "src": "n-ndid2.jpg",
+      "out": "42-ndid-waiting.png",
+      "annots": [
+        {"box": [55, 830, 806, 1000], "label": "Time remaining"},
+        {"box": [52, 1604, 810, 1718], "label": "Check status"},
+        {"box": [52, 1738, 810, 1854], "label": "Cancel"}
+      ]
+    },
+    {
+      "src": "43-ndid-success.png",
+      "out": "43-ndid-done.png",
+      "annots": [
+        {"box": [22, 468, 392, 508], "label": "Verified"},
+        {"box": [22, 830, 392, 886], "label": "OK"}
+      ]
+    },
+    {
+      "src": "45-final-declaration.png",
+      "out": "45-declaration.png",
+      "annots": [
+        {"box": [40, 334, 374, 498], "label": "Declaration"},
+        {"box": [278, 500, 354, 542], "label": "Confirm"}
+      ]
+    },
+    {
+      "src": "50-success.png",
+      "out": "50-submitted.png",
+      "annots": [
+        {"box": [22, 518, 392, 552], "label": "You receive"},
+        {"box": [22, 552, 392, 584], "label": "Reference no."},
+        {"box": [24, 616, 392, 676], "label": "Back to home"}
+      ]
+    }
+  ]
+}
