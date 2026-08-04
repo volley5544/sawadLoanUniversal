@@ -101,17 +101,18 @@
 /// `URL not allowed`, and fixing it needs an app release, not a web deploy.
 /// Keep the two in step.
 ///
-/// ## `httpMultipart` — CORS-free multipart upload (P-Loan save API)
+/// ## `httpMultipart` — CORS-free multipart upload
 ///
-/// **Not implemented by the host yet — the P-Loan save submit needs it.**
-///
-/// `POST /SavePloanContract` takes `multipart/form-data` with repeated
-/// `group[]` file parts, and (verified 2026-07-27) answers **401 with no
-/// `Access-Control-Allow-*` headers on the preflight**, so a browser upload is
-/// blocked. `httpRequest` above can't carry it either: multipart needs the file
-/// bytes, and that handler's body is a single string. This handler takes the
-/// parts **base64-encoded inside the JSON envelope** and lets the host assemble
-/// the real multipart request natively.
+/// **No longer needed as of 2026-08-04, and never implemented.** It existed for
+/// the old P-Loan save endpoint (`<:8082>/SavePloanContract`), which took
+/// `multipart/form-data` and sent no CORS headers. That endpoint has been
+/// retargeted to `POST <api_url_base>/ploan` — a JSON, bearer-authenticated call
+/// on the mobile API base that goes through `httpRequest`/`package:http` like
+/// every other mobile-API call — so nothing in this app now needs a multipart
+/// bridge. The snippet below is kept only as the reference pattern should a
+/// future file-upload endpoint appear: it takes the parts **base64-encoded
+/// inside the JSON envelope** and lets the host assemble the real multipart
+/// request natively.
 ///
 /// ```dart
 /// webViewController.addJavaScriptHandler(

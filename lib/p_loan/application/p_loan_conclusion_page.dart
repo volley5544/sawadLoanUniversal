@@ -350,6 +350,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       final transNo = switch (_flow.submitTarget) {
         PLoanSubmitTarget.pLoanSaveApi => await PLoanApi.savePLoanContract(
             submission: PLoanContractSubmission.fromFlow(_flow),
+            token: _flow.authToken,
           ),
         PLoanSubmitTarget.topup => await PLoanApi.submit(
             payload: _flow.toSubmissionJson(),
@@ -408,8 +409,8 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
 
   /// Shows the payload this flow would send.
   ///
-  /// **No longer kind-aware**: since 2026-07-31 both kinds file with
-  /// `POST /SavePloanContract`, so this previews [PLoanContractSubmission] for
+  /// **No longer kind-aware**: since 2026-07-31 both kinds file with the P-Loan
+  /// save API (`POST /ploan`), so this previews [PLoanContractSubmission] for
   /// either. It used to show the `regmast_ploan.php` mapping for an Extra, which
   /// would now be a preview of a body nothing sends — worse than no preview,
   /// because a QA check against it would pass while the real payload differed.
@@ -423,11 +424,13 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
     final images = submission.imageGroups;
     final unresolved = submission.unresolvedFields;
     final lines = [
-      'POST /SavePloanContract  (${_flow.kind.shortLabel})',
+      'POST /ploan  (${_flow.kind.shortLabel})',
       '',
       for (final e in fields.entries) '${e.key}: ${e.value}',
       '',
-      'images:',
+      // /ploan is JSON and takes no files; these are collected for the flow but
+      // not part of this request.
+      'images (collected, NOT sent to /ploan):',
       for (final e in images.entries)
         '  ${e.key}[]: ${e.value.length} file(s)',
       if (unresolved.isNotEmpty) ...[

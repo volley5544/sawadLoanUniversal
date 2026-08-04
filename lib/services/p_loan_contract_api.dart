@@ -1,43 +1,40 @@
 import 'dart:convert';
 
-import '../config/app_environment.dart';
 import '../p_loan/application/models/p_loan_submission.dart';
 import 'api_transport.dart';
-import 'app_config_api.dart';
-import 'native_bridge.dart';
 import 'srisawad_api.dart';
 
-/// Client for the **P-Loan save API** — `POST /SavePloanContract`, where a
-/// completed P-Loan application is filed.
+/// Client for the **P-Loan save API** — `POST /ploan`, where a completed P-Loan
+/// application (either kind) is filed.
 ///
-/// Auth and body still differ from the mobile API: HTTP **Basic** auth instead
-/// of a bearer token ([kPLoanSaveApiAuth]), and a `multipart/form-data` body
-/// with repeated `group[]` file parts — the same shape `regmast_ploan.php`
-/// takes. **The base URL, however, now comes from the same place the mobile API
-/// does** (changed 2026-08-04): `api_url['api_url_base']` in the Firestore
-/// config document `application/public_config`, with [kPLoanSaveApiBase] kept
-/// only as the compile-time degrade-to. See [_base].
+/// **Retargeted 2026-08-04** from the old `POST <:8082>/SavePloanContract`
+/// (multipart body, a shared HTTP **Basic** credential baked into the bundle) to
+/// a plain **mobile-API-style call**:
 ///
-/// ## ⚠ Transport: this needs the native host
+///   - **Base URL** = `api_url['api_url_base']` from the Firestore config
+///     document `application/public_config` — the same per-project base
+///     [SrisawadApi.baseUrl] resolves, so uat lands on `dev.swpfin.com:7076`;
+///   - **Auth** = the customer's own Firebase **bearer token** (the `?token=`
+///     launch param), so no service credential ships in the bundle — this is
+///     what closed that pentest finding;
+///   - **Header** `x-srisawad: x1`, matching the endpoint's sample call;
+///   - **Body** = JSON, exactly [PLoanContractSubmission.fields] (30 keys). The
+///     endpoint takes **no files**, so the collateral/identity photos are no
+///     longer part of this request.
 ///
-/// Verified against the live endpoint on 2026-07-27:
-///
-///   - a request with no `Authorization` header answers **401**;
-///   - **no `Access-Control-Allow-*` header appears on any response**, and the
-///     `OPTIONS` preflight is 401'd, so a browser upload is blocked before it
-///     is ever sent;
-///   - `GET`/`OPTIONS` with valid auth answer 404 — the route is POST-only.
-///
-/// So this cannot be called from a plain browser at all, and inside the WebView
-/// it needs the host's **`httpMultipart`** bridge handler, which the host app
-/// does not implement yet ([sendMultipartGroupsApiRequest] falls back to a
-/// direct upload and, when that fails, says so). The alternative fix is CORS
-/// headers on the endpoint; either side closes it.
+/// Because it is now the mobile API host, it answers with `access-control-allow-
+/// origin: *` like the rest of that API, so — unlike the old `:8082` endpoint —
+/// it can be called from a plain browser and needs no `httpMultipart` bridge.
 class PLoanContractApi {
   PLoanContractApi._();
 
-  /// Path appended to the resolved base (see [_base]).
-  static const String path = '/SavePloanContract';
+  /// Path appended to [SrisawadApi.baseUrl].
+  static const String path = '/ploan';
+
+  /// `x-srisawad` header the endpoint's sample call sends. Forced on every
+  /// environment (the mobile API's own header is empty on uat), so it matches
+  /// the documented request rather than the per-env value.
+  static const String _srisawadHeader = 'x1';
 
   /// Files the endpoint's own sample call populates. Used only to make a
   /// rejection legible: if the server refuses and one of these went out empty,
@@ -58,43 +55,33 @@ class PLoanContractApi {
     'branchId',
   };
 
-  /// Files [submission] and returns the reference the server assigns, or `''`
-  /// when the response carries none.
+  /// Files [submission] as JSON and returns the reference the server assigns, or
+  /// `''` when the response carries none. [token] is the customer's Firebase
+  /// bearer token (the `?token=` launch param).
   ///
   /// Throws [SrisawadApiException] with the server's own message on refusal, so
   /// callers render the API's wording rather than a substitute.
-  static Future<String> save(PLoanContractSubmission submission) async {
-    final url = Uri.parse('${await _base()}$path');
-
-    final files = <MultipartFilePart>[];
-    submission.imageGroups.forEach((group, images) {
-      for (var i = 0; i < images.length; i++) {
-        files.add(MultipartFilePart(
-          // Repeated `group[]` parts, matching the sample call.
-          field: '$group[]',
-          filename: '${group}_${i + 1}.jpg',
-          bytes: images[i],
-        ));
-      }
-    });
+  static Future<String> save(
+    PLoanContractSubmission submission, {
+    required String token,
+  }) async {
+    final base = await SrisawadApi.baseUrl();
+    final url = Uri.parse('$base$path');
 
     final ApiHttpResult res;
     try {
-      res = await sendMultipartGroupsApiRequest(
+      res = await sendApiRequest(
+        'POST',
         url,
-        headers: {'Authorization': kPLoanSaveApiAuth},
-        fields: submission.fields,
-        files: files,
+        headers: SrisawadApi.headers(
+          token,
+          contentType: 'application/json',
+          extra: const {'x-srisawad': _srisawadHeader},
+        ),
+        body: jsonEncode(submission.fields),
       );
     } on ApiTransportException catch (e) {
-      // Name the likely cause. This endpoint sends no CORS headers, so from a
-      // plain browser the request never leaves — which looks like a network
-      // outage unless you know that.
-      final hint = NativeCameraBridge.isSupported
-          ? ''
-          : ' (เรียกจากเบราว์เซอร์ไม่ได้ — endpoint นี้ไม่ส่ง CORS header '
-              'ต้องเรียกผ่านแอป)';
-      throw SrisawadApiException('ส่งคำขอไม่สำเร็จ: ${e.message}$hint');
+      throw SrisawadApiException('ส่งคำขอไม่สำเร็จ: ${e.message}');
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -114,20 +101,6 @@ class PLoanContractApi {
       decoded,
       const ['transNo', 'trans_no', 'contractNo', 'contract_no', 'refNo', 'id'],
     );
-  }
-
-  /// Base for the POST, resolved at call time.
-  ///
-  /// `api_url['api_url_base']` from the Firestore config document
-  /// (`application/public_config`) is authoritative — the same per-project base
-  /// [SrisawadApi.baseUrl] uses, so this call now lands on whatever host the
-  /// mobile API does (uat: `https://dev.swpfin.com:7076`). [kPLoanSaveApiBase]
-  /// (`:8082`) is only the degrade-to when the config can't be read, so a config
-  /// outage still reaches the previously-working host rather than failing.
-  static Future<String> _base() async {
-    final config = await AppConfigApi.ensureLoaded();
-    final base = (config.apiUrlBase ?? kPLoanSaveApiBase).trim();
-    return base.endsWith('/') ? base.substring(0, base.length - 1) : base;
   }
 
   /// The server's message when it gives one, plus the blank fields it may have

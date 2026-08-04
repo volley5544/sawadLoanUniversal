@@ -731,9 +731,10 @@ class PLoanFlow implements NdidSubject {
         : requestedAmount > 0;
   }
 
-  /// Where a completed application is filed: **`POST /SavePloanContract`, for
-  /// both kinds** (instructed 2026-07-31 — *"in p-loan extra step 4 we will save
-  /// to https://dev.swpfin.com:8082/SavePloanContract"*).
+  /// Where a completed application is filed: **`POST /ploan`, for both kinds**.
+  /// Instructed 2026-07-31 to file both to the P-Loan save API, then retargeted
+  /// 2026-08-04 from the old `<:8082>/SavePloanContract` to `<api_url_base>/ploan`
+  /// — a bearer-authenticated JSON call on the mobile API base.
   ///
   /// An Extra used to go to `POST /topup`, inherited from the FlutterFlow source
   /// this flow was forked from — where the whole feature was a top-up request
@@ -748,12 +749,11 @@ class PLoanFlow implements NdidSubject {
   /// submit path. It is kept, with its tests, because it is the only record of
   /// that wire format and reverting is one line here.
   ///
-  /// ⚠ **Two host-side prerequisites, both needing an app release.** The save API
-  /// sends no CORS headers and takes `multipart/form-data`, so inside the app it
-  /// needs (1) the **`httpMultipart` bridge handler**, which the host does not
-  /// implement yet, and (2) `https://dev.swpfin.com:8082/` added to
-  /// `_kHttpRequestAllowedPrefixes`. Until both ship, an Extra submit fails with
-  /// a message naming the missing handler — see `p_loan_contract_api.dart`.
+  /// The retarget **removed the old host-side prerequisites** (a `httpMultipart`
+  /// bridge handler and a `:8082` allowlist entry): `/ploan` is JSON on the
+  /// mobile API base, so it goes through the standard transport with the
+  /// customer's bearer token and no shipped credential — see
+  /// `p_loan_contract_api.dart`.
   PLoanSubmitTarget get submitTarget => PLoanSubmitTarget.pLoanSaveApi;
 
   /// Whether [verifiedThaiId] matches the profile.

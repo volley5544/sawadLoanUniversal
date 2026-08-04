@@ -12,7 +12,7 @@ before changing anything:
 | | 5-step loan-register wizard (`lib/loan_register/`) | P-Loan application (`lib/p_loan/application/`) |
 | --- | --- | --- |
 | State | **UI-only.** Renders from `LoanRegisterForm.mock()` | **Live end to end**, no mock fallback |
-| Submits | nowhere — final ถัดไป is a SnackBar | `POST /SavePloanContract` (**both** kinds) |
+| Submits | nowhere — final ถัดไป is a SnackBar | `POST /ploan` (**both** kinds) |
 | Reads | a customer profile + address book | `/user/detail`, `/loan/list`, `/topup/*`, `/pdf/loan`, `/vision/thai-id-validate` |
 
 There is still **no Firebase SDK** in the app — but Firebase is no longer only
@@ -25,14 +25,14 @@ projects, `prod` and `uat` (see Deploy below).
 
 - **The P-Loan application flow is the live one.** Its screens have no mock
   fallback (fixtures exist behind a default-off define — see **Mock mode**).
-  **Both kinds now file with `POST /SavePloanContract`** (changed 2026-07-31 — an
-  Extra is a P-Loan contract referencing an existing one, not a top-up of it),
-  and consequently **neither can complete in the app yet**: that endpoint sends
-  no CORS headers, so it needs the host's `httpMultipart` handler, which does not
-  exist (**Outstanding** #2). The Extra path could previously complete via
-  `POST /topup`, so this is a step back until the host ships — a deliberate one,
-  since filing Extras as top-ups was the wrong record.
-  A **new P-Loan** is additionally blocked because it has **no contract** (see
+  **Both kinds now file with `POST /ploan`** on the mobile API base (changed
+  2026-07-31 to unify the endpoint; **retargeted 2026-08-04** from the old
+  `<:8082>/SavePloanContract` to a JSON, **bearer-authenticated** call —
+  `<api_url_base>/ploan`). This **removed the old submit blocker**: the endpoint
+  no longer needs the never-built `httpMultipart` bridge or a baked-in Basic
+  credential, so an **Extra can complete** (through the host, and — pending a CORS
+  check — in a plain browser too). See **P-Loan save API** and Outstanding #2/#12.
+  A **new P-Loan** is still blocked because it has **no contract** (see
   *A new P-Loan has no contract at all*): `POST /pdf/loan` can't produce the
   documents its submit gate needs. It also **prices steps 2–3 with an interim
   client-side estimate** — no calculator API yet, and the top-up one can't stand
@@ -606,7 +606,7 @@ Step 1 offers both, and everything after it is the same six screens:
 | Step 2/3 pricing | `/topup/detail` on entry, `/topup/calculator` on blur | **no top-up call**; provisional client estimate on ถัดไป (interim — see below) |
 | Step 4 collateral | read off `/topup/detail` | **customer types it** (see below) |
 | Step 5 payout account | read off the contract | **customer types it** (see below) |
-| Submits to | `POST /SavePloanContract` | `POST /SavePloanContract` |
+| Submits to | `POST /ploan` | `POST /ploan` |
 
 `PLoanFlow.kind` is set on step 1 and read by every screen after it. The Extra
 path is byte-for-byte what it was; only the new path is new, and only it shows
@@ -908,26 +908,36 @@ await PLoanApiService().submit(fields: s.fields, imageGroups: s.imageGroups);
 
 ### P-Loan save API (`services/p_loan_contract_api.dart`)
 
-`POST /SavePloanContract` — where a **new P-Loan**, and (since the 2026-07-31
-retarget) an Extra, are filed. HTTP **Basic** auth instead of a bearer token
-(`kPLoanSaveApiAuth`), and a `multipart/form-data` body with repeated `group[]`
-file parts.
+`POST /ploan` — where a completed P-Loan application, **both kinds** (an Extra
+since the 2026-07-31 retarget), is filed.
 
-**Base URL: config-driven since 2026-08-04.** `PLoanContractApi._base()` now
-resolves `api_url['api_url_base']` from the Firestore config document
-(`application/public_config`) — the **same per-project base `SrisawadApi.baseUrl`
-uses**, so on uat the save call lands on `https://dev.swpfin.com:7076` (the
-mobile API host), not the old dedicated `:8082`. `kPLoanSaveApiBase` (default
-`https://dev.swpfin.com:8082`) is kept **only as the compile-time degrade-to**
-when the config can't be read, so a config outage still reaches the
-previously-working host. This was requested to route the save through the mobile
-API base rather than a separate host — note it changes only the base, **not** the
-auth (still Basic) or the multipart transport. ⚠ Whether `:7076` actually serves
-`/SavePloanContract` (and whether it sends CORS headers / needs Basic auth once
-proxied) is a **backend fact to confirm** — if it is proxied behind the mobile
-API, Outstanding #2 (the missing `httpMultipart` bridge / CORS) may be moot and
-the Basic credential may no longer be needed. Both `kPLoanSaveApiBase` and
-`kPLoanSaveApiAuth` remain overridable per build.
+**Retargeted 2026-08-04 to a mobile-API-style call**, from the earlier
+`<:8082>/SavePloanContract`. It is now just another call on the mobile API:
+
+- **Base URL** = `api_url['api_url_base']` from the Firestore config document
+  (`application/public_config`) via `SrisawadApi.baseUrl()` — so on uat it lands
+  on `https://dev.swpfin.com:7076`, the same host every other mobile-API call
+  uses. There is no separate host/port define any more.
+- **Auth** = the customer's own Firebase **bearer token** (the `?token=` launch
+  param, `PLoanFlow.authToken`). **No service credential ships in the bundle.**
+- **Header** `x-srisawad: x1` (`_srisawadHeader`), forced on every env since the
+  mobile API's own header is empty on uat.
+- **Body** = JSON, exactly `PLoanContractSubmission.fields` (30 keys, matching
+  the supplied `api_data/new-api-ploan.txt` curl). **No files** — the endpoint
+  takes none, so the collateral/identity photos are collected for the flow but
+  never sent (the preview labels them so).
+
+This **deleted** `kPLoanSaveApiBase` (`:8082`) and `kPLoanSaveApiAuth` (the Basic
+credential) from `app_environment.dart` — the pentest's high-severity
+baked-in-credential finding is closed, since a bearer token replaces it. It also
+removes the old host-side prerequisites: `httpMultipart` bridge handler and
+`:8082` allowlist entry are no longer needed (see Outstanding #2).
+
+⚠ **One backend fact still to confirm with a live submit:** that `<:7076>/ploan`
+is reachable and that it sends `access-control-allow-origin: *` like the rest of
+the mobile API (expected, since it is the same gateway — the sample curl doesn't
+prove CORS). If it does, this flow now completes in a plain browser too, not just
+in the host.
 
 `PLoanContractSubmission.fromFlow(flow)` builds it — a **second** mapper beside
 `PLoanSubmission`, because the field set is close to `regmast_ploan.php` but not
@@ -946,27 +956,20 @@ the two payloads can't disagree about the same number; a test asserts every
 shared key matches and that the produced key set is exactly the 30 from the
 API's own sample (the untracked `etc/api.txt`).
 
-**⚠ Transport: this needs a native-host handler that does not exist yet.**
-Verified against the live endpoint on 2026-07-27:
+**Transport (superseded).** The old `<:8082>/SavePloanContract` (verified
+2026-07-27) needed the native host: no CORS headers, 401'd preflight, and a
+`multipart/form-data` body the `httpRequest` bridge couldn't carry. The
+2026-08-04 retarget removed all of that — `/ploan` is JSON on the mobile API base
+and goes through the standard `sendApiRequest` transport (host bridge, or
+`package:http` in a browser). The old `sendMultipartGroupsApiRequest` /
+`httpMultipart` path is off every submit; see `native_bridge.dart`, where that
+handler is now marked no-longer-needed.
 
-- no `Authorization` header → **401**;
-- **no `Access-Control-Allow-*` header on any response**, and the `OPTIONS`
-  preflight is 401'd — so a browser upload is blocked before it is sent;
-- `GET`/`OPTIONS` with valid auth → 404. The route is POST-only.
-
-So it can't be called from a plain browser at all, and inside the WebView it
-needs the host's new **`httpMultipart`** bridge handler (contract + host snippet
-in `native_bridge.dart`). `sendMultipartGroupsApiRequest` tries the bridge, falls
-back to a direct upload if the host is older, and when that fails too says which
-handler is missing. CORS headers on the endpoint would be the other fix; either
-side closes it.
-
-**⚠ The Basic credential ships in the bundle.** It is a shared service account
-(`prod` in the username, on the dev host) baked in as a `--dart-define` default,
-the same way `kNdidApiKey` is — and a define changes where a value comes from,
-not who can read it. Anyone can pull it out of `main.dart.js`. The fixes are
-server-side: proxy this endpoint behind the mobile API, or issue a credential
-scoped to this client that can be rotated on its own.
+**No credential ships in the bundle any more.** The old Basic service account
+(`kPLoanSaveApiAuth`) was deleted with the retarget — `/ploan` authenticates with
+the customer's own Firebase bearer token, so there is nothing shared to leak.
+This closes the pentest finding it was flagged for. (The token still travels in
+the launch URL — Outstanding #19 / App Check is the remaining hardening there.)
 
 **Fields the flow can't fill**, reported in
 `PLoanContractSubmission.unresolvedFields` rather than guessed:
@@ -1246,7 +1249,7 @@ data (an existing contract, its limit, its installment calculation).
 | `srisawad_api.dart` | Shared base-URL resolution, headers, send helper, `SrisawadApiException`, and `GET /loan/list` (shared by both products) |
 | `topup_api.dart` | `TopupApi` — `/topup/detail`, `/topup/calculator`, `POST /topup` |
 | `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan`, `/vision/thai-id-validate`, and `calculateNewLoanInstallments` (interim client-side estimate for a new P-Loan) |
-| `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /SavePloanContract`, the **P-Loan save API** (own host, Basic auth, multipart). Reached via `PLoanApi.saveNewLoan` |
+| `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /ploan`, the **P-Loan save API** (mobile API base, **bearer** auth, JSON). Reached via `PLoanApi.savePLoanContract` |
 | `user_api.dart` | Customer profile + address book |
 
 **Base URL resolution order** (`SrisawadApi.baseUrl()`):
@@ -1483,13 +1486,12 @@ falls back to an orange tile with its id upper-cased.
 - Compress the photo natively (≈1280px / JPEG ~80) before base64 so the bridge
   stays fast. The full handler code lives in the doc comment of
   `native_bridge.dart`.
-- **`httpMultipart` handler — ⚠ not implemented by the host yet.** Needed by
-  the P-Loan save API, which takes file parts and sends no CORS headers.
-  `httpRequest` can't carry it (its body is a single string), so this handler
-  takes the parts as **base64 inside its JSON envelope** and the host assembles
-  the real multipart request natively. Full snippet in `native_bridge.dart`'s
-  doc comment. Until it exists, a new-P-Loan submit fails with a message naming
-  it.
+- **`httpMultipart` handler — no longer needed (2026-08-04).** It was only ever
+  for the old `<:8082>/SavePloanContract` (multipart, no CORS). That endpoint is
+  now `POST /ploan` — JSON on the mobile API base, carried by the ordinary
+  `httpRequest` bridge / `package:http` — so no multipart handler is required.
+  The snippet stays in `native_bridge.dart` purely as a reference pattern for any
+  future file-upload endpoint.
 - **`openBranchPicker` handler:** `pickBranch()` asks the host to open its
   branch-picker map (step-5 appointment). The host pushes a selection-mode map
   page and returns the chosen branch as a **JSON string** (`branchName`,
@@ -1583,9 +1585,12 @@ exists to stop that recurring; it is checked in, so deploy it with
 `firebase deploy --only firestore:rules -P uat|prod` after any change.
 
 Credentials that ship in the web bundle, and therefore are **not** secret from
-anyone who opens the app: the Firebase web API key (fine — it grants nothing),
-`kNdidApiKey`, and `kPLoanSaveApiAuth` (**not** fine — a shared service account;
-see **P-Loan save API**).
+anyone who opens the app: the Firebase web API key (fine — it grants nothing) and
+`kNdidApiKey`. The shared Basic service account `kPLoanSaveApiAuth` **used to be
+here too** — it was **deleted 2026-08-04** when the P-Loan save endpoint moved to
+`POST /ploan`, which authenticates with the customer's own Firebase bearer token
+(see **P-Loan save API**). So the only baked-in secret still worth rotating is
+`kNdidApiKey` (a web build can't keep it from clients anyway).
 
 ~~**One identity check is deliberately weakened off prod.**~~ **Closed
 2026-07-31.** `kNdidTestThaiId` made non-prod builds run NDID against
@@ -1610,20 +1615,17 @@ reason recorded.
 1. **Rotate `agent_web_api_token` and `agent_web_api_token_uat`.** They were
    readable by anyone while the uat rules were open. Closing the rules does not
    un-leak them.
-2. **🚧 Implement the `httpMultipart` bridge handler in the host app**
-   (`loan_universal_web_widget.dart`; full snippet in `native_bridge.dart`).
-   **Now blocks *every* submit, not just a new loan** — since 2026-07-31 an Extra
-   files with `POST /SavePloanContract` too, and that endpoint sends no CORS
-   headers, so the browser blocks the upload and the bridge is the only route.
-   Verified still absent 2026-07-31. The app fails with a message naming the
-   handler. Also needs `https://dev.swpfin.com:8082/` in
-   `_kHttpRequestAllowedPrefixes` — added in that repo's working tree,
-   **uncommitted**. CORS headers on the endpoint (or proxying it behind the
-   mobile API, see #3) would fix it from the other side instead, without an app
-   release.
-3. **Do something about `kPLoanSaveApiAuth`.** Proxy `SavePloanContract` behind
-   the mobile API, or issue a client-scoped credential. A `--dart-define` moved
-   where the value comes from, not who can read it.
+2. ~~Implement the `httpMultipart` bridge handler in the host app.~~
+   **Resolved 2026-08-04.** The P-Loan save endpoint moved to `POST /ploan` —
+   JSON on the mobile API base, bearer-authenticated — so it rides the existing
+   `httpRequest` bridge / `package:http` and needs no multipart handler and no
+   `:8082` allowlist entry. **Both submit blockers are gone for the Extra path.**
+   The remaining verification is a live submit (#12) and confirming `/ploan`
+   sends CORS so the browser path works too.
+3. ~~Do something about `kPLoanSaveApiAuth`.~~ **Resolved 2026-08-04.** The Basic
+   service credential was **deleted** when the endpoint moved to bearer auth on
+   `/ploan`; nothing shared ships in the bundle now. (`kNdidApiKey` is the only
+   baked-in secret left — a web build can't hide it regardless.)
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
    to match the deployed `WEB_VERSION` (**50** as of 2026-07-31), or the host's
    stale-cache auto-reload never fires.
@@ -1671,10 +1673,14 @@ reason recorded.
     of the `/topup` wire format, and "fixing" a body nothing sends would only
     disguise the fact that it is dead. If `/topup` is ever revived, fix it *then* —
     or delete the method and this note together.
-12. **No live `SavePloanContract` submit has ever run.** Auth, routing and the
-    CORS behaviour were verified by probing; the field mapping is verified
-    against the API's sample and by tests. One real submit is still needed — it
-    was skipped rather than file a junk application in dev.
+12. **No live P-Loan save submit has ever run** — now against `POST /ploan` (the
+    2026-08-04 endpoint), not the old `SavePloanContract`. The field mapping is
+    verified against the sample curl (`api_data/new-api-ploan.txt`) and by tests,
+    but the new endpoint's transport is **unproven end to end**: confirm `/ploan`
+    on the mobile API base is reachable, that the bearer token is accepted, and
+    that it returns `access-control-allow-origin: *` (so the browser path works).
+    One real submit is still needed — skipped rather than file a junk application
+    in dev.
 13. **The top-up-card chain has been walked, but never submitted.** On
     2026-07-30 the user ran the real chain — srisawad app → LandAndHouseWeb
     top-up card → this build — as far as **step 4**, where the PDF viewer turned

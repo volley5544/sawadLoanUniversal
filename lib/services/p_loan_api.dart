@@ -30,8 +30,8 @@ import 'user_api.dart';
 /// | [listContracts]         | `GET /loan/list` (shared) |
 /// | [fetchAmountDetail]     | `GET /topup/detail` |
 /// | [calculateInstallments] | `POST /topup/calculator` |
-/// | [submit]                | `POST /topup` (Extra) |
-/// | [saveNewLoan]           | `POST /SavePloanContract` (new P-Loan) |
+/// | [submit]                | `POST /topup` (unused — legacy) |
+/// | [savePLoanContract]     | `POST /ploan` (both kinds) |
 /// | [generateDocuments]     | `POST /pdf/loan` (P-Loan only) |
 /// | [validateThaiIdCard]    | `POST /vision/thai-id-validate` (P-Loan only) |
 ///
@@ -154,7 +154,7 @@ class PLoanApi {
   }
 
   /// Files a completed P-Loan application — **either kind** — with the P-Loan
-  /// save API (`POST /SavePloanContract`).
+  /// save API (`POST /ploan`, on the mobile API base, bearer-authenticated).
   ///
   /// Renamed from `saveNewLoan` on 2026-07-31, when an Extra moved here from
   /// `POST /topup`: a P-Loan Extra is a P-Loan contract that *references* an
@@ -163,12 +163,14 @@ class PLoanApi {
   ///
   /// [submit] (`POST /topup`) is consequently no longer on any submit path.
   ///
-  /// In mock mode **nothing is sent**; a `MOCK-` prefixed reference comes back.
+  /// [token] is the customer's Firebase bearer token. In mock mode **nothing is
+  /// sent**; a `MOCK-` prefixed reference comes back.
   static Future<String> savePLoanContract({
     required PLoanContractSubmission submission,
+    required String token,
   }) {
     if (kPLoanUseMockData) return _mock(mockTransNo());
-    return PLoanContractApi.save(submission);
+    return PLoanContractApi.save(submission, token: token);
   }
 
   // ── P-Loan only ──────────────────────────────────────────────────────

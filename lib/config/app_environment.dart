@@ -106,37 +106,13 @@ const String kNdidApiKey = String.fromEnvironment(
 // Passing `--dart-define=NDID_TEST_THAI_ID=...` is now silently ignored; drop it
 // from any build script that still sets it.
 
-/// Base URL of the **P-Loan save API** — `POST <base>/SavePloanContract`, the
-/// endpoint a completed P-Loan application is filed to.
-///
-/// ```sh
-/// flutter build web ... --dart-define=P_LOAN_SAVE_API_BASE=https://...
-/// ```
-///
-/// No trailing slash. Separate from the mobile API: it is a different host and
-/// port, with its own auth scheme (see [kPLoanSaveApiAuth]).
-const String kPLoanSaveApiBase = String.fromEnvironment(
-  'P_LOAN_SAVE_API_BASE',
-  defaultValue: 'https://dev.swpfin.com:8082',
-);
-
-/// `Authorization` header value for the P-Loan save API — HTTP Basic.
-///
-/// ```sh
-/// flutter build web ... --dart-define=P_LOAN_SAVE_API_AUTH='Basic <base64>'
-/// ```
-///
-/// **⚠ This is a shared service credential in a public web bundle.** Anyone can
-/// download `main.dart.js` and read it, exactly as with [kNdidApiKey] — a
-/// `--dart-define` changes where the value comes from, not who can see it. The
-/// only real fixes are server-side: proxy this endpoint behind the mobile API
-/// (which already fronts the app), or issue a credential scoped to this client
-/// that can be rotated and rate-limited on its own. Until then, treat the
-/// account as compromised-by-design and give it the narrowest possible rights.
-const String kPLoanSaveApiAuth = String.fromEnvironment(
-  'P_LOAN_SAVE_API_AUTH',
-  defaultValue: 'Basic Y2RwYXBpcHJvZDpQQHNzdzByZDEyMyNAITIwMjU=',
-);
+// The P-Loan save API used to be a separate service on its own host/port
+// (`kPLoanSaveApiBase`, `:8082`) with an HTTP **Basic** credential baked into
+// the bundle (`kPLoanSaveApiAuth`). Both were **deleted on 2026-08-04** when the
+// endpoint moved to `POST <api_url_base>/ploan` — a mobile-API-style call that
+// authenticates with the customer's own Firebase **bearer token** and needs no
+// shipped credential. See `services/p_loan_contract_api.dart`. Removing the
+// Basic secret from source closes the pentest finding it was flagged for.
 
 /// Serve the P-Loan application flow from fixtures instead of calling the
 /// mobile API.
