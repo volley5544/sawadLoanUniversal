@@ -234,6 +234,13 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
     if (status.isPending) return;
     _pollTimer?.cancel();
     if (status.isAccepted) {
+      // Record NDID's own reference before popping. The P-Loan submit sends it
+      // as `ndid_reference_id` so the backend can confirm this verification
+      // with NDID directly rather than trusting the client's success flag —
+      // which is all `_verified` is. Only the real API path sets it: the
+      // simulated hop below has no reference, and inventing one would claim a
+      // verification that never happened.
+      widget.form?.ndidReferenceId = ref;
       setState(() {
         _verified = true;
         _timer?.cancel();

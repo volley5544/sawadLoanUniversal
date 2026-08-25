@@ -57,9 +57,10 @@ class PLoanApi {
   /// mode covers the whole flow; the wizard's own startup fetch is untouched.
   static Future<CustomerDetail> fetchCustomer({
     required String hashThaiId,
+    required String token,
   }) {
     if (kPLoanUseMockData) return _mock(mockCustomer());
-    return UserApi.fetchUserDetail(hashThaiId);
+    return UserApi.fetchUserDetail(hashThaiId, token: token);
   }
 
   /// Step 5 — the customer's registered addresses.
@@ -177,8 +178,9 @@ class PLoanApi {
 
   /// Step 6 — generates the three contract PDFs (base64).
   ///
-  /// This endpoint wants `x-srisawad: x1_c3Jpc2F3YWQ`, not the `x1` the rest of
-  /// the API uses.
+  /// **`x-srisawad` is per-environment here**, unlike everywhere else on this
+  /// base: prod wants `x1_c3Jpc2F3YWQ`, uat wants the ordinary `x1` (changed
+  /// 2026-08-07). See [AppEnvironment.pdfLoanSrisawadHeader].
   static Future<LoanDocuments> generateDocuments({
     required ContractPdfRequest request,
     required String hashThaiId,
@@ -190,7 +192,9 @@ class PLoanApi {
       'POST',
       Uri.parse('$base/pdf/loan'),
       token: token,
-      extraHeaders: const {'x-srisawad': 'x1_c3Jpc2F3YWQ'},
+      extraHeaders: {
+        'x-srisawad': AppEnvironment.current.pdfLoanSrisawadHeader,
+      },
       body: {
         ...request.toJson(),
         'hash_thai_id': hashThaiId,

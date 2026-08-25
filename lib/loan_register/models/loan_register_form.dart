@@ -82,6 +82,12 @@ class LoanRegisterForm implements NdidSubject {
   @override
   String? ndidIdpId;
 
+  /// [NdidSubject.ndidReferenceId] — recorded by [NdidVerifyPage] for symmetry
+  /// with the P-Loan flow. **Unused here:** this wizard submits nowhere, so
+  /// nothing reads it back. It exists because both flows share those screens.
+  @override
+  String ndidReferenceId = '';
+
   // ── Step 5: นัดหมายส่งเอกสาร ──────────────────────────────────────────
   String appointmentBranch; // สาขานัดหมาย
   String appointmentDateTime; // วันที่-เวลานัดหมาย (Buddhist dd/MM/yyyy HH:mm)

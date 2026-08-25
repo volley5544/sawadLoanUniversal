@@ -10,6 +10,7 @@ import '../../loan_register/components/loan_register_styles.dart';
 import '../../loan_register/components/register_field_row.dart';
 import '../../loan_register/components/register_step_indicator.dart';
 import '../../router/app_router.dart';
+import '../../services/device_location.dart';
 import '../../services/native_bridge.dart';
 import '../../services/p_loan_api.dart';
 import '../../services/srisawad_api.dart';
@@ -52,6 +53,31 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   void initState() {
     super.initState();
     _generateDocuments();
+    _captureLocation();
+  }
+
+  /// Fills `latitude` / `longitude` for the submit payload from the device GPS.
+  ///
+  /// Fired here, on the screen that submits, and **not awaited anywhere**. The
+  /// customer spends minutes on this page — reading three PDFs, photographing
+  /// their ID card, taking a selfie, signing with NDID — so a fix that takes
+  /// seconds is long since in place by the time ยืนยัน is pressed. Awaiting it at
+  /// submit would instead put a permission prompt and a GPS lock in front of the
+  /// one button that matters.
+  ///
+  /// A failure is deliberately silent: the fields stay empty, land in
+  /// `unresolvedFields` as they always did, and the application still files.
+  /// Location is worth having, not worth blocking an application over. The
+  /// reason is logged to the WebView console — see [DeviceLocation].
+  ///
+  /// Note this does **not** fill `gpsProvinceId` / `gpsAumphurId`: those are
+  /// srisawad's own province/district **ids**, which need a lookup from these
+  /// coordinates that nothing in this app can perform.
+  Future<void> _captureLocation() async {
+    final position = await DeviceLocation.current();
+    if (position == null) return;
+    _flow.latitude = position.latitudeString;
+    _flow.longitude = position.longitudeString;
   }
 
   /// Builds the `save_pdf` block, which is both the `/pdf/loan` request body
@@ -410,8 +436,8 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   /// Shows the payload this flow would send.
   ///
   /// **No longer kind-aware**: since 2026-07-31 both kinds file with the P-Loan
-  /// save API (`POST /ploan`), so this previews [PLoanContractSubmission] for
-  /// either. It used to show the `regmast_ploan.php` mapping for an Extra, which
+  /// save API (`POST /ploan`, `multipart/form-data`), so this previews
+  /// [PLoanContractSubmission] for either. It used to show the `regmast_ploan.php` mapping for an Extra, which
   /// would now be a preview of a body nothing sends — worse than no preview,
   /// because a QA check against it would pass while the real payload differed.
   ///
@@ -424,12 +450,19 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
     final images = submission.imageGroups;
     final unresolved = submission.unresolvedFields;
     final lines = [
-      'POST /ploan  (${_flow.kind.shortLabel})',
+      'POST /ploan  multipart/form-data  (${_flow.kind.shortLabel})',
       '',
       for (final e in fields.entries) '${e.key}: ${e.value}',
       '',
-      // /ploan is JSON and takes no files; these are collected for the flow but
-      // not part of this request.
+      // Sizes and content types rather than bytes: enough to tell a JPEG from a
+      // PDF from a missing part, which is what a field-mapping check needs.
+      'file parts (${submission.files.length}):',
+      for (final f in submission.files)
+        '  ${f.field}: ${f.filename} (${f.contentType}, '
+            '${(f.bytes.length / 1024).toStringAsFixed(1)} KB)',
+      '',
+      // The regmast multipart grouping. /ploan takes only the three above, so
+      // the collateral shots are collected for the flow but never filed.
       'images (collected, NOT sent to /ploan):',
       for (final e in images.entries)
         '  ${e.key}[]: ${e.value.length} file(s)',

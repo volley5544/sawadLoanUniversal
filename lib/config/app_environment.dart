@@ -160,6 +160,7 @@ enum AppEnvironment {
     firebaseApiKey: '',
     mobileApiBase: 'https://mobile-api.swpfin.com',
     srisawadHeader: 'x1',
+    pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
   ),
   uat(
     name: 'uat',
@@ -170,6 +171,9 @@ enum AppEnvironment {
     // The new UAT gateway requires it on every api_url_base call, same as prod
     // (was empty for the old uat host — changed 2026-08-04).
     srisawadHeader: 'x1',
+    // The uat gateway wants the ordinary value here too — only prod still
+    // expects the special one (changed 2026-08-07).
+    pdfLoanSrisawadHeader: 'x1',
   );
 
   const AppEnvironment({
@@ -179,6 +183,7 @@ enum AppEnvironment {
     required this.firebaseApiKey,
     required this.mobileApiBase,
     required this.srisawadHeader,
+    required this.pdfLoanSrisawadHeader,
   });
 
   /// Short identifier, e.g. `prod` / `uat`.
@@ -209,6 +214,21 @@ enum AppEnvironment {
   /// the new uat gateway. Empty means "don't send the header" — no environment
   /// is empty today, but the mechanism is kept.
   final String srisawadHeader;
+
+  /// `x-srisawad` for **`POST /pdf/loan` only**, which is the one endpoint on
+  /// this base that doesn't take [srisawadHeader].
+  ///
+  /// | Env | Value |
+  /// | --- | --- |
+  /// | prod | `x1_c3Jpc2F3YWQ` |
+  /// | uat | `x1` — same as every other call (changed 2026-08-07) |
+  ///
+  /// It is per-environment rather than the one constant it used to be because
+  /// the two gateways disagree: uat wants the ordinary value and prod still
+  /// wants the special one. Sending the wrong one is not a silent difference —
+  /// the gateway refuses the request, so the contract PDFs never generate and
+  /// step 6 cannot reach its submit gate.
+  final String pdfLoanSrisawadHeader;
 
   /// The `ENV` value baked in at build time. Empty for local runs.
   static const String _raw = String.fromEnvironment('ENV');

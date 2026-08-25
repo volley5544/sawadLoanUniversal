@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../loan_register/appointment_datetime_page.dart';
@@ -26,6 +27,7 @@ import '../p_loan/application/p_loan_success_page.dart';
 import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../p_loan/application/p_loan_vehicle_photos_page.dart';
 import '../p_loan/submit_form/p_loan_form_page.dart';
+import '../services/diagnostics.dart';
 
 /// Route paths for the loan-register wizard. These map 1:1 to the browser URL
 /// (path strategy is enabled in main.dart), e.g.
@@ -79,6 +81,22 @@ abstract final class AppRoutes {
 /// standalone.
 final GoRouter appRouter = GoRouter(
   initialLocation: AppRoutes.home,
+  // Records every push/pop/replace as a breadcrumb, so a screenshot of the error
+  // screen (or the diagnostics sheet behind the `(UAT ver…)` tag) shows the route
+  // history that led there. Reads RouteSettings.name, which go_router sets to the
+  // route's path.
+  observers: <NavigatorObserver>[DiagnosticsRouteObserver()],
+  // Without this an unmatched location gets go_router's own error page, and a
+  // navigation that throws gets nothing useful. Both used to read as "the WebView
+  // went white" in a tester's report.
+  errorBuilder: (BuildContext context, GoRouterState state) {
+    final error = state.error;
+    Diagnostics.log('route error ${state.uri}${error == null ? '' : ' — $error'}');
+    return DiagnosticsErrorView(
+      message: error?.toString() ?? 'ไม่พบหน้านี้\n${state.uri}',
+      trail: Diagnostics.trail,
+    );
+  },
   routes: <RouteBase>[
     GoRoute(
       path: AppRoutes.home,

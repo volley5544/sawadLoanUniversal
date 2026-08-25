@@ -10,8 +10,13 @@ import 'srisawad_api.dart';
 ///
 ///   1. `GET /user/detail?hash_thai_id=<hash>` — customer profile
 ///   2. `GET /profile/address/<hash>`          — customer address book
-///      (requires the Firebase `Authorization: Bearer` token the native host
-///      passes via the `?token=` launch URL param)
+///
+/// **Both require the Firebase `Authorization: Bearer` token** the native host
+/// passes via the `?token=` launch URL param, so [token] is a required argument
+/// on each — the compiler is the guard, since a caller that simply forgot it is
+/// how `/user/detail` came to be fetched unauthenticated (pentest finding #2,
+/// "Authenticated API could be accessed without authentication", which names
+/// that endpoint first). The header itself is added by [SrisawadApi.headers].
 ///
 /// Base URL + `x-srisawad` header come from [AppEnvironment.current]
 /// (prod: `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
@@ -28,16 +33,26 @@ class UserApi {
   /// [SrisawadApi.baseUrl].
   static Future<String> get _base => SrisawadApi.baseUrl();
 
-  static Map<String, String> _headers({String? token}) =>
-      SrisawadApi.headers(token ?? '');
+  /// Takes the token positionally and non-null: an optional one let `?? ''`
+  /// stand in for a real credential, which is exactly the omission that left
+  /// `/user/detail` unauthenticated.
+  static Map<String, String> _headers(String token) =>
+      SrisawadApi.headers(token);
 
   /// Fetches the customer profile for [hashThaiId]. The payload sits under
   /// `results` with its own `code`/`message`; anything but code 200 throws.
-  static Future<CustomerDetail> fetchUserDetail(String hashThaiId) async {
+  ///
+  /// [token] is the Firebase auth token from the native host (`?token=` launch
+  /// param) — required, see the class doc.
+  static Future<CustomerDetail> fetchUserDetail(
+    String hashThaiId, {
+    required String token,
+  }) async {
     final base = await _base;
     final json = await _getJson(
       Uri.parse('$base/user/detail'
           '?hash_thai_id=${Uri.encodeQueryComponent(hashThaiId)}'),
+      token: token,
     );
     final results = json is Map<String, dynamic> ? json['results'] : null;
     if (results is! Map<String, dynamic>) {
@@ -55,7 +70,7 @@ class UserApi {
   /// Firebase auth token from the native host (`?token=` launch param).
   static Future<CustomerAddressBook> fetchAddressBook(
     String hashThaiId, {
-    String? token,
+    required String token,
   }) async {
     final base = await _base;
     final json = await _getJson(
@@ -68,10 +83,10 @@ class UserApi {
     return CustomerAddressBook.fromJson(json);
   }
 
-  static Future<dynamic> _getJson(Uri url, {String? token}) async {
+  static Future<dynamic> _getJson(Uri url, {required String token}) async {
     final ApiHttpResult res;
     try {
-      res = await sendApiRequest('GET', url, headers: _headers(token: token));
+      res = await sendApiRequest('GET', url, headers: _headers(token));
     } on ApiTransportException catch (e) {
       throw UserApiException('mobile API ${e.message}');
     }

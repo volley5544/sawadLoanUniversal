@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sawad_loan_universal/config/app_environment.dart';
 import 'package:sawad_loan_universal/models/app_config.dart';
 import 'package:sawad_loan_universal/services/firestore_rest.dart';
 
@@ -166,6 +167,22 @@ void main() {
         AppConfig(apiUrl: const {'ndid_url_base': '  '}).ndidUrlBase,
         isNull,
       );
+    });
+  });
+
+  group('x-srisawad header', () {
+    test('every api_url_base call sends x1 on both environments', () {
+      expect(AppEnvironment.prod.srisawadHeader, 'x1');
+      expect(AppEnvironment.uat.srisawadHeader, 'x1');
+    });
+
+    test('POST /pdf/loan differs per environment', () {
+      // The one endpoint on this base that doesn't take the ordinary value —
+      // and the two gateways disagree about it. Sending the wrong one is not a
+      // subtle difference: the gateway refuses, so the contract PDFs never
+      // generate and step 6 can't reach its submit gate.
+      expect(AppEnvironment.prod.pdfLoanSrisawadHeader, 'x1_c3Jpc2F3YWQ');
+      expect(AppEnvironment.uat.pdfLoanSrisawadHeader, 'x1');
     });
   });
 }

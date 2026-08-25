@@ -19,13 +19,25 @@ import 'srisawad_api.dart';
 ///     what closed that pentest finding;
 ///   - **Header** `x-srisawad` from [SrisawadApi.headers] like every other
 ///     mobile-API call (`x1` on both prod and the new uat gateway);
-///   - **Body** = JSON, exactly [PLoanContractSubmission.fields] (30 keys). The
-///     endpoint takes **no files**, so the collateral/identity photos are no
-///     longer part of this request.
+///   - **Body** = `multipart/form-data` (2026-08-07, was JSON): the 30 scalar
+///     fields from the API's sample call **plus `ndid_reference_id`**
+///     (2026-08-14) as form fields, plus five real file parts — `cardIdImage`,
+///     `customerImage` and `documentImage[]` ×3 carrying the contract PDFs the
+///     customer consented to.
 ///
-/// Because it is now the mobile API host, it answers with `access-control-allow-
-/// origin: *` like the rest of that API, so — unlike the old `:8082` endpoint —
-/// it can be called from a plain browser and needs no `httpMultipart` bridge.
+/// **The upload goes direct through `package:http`, never the host bridge**
+/// (`bypassHostBridge: true`). That is the whole reason multipart is affordable
+/// here: the host's `httpRequest`/`httpMultipart` handlers exist because the
+/// **old** `<:8082>/SavePloanContract` sent no CORS headers, so a browser upload
+/// was blocked outright. `/ploan` is on the mobile API base, which answers
+/// `access-control-allow-origin: *` — the same reason
+/// [sendMultipartApiRequest] already uploads the ID card that way. So this
+/// needs **no `httpMultipart` bridge handler and no app release**, in the host
+/// or a plain browser alike.
+///
+/// ⚠ The request carries five files, so it is large. A timeout or a
+/// request-size limit is the first thing to suspect if a submit that used to
+/// work starts failing.
 class PLoanContractApi {
   PLoanContractApi._();
 
@@ -47,13 +59,25 @@ class PLoanContractApi {
     'bankAccNo',
     'transferAmt',
     'statusCode',
-    'empId',
+    // `empId` is deliberately absent: it is accepted blank (see
+    // PLoanContractSubmission.acceptedBlank), so naming it in a refusal would
+    // point at a field that is empty on purpose.
     'branchId',
+    // NDID's reference for the accepted verification. `canSubmit` requires the
+    // NDID hop, so a blank one means the flow was completed without a real
+    // verification (a simulated hop) — precisely the thing the server will
+    // refuse, and worth naming so the refusal is legible.
+    'ndid_reference_id',
+    // The file fields. `canSubmit` gates on all three, so a blank one here is
+    // worth naming rather than leaving the server to say "HTTP 400".
+    'cardIdImage',
+    'customerImage',
+    'documentImage',
   };
 
-  /// Files [submission] as JSON and returns the reference the server assigns, or
-  /// `''` when the response carries none. [token] is the customer's Firebase
-  /// bearer token (the `?token=` launch param).
+  /// Files [submission] as `multipart/form-data` and returns the reference the
+  /// server assigns, or `''` when the response carries none. [token] is the
+  /// customer's Firebase bearer token (the `?token=` launch param).
   ///
   /// Throws [SrisawadApiException] with the server's own message on refusal, so
   /// callers render the API's wording rather than a substitute.
@@ -66,11 +90,23 @@ class PLoanContractApi {
 
     final ApiHttpResult res;
     try {
-      res = await sendApiRequest(
-        'POST',
+      res = await sendMultipartGroupsApiRequest(
         url,
-        headers: SrisawadApi.headers(token, contentType: 'application/json'),
-        body: jsonEncode(submission.fields),
+        // No Content-Type: MultipartRequest has to append its own boundary.
+        headers: SrisawadApi.headers(token),
+        fields: submission.fields,
+        files: [
+          for (final f in submission.files)
+            MultipartFilePart(
+              field: f.field,
+              filename: f.filename,
+              contentType: f.contentType,
+              bytes: f.bytes,
+            ),
+        ],
+        // The mobile API sends `access-control-allow-origin: *`, so the upload
+        // goes direct and needs no `httpMultipart` handler in the host.
+        bypassHostBridge: true,
       );
     } on ApiTransportException catch (e) {
       throw SrisawadApiException('ส่งคำขอไม่สำเร็จ: ${e.message}');

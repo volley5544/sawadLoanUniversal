@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,21 @@ const _saveApiFields = <String>{
   'registerYear', 'marketingConsent', 'sensitiveConsent',
 };
 
+/// The 31st field, added 2026-08-14 — not in the sample call, so it is listed
+/// separately rather than folded into the set above. That keeps the sample's own
+/// 30 pinned as the sample's, and makes any future addition visible as an
+/// addition.
+///
+/// **snake_case on purpose**, unlike its 30 camelCase neighbours: it is the name
+/// the API asked for.
+const _saveApiNdidFields = <String>{'ndid_reference_id'};
+
+const _saveApiAllFields = <String>{..._saveApiFields, ..._saveApiNdidFields};
+
+/// Those 30 stay **form fields**; the files added on 2026-08-07 go as real
+/// multipart file parts beside them — `cardIdImage`, `customerImage` and
+/// `documentImage[]` ×3 (the contract PDFs). See the `file parts` group.
+
 /// The 12 image groups from `_imageGroups` in the same file.
 const _formImageGroups = <String>{
   'documentImage', 'eSignatureImage', 'bookBankImage', 'cardIdImage',
@@ -79,6 +95,10 @@ PLoanFlow _completedFlow({PLoanKind kind = PLoanKind.extra}) {
     ..longitude = '100.5755956'
     ..documents = mockDocuments()
     ..transNo = 'TX-1'
+    // A completed application has been through NDID, so it holds the
+    // reference that proves it — the value `POST /ploan` gets as
+    // `ndid_reference_id`.
+    ..ndidReferenceId = '9bcc18bb-9bb4-4302-8c48-514a17c08e08'
     ..marketingConsent = true
     ..sensitiveConsent = true;
   flow.installment = plan.installments.firstWhere((i) => i.tenor == 24);
@@ -247,11 +267,14 @@ void main() {
   });
 
   group('P-Loan save API payload (POST /SavePloanContract)', () {
-    test('sends exactly the 30 fields the API sample sends', () {
+    test('sends the 30 fields the API sample sends, plus ndid_reference_id', () {
       final produced =
           PLoanContractSubmission.fromFlow(_completedFlow()).fields;
-      expect(produced.keys.toSet(), equals(_saveApiFields));
-      expect(produced.length, 30);
+      expect(produced.keys.toSet(), equals(_saveApiAllFields));
+      expect(produced.length, 31);
+      // Nothing else crept in alongside the NDID field.
+      expect(produced.keys.toSet().difference(_saveApiFields),
+          equals(_saveApiNdidFields));
     });
 
     test('omits the regmast-only fields rather than sending them anyway', () {
@@ -271,6 +294,45 @@ void main() {
       ]) {
         expect(produced.containsKey(key), isFalse, reason: '$key must not go');
       }
+    });
+
+    group('ndid_reference_id', () {
+      // The only field on this payload the backend can independently check:
+      // it can ask NDID about this reference instead of trusting the client's
+      // "verification succeeded". So it has to arrive verbatim, and a missing
+      // one must be visible rather than papered over.
+      test('carries NDID\'s reference for the accepted verification', () {
+        final flow = _completedFlow();
+        final fields = PLoanContractSubmission.fromFlow(flow).fields;
+        expect(fields['ndid_reference_id'], flow.ndidReferenceId);
+        expect(fields['ndid_reference_id'],
+            '9bcc18bb-9bb4-4302-8c48-514a17c08e08');
+      });
+
+      test('is reported unresolved when no real NDID hop happened', () {
+        // A simulated verification records no reference. The field still goes
+        // out — present and empty, like the rest of this payload — but it is
+        // named, so a refusal says which proof was missing.
+        final flow = _completedFlow()..ndidReferenceId = '';
+        final submission = PLoanContractSubmission.fromFlow(flow);
+        expect(submission.fields.containsKey('ndid_reference_id'), isTrue);
+        expect(submission.fields['ndid_reference_id'], '');
+        expect(submission.unresolvedFields, contains('ndid_reference_id'));
+        expect(submission.isComplete, isFalse);
+      });
+
+      test('is not in the regmast payload, which has no slot for it', () {
+        final regmast = PLoanSubmission.fromFlow(_completedFlow()).fields;
+        expect(regmast.containsKey('ndid_reference_id'), isFalse);
+      });
+
+      test('reaches a new P-Loan payload too, not just an Extra', () {
+        final fields = PLoanContractSubmission.fromFlow(
+                _completedFlow(kind: PLoanKind.newLoan))
+            .fields;
+        expect(fields['ndid_reference_id'],
+            '9bcc18bb-9bb4-4302-8c48-514a17c08e08');
+      });
     });
 
     test('splits the customer name and names the account holder', () {
@@ -309,6 +371,167 @@ void main() {
       expect(save.imageGroups['carImage']!.length, 2); // fullVehicle + front
       expect(save.imageGroups['cardIdImage']!.length, 1);
       expect(save.imageGroups['documentImage']!.length, 1);
+    });
+
+    group('file parts', () {
+      test('sends five parts: two photos and the three contract PDFs', () {
+        final files = PLoanContractSubmission.fromFlow(_completedFlow()).files;
+        expect(files.map((f) => f.field).toList(), [
+          'cardIdImage',
+          'customerImage',
+          'documentImage[]',
+          'documentImage[]',
+          'documentImage[]',
+        ]);
+        // The scalar fields are unaffected by the files — still exactly 31.
+        expect(PLoanContractSubmission.fromFlow(_completedFlow()).fields.length,
+            31);
+      });
+
+      test('the identity photos carry their bytes and an image type', () {
+        final flow = _completedFlow();
+        final files = PLoanContractSubmission.fromFlow(flow).files;
+        final card = files.firstWhere((f) => f.field == 'cardIdImage');
+        final selfie = files.firstWhere((f) => f.field == 'customerImage');
+
+        expect(card.bytes, flow.photos[PLoanPhoto.idCard]);
+        expect(selfie.bytes, flow.photos[PLoanPhoto.selfieWithIdCard]);
+        for (final f in [card, selfie]) {
+          expect(f.contentType, 'image/jpeg');
+          expect(f.filename, endsWith('.jpg'));
+        }
+      });
+
+      test('the PDFs are decoded, in screen order, as application/pdf', () {
+        final flow = _completedFlow();
+        final docs = flow.documents!;
+        final pdfs = PLoanContractSubmission.fromFlow(flow)
+            .files
+            .where((f) => f.field == 'documentImage[]')
+            .toList();
+
+        // The same order the summary screen lists and consents to them, and the
+        // same bytes — what is filed must be byte-identical to what was read.
+        expect(pdfs.map((f) => f.bytes).toList(), [
+          base64Decode(docs.request),
+          base64Decode(docs.receipt),
+          base64Decode(docs.agreement),
+        ]);
+        expect(pdfs.map((f) => f.filename).toList(),
+            ['request.pdf', 'receipt.pdf', 'agreement.pdf']);
+        for (final f in pdfs) {
+          expect(f.contentType, 'application/pdf');
+        }
+      });
+
+      test('a data: prefix is stripped before decoding, not sent as bytes', () {
+        // Live, /pdf/loan returns these as `data:application/pdf;base64,…`; the
+        // mock fixtures build bare base64. Both must upload the same bytes, or
+        // mock mode would exercise a request production never sends.
+        final raw = base64Encode(const [1, 2, 3, 4]);
+        final flow = _completedFlow()
+          ..documents = LoanDocuments(
+            request: 'data:application/pdf;base64,$raw',
+            receipt: raw,
+            agreement: raw,
+          );
+        final pdfs = PLoanContractSubmission.fromFlow(flow)
+            .files
+            .where((f) => f.field == 'documentImage[]');
+        expect(pdfs.length, 3);
+        for (final f in pdfs) {
+          expect(f.bytes, [1, 2, 3, 4]);
+        }
+      });
+
+      test('a missing file sends no part at all, and is reported', () {
+        final flow = _completedFlow();
+        flow.photos.remove(PLoanPhoto.idCard);
+        flow.documents = null;
+        final submission = PLoanContractSubmission.fromFlow(flow);
+
+        // An empty part is worse than no part — it looks like a zero-byte file.
+        expect(submission.files.map((f) => f.field), ['customerImage']);
+        expect(submission.unresolvedFields,
+            containsAll(<String>['cardIdImage', 'documentImage']));
+        // The selfie is still there, so it must not be reported.
+        expect(submission.unresolvedFields, isNot(contains('customerImage')));
+      });
+
+      test('an undecodable document is reported, not thrown', () {
+        final flow = _completedFlow()
+          ..documents = const LoanDocuments(
+            request: 'not base64 at all!!',
+            receipt: '',
+            agreement: '',
+          );
+        final submission = PLoanContractSubmission.fromFlow(flow);
+        expect(submission.files.where((f) => f.field == 'documentImage[]'),
+            isEmpty);
+        expect(submission.unresolvedFields, contains('documentImage'));
+      });
+
+      test('a complete flow reports no missing file', () {
+        final submission = PLoanContractSubmission.fromFlow(_completedFlow());
+        for (final key in PLoanContractSubmission.fileFieldNames) {
+          expect(submission.unresolvedFields, isNot(contains(key)));
+        }
+        expect(submission.isComplete, isTrue);
+      });
+    });
+
+    group('fields accepted blank', () {
+      test('all five are sent as empty strings, present not omitted', () {
+        final flow = _completedFlow()
+          ..empId = ''
+          ..mktChannel = ''
+          ..customerSource = ''
+          ..gpsProvinceId = ''
+          ..gpsAumphurId = '';
+        final fields = PLoanContractSubmission.fromFlow(flow).fields;
+
+        for (final key in PLoanContractSubmission.acceptedBlank) {
+          // Present-with-empty-value, never absent: the server sees the field.
+          expect(fields.containsKey(key), isTrue, reason: '$key was omitted');
+          expect(fields[key], '');
+        }
+        // The payload is still the full 31.
+        expect(fields.length, 31);
+      });
+
+      test('a blank one is not reported as unresolved', () {
+        final flow = _completedFlow()
+          ..empId = ''
+          ..mktChannel = ''
+          ..customerSource = ''
+          ..gpsProvinceId = ''
+          ..gpsAumphurId = '';
+        final submission = PLoanContractSubmission.fromFlow(flow);
+        for (final key in PLoanContractSubmission.acceptedBlank) {
+          expect(submission.unresolvedFields, isNot(contains(key)));
+        }
+        // Nothing else went missing, so the payload reads as complete.
+        expect(submission.isComplete, isTrue);
+      });
+
+      test('a host-supplied value is still sent, not blanked', () {
+        // The rule is "blank is acceptable", not "always blank" — discarding a
+        // value the host went to the trouble of passing would be a regression.
+        final fields = PLoanContractSubmission.fromFlow(_completedFlow()).fields;
+        expect(fields['empId'], '9472');
+        expect(fields['mktChannel'], '065');
+        expect(fields['customerSource'], '9');
+        expect(fields['gpsProvinceId'], '10');
+        expect(fields['gpsAumphurId'], '1041');
+      });
+
+      test('genuinely missing data is still reported', () {
+        // The blanket must not swallow a real gap: a new P-Loan has no approved
+        // limit, and that still has to surface.
+        final fresh = PLoanContractSubmission.fromFlow(
+            _completedFlow(kind: PLoanKind.newLoan));
+        expect(fresh.unresolvedFields, contains('creditAmt'));
+      });
     });
 
     test('a new P-Loan has no approved limit, and reports it', () {

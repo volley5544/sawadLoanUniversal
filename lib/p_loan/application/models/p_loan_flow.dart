@@ -514,6 +514,17 @@ class PLoanFlow implements NdidSubject {
   @override
   String? ndidIdpId;
 
+  /// [NdidSubject.ndidReferenceId] — NDID's `reference_id` for the accepted
+  /// verification, written by the verify page and sent to `POST /ploan` as
+  /// **`ndid_reference_id`** so the backend can confirm the result with NDID
+  /// itself.
+  ///
+  /// This is the one piece of the NDID hop that reaches the payload.
+  /// [ndidVerified] is a client bool and worth exactly what a client bool is
+  /// worth — the reference is what the server can actually check.
+  @override
+  String ndidReferenceId = '';
+
   /// The applicant's own Thai ID, digits only — from the profile, falling back
   /// to the id read off the card when the profile has none.
   String get customerThaiIdDigits {

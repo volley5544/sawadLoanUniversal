@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../router/app_router.dart';
+import '../services/diagnostics.dart';
 import '../services/native_bridge.dart';
 import '../services/ndid_api.dart';
 import 'components/env_version_tag.dart';
@@ -99,6 +100,7 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
       _error = null;
       _selected = null;
     });
+    Diagnostics.log('ndid idp/list start');
     try {
       // IdPs the customer onboarded with (by Thai ID) + the full IdP list;
       // the difference fills the "not registered" grid.
@@ -111,12 +113,23 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
       final others =
           results[1].where((e) => !registeredIds.contains(e.id)).toList();
       if (!mounted) return;
+      final registeredTiles = registered.map(_toBank).toList(growable: false);
+      final otherTiles = others.map(_toBank).toList(growable: false);
+      // The tile count is the number that matters: see [_kMaxLogoTiles]. `logos`
+      // is how many platform views this render will actually create, so a future
+      // trail shows at a glance whether the ration held.
+      Diagnostics.log('ndid idp/list ok registered=${registeredTiles.length} '
+          'others=${otherTiles.length} '
+          'logos=${registeredTiles.take(_kMaxLogoTiles).where(
+                (b) => b.logoUrl.isNotEmpty,
+              ).length}');
       setState(() {
-        _registered = registered.map(_toBank).toList(growable: false);
-        _notRegistered = others.map(_toBank).toList(growable: false);
+        _registered = registeredTiles;
+        _notRegistered = otherTiles;
         _loading = false;
       });
     } on NdidApiException catch (e) {
+      Diagnostics.log('ndid idp/list fail ${e.message}');
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -269,10 +282,10 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
             Text('ไม่พบผู้ให้บริการที่ท่านเคยลงทะเบียน NDID',
                 style: LoanRegisterStyles.labelStyle())
           else
-            _bankGrid(_registered, enabled: true),
+            _bankGrid(_registered, enabled: true, showLogos: true),
           const SizedBox(height: 20),
           _groupTitle('ผู้ให้บริการที่ยังไม่ลงทะเบียน NDID'),
-          _bankGrid(_notRegistered, enabled: true),
+          _bankGrid(_notRegistered, enabled: true, showLogos: false),
           const SizedBox(height: 8),
           Text(
             'หากเลือกผู้ให้บริการที่ยังไม่ได้ลงทะเบียน '
@@ -298,14 +311,44 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     );
   }
 
-  Widget _bankGrid(List<_NdidBank> banks, {required bool enabled}) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: banks
-          .map((b) => _bankTile(b, enabled: enabled))
-          .toList(growable: false),
-    );
+  /// Most tiles allowed to render a real logo — i.e. the ceiling on how many HTML
+  /// `<img>` **platform views** this page may create at once.
+  ///
+  /// **This limit is why the page no longer kills the WebView.** Every logo tile
+  /// is an `Image.network` with [WebHtmlElementStrategy.prefer] (see [_bankMark]
+  /// for why it has to be), and in Flutter web's CanvasKit renderer each platform
+  /// view splits the scene into its own GPU-backed overlay canvas. The uat gateway
+  /// returns **16** IdPs for a real customer — 1 registered, 15 not — and both
+  /// grids are built eagerly in a [Wrap] with no viewport culling, so all 16
+  /// appeared at once. At phone DPR that is on the order of 12 MB per overlay,
+  /// far past what one WKWebView content process gets, and the process was
+  /// killed: a foreground crash on this screen, confirmed from a tester's
+  /// breadcrumb trail (2026-08-17) which ended at `push /ndidBankSelectPage` with
+  /// no exception and no lifecycle change before it. It only reproduced when the
+  /// customer lingered here; tapping a bank within ~3 s beat the image loads.
+  static const int _kMaxLogoTiles = 4;
+
+  /// Builds one grid. `showLogos` is granted to the *registered* grid only, and
+  /// even there capped at [_kMaxLogoTiles].
+  ///
+  /// Registered is the right grid to spend the budget on: it is the bank the
+  /// customer actually uses, and it is normally one or two tiles. The
+  /// not-registered grid is the long one, and a coloured [_codeMark] with the
+  /// bank's initials identifies it well enough to pick.
+  Widget _bankGrid(
+    List<_NdidBank> banks, {
+    required bool enabled,
+    required bool showLogos,
+  }) {
+    final children = <Widget>[];
+    for (int i = 0; i < banks.length; i++) {
+      children.add(_bankTile(
+        banks[i],
+        enabled: enabled,
+        showLogo: showLogos && i < _kMaxLogoTiles,
+      ));
+    }
+    return Wrap(spacing: 12, runSpacing: 12, children: children);
   }
 
   /// The 44×44 square at the top of a tile: the IdP's own logo when the gateway
@@ -319,10 +362,14 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
   /// SVG natively. The bridge is no help here: `httpRequest` returns its body as
   /// a UTF-8 string, which cannot carry a JPEG.
   ///
+  /// ⚠ **Each of these is a platform view, and they are rationed.** `showLogo` is
+  /// false for most tiles — see [_kMaxLogoTiles] for the crash that made that
+  /// necessary. Do not render one unconditionally again.
+  ///
   /// Off web, and if the element approach fails too, [_codeMark] takes over —
   /// so a tile is never blank.
-  Widget _bankMark(_NdidBank bank) {
-    if (bank.logoUrl.isEmpty) return _codeMark(bank);
+  Widget _bankMark(_NdidBank bank, {required bool showLogo}) {
+    if (!showLogo || bank.logoUrl.isEmpty) return _codeMark(bank);
     return Container(
       width: 44,
       height: 44,
@@ -364,7 +411,11 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     );
   }
 
-  Widget _bankTile(_NdidBank bank, {required bool enabled}) {
+  Widget _bankTile(
+    _NdidBank bank, {
+    required bool enabled,
+    required bool showLogo,
+  }) {
     final bool isSelected = enabled && identical(_selected, bank);
     return Opacity(
       opacity: enabled ? 1 : 0.45,
@@ -386,7 +437,7 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
           ),
           child: Column(
             children: [
-              _bankMark(bank),
+              _bankMark(bank, showLogo: showLogo),
               const SizedBox(height: 6),
               Text(
                 bank.name,

@@ -54,6 +54,18 @@ class PdfInlineView extends StatefulWidget {
 
 class _PdfInlineViewState extends State<PdfInlineView> {
   PdfController? _controller;
+
+  /// Held separately from [_controller] **because disposing the controller does
+  /// not close the document.**
+  ///
+  /// `pdfx` 2.9.2's `PdfController.dispose()` only disposes its `PageController`
+  /// (`pdf_controller.dart:150-152`) — it never calls `PdfDocument.close()`, so
+  /// the underlying pdf.js `PDFDocumentProxy` and its `ArrayBuffer` stay alive in
+  /// the JS heap and the pdf.js worker for the rest of the session. Step 6
+  /// requires the customer to open all three contracts before the NDID row
+  /// unlocks, so that left three orphaned documents resident from step 6 onward —
+  /// i.e. for the whole NDID countdown, on the page iOS testers saw go blank.
+  PdfDocument? _document;
   String? _error;
 
   @override
@@ -69,8 +81,7 @@ class _PdfInlineViewState extends State<PdfInlineView> {
     // a different file. Without this it would keep showing the first one.
     if (oldWidget.viewId != widget.viewId ||
         oldWidget.base64Pdf != widget.base64Pdf) {
-      _controller?.dispose();
-      _controller = null;
+      _release();
       _error = null;
       _load();
     }
@@ -78,8 +89,27 @@ class _PdfInlineViewState extends State<PdfInlineView> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _release();
     super.dispose();
+  }
+
+  /// Tears down the controller *and* the document, then drops the rendered pages.
+  ///
+  /// `PdfView` rasterises every page at 2x as a JPEG and serves it through
+  /// `PdfPageImageProvider`, so the bitmaps also land in Flutter's global
+  /// `ImageCache` (a 100 MB / 1000-entry budget) and survive the sheet closing.
+  /// Clearing it here is deliberately broad — the alternative is knowing every
+  /// provider key pdfx minted — and cheap: the only other images this app caches
+  /// are the ID-card/selfie thumbnails, which re-decode from bytes still held on
+  /// the flow.
+  void _release() {
+    _controller?.dispose();
+    _controller = null;
+    _document?.close();
+    _document = null;
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
   }
 
   Future<void> _load() async {
@@ -112,6 +142,7 @@ class _PdfInlineViewState extends State<PdfInlineView> {
         return;
       }
       setState(() {
+        _document = document;
         _controller = PdfController(document: Future.value(document));
       });
     } catch (e) {

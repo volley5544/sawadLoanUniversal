@@ -8,6 +8,7 @@ import 'config/app_environment.dart';
 import 'router/app_router.dart';
 import 'router/url_strategy.dart';
 import 'services/app_config_api.dart';
+import 'services/diagnostics.dart';
 import 'services/native_bridge.dart';
 import 'services/ndid_api.dart';
 import 'services/srisawad_api.dart';
@@ -17,6 +18,14 @@ late AppState appState;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Before anything that can throw: replace Flutter's blank grey error box with
+  // a screen that names the exception and shows what led to it. A release build
+  // paints RenderErrorBox — a textless light-grey rectangle — which is exactly
+  // what iOS testers were reporting as "the WebView went white", and it is
+  // indistinguishable from the WKWebView content process having been killed.
+  // With this installed the two cases tell themselves apart in one screenshot.
+  Diagnostics.installHandlers();
 
   // Clean per-page URLs on web (e.g. /customerInfoPage instead of /#/...).
   // No-op off-web. Must run before runApp. See router/url_strategy.dart.
@@ -38,6 +47,13 @@ Future<void> main() async {
   print('SawadLoanUniversalWebVersion:$kWebVersion');
 
   await appState.initializePersistedState();
+
+  // Recover the breadcrumb trail from the run before this one, then start a fresh
+  // one. This is what makes a *silent* death reportable: if the previous trail
+  // ends at a route with no ERROR crumb after it, nothing threw — the run was cut
+  // off, which is the signature of the content process being reclaimed rather
+  // than of a crash. Needs SharedPreferences, hence after the line above.
+  await Diagnostics.restorePrevious();
 
   // If the native host recovered a document photo after the app was killed
   // mid-capture, it pushes it in here; stash it for the collateral page.
@@ -113,7 +129,10 @@ Future<void> _loadCustomerProfile() async {
   appState.profileLoading = true;
   try {
     try {
-      final detail = await UserApi.fetchUserDetail(hash);
+      final detail = await UserApi.fetchUserDetail(
+        hash,
+        token: appState.authToken,
+      );
       appState.update(() => appState.customerDetail = detail);
     } catch (e) {
       // ignore: avoid_print — intentional: surface in the WebView console.

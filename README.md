@@ -329,10 +329,14 @@ lib/
     srisawad_api.dart           shared base URL / headers / GET /loan/list
     topup_api.dart              top-up API group (/topup/*)
     p_loan_api.dart             P-Loan API group (the flow's single seam)
-    p_loan_contract_api.dart    P-Loan save API (POST /ploan, bearer + JSON)
+    p_loan_contract_api.dart    P-Loan save API (POST /ploan, bearer +
+                                multipart: 31 fields + 5 file parts)
     app_config_api.dart         Firestore runtime config (REST, no SDK)
     firebase_auth_rest.dart     anonymous sign-in over REST (no SDK)
     firestore_rest.dart         typed-value decoder for the REST format
+    diagnostics.dart            breadcrumb trail across reloads + a readable
+                                error screen (tap the "(UAT ver…)" tag)
+    device_location.dart        GPS for the submit payload (+ _web / _stub)
   loan_register/
     *_page.dart                 the wizard steps & pickers
     models/loan_register_form.dart   in-memory wizard model (+ mock data)
@@ -348,6 +352,83 @@ tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
+
+## Recent changes — 2026-08-07 → 2026-08-25
+
+Three sessions, ending with the **2026-08-11 pentest signed off** and the first
+**live `POST /ploan` submit**. Full detail in [CLAUDE.md](CLAUDE.md); the
+headlines:
+
+**Security — the pentest retest passed**
+
+- **Every `api_url_base` call now carries the bearer token.** `GET /user/detail`
+  — a customer's own profile — had been going out unauthenticated from all three
+  of its call sites, and it is the endpoint finding #2 names first. `token` is now
+  a **`required` argument** on every client method, so the compiler is the guard
+  rather than a convention; an empty one logs a warning instead of sending a bare
+  `Bearer `. Pinned by `test/srisawad_api_headers_test.dart`.
+- **The NDID reference reaches the payload.** `ndid_reference_id` — NDID's own
+  `reference_id` for the accepted verification — is filed with the application so
+  the backend can confirm the result with NDID instead of trusting a client bool.
+  ⚠ That is the **prerequisite** for finding #11, not the fix; the server-side
+  check is the API team's. It is written only on the real API path — the
+  simulated hop records nothing rather than claiming a verification that never
+  happened.
+- No baked-in service credential ships any more (deleted 2026-08-04 with the
+  bearer retarget). `kNdidApiKey` is the only one left, and a web build cannot
+  hide it regardless.
+- ⚠ **Still open, and never part of the report:** the plain-browser
+  "จำลองยืนยันตัวตนสำเร็จ" button is a real NDID bypass in any build a browser can
+  reach. "Pentest passed" does not cover it — nobody tested for it.
+
+**🐞 The iOS white screen — root cause found and fixed**
+
+- **The NDID bank-select page was crashing the WKWebView content process**, in
+  the foreground. Each bank logo is an HTML `<img>` **platform view** (it has to
+  be — the gateway sends no CORS headers and its placeholder is an SVG), and in
+  CanvasKit every platform view gets its own GPU-backed overlay canvas, ~12 MB at
+  phone DPR. The uat gateway returns **16** IdPs and both grids render eagerly,
+  so all 16 arrived at once — past what one content process gets.
+- **Fixed by rationing logos** to four tiles, registered grid only; the rest fall
+  back to initials. Shipped as uat **webVersion 74**. ⚠ The deciding test is
+  still outstanding: an iOS tester **lingering 30–60 s** on that page. A run that
+  taps through in ~3 s beats the image loads, which is why it looked intermittent.
+- **New: on-device diagnostics** (`services/diagnostics.dart`) — a breadcrumb
+  trail that survives a reload, plus a readable error screen in place of
+  Flutter's textless grey box, reachable by tapping the `(UAT ver…)` tag. This is
+  what proved the cause: the bad run's trail ended at `push /ndidBankSelectPage`
+  with **no `ERROR` crumb** (nothing threw) and **no `lifecycle hidden`**
+  (foreground), which is the signature of a process kill rather than a crash.
+  ⚠ The copied report masks `token` and `hashThaiId` — keep it that way.
+- **`pdfx` never closed its documents.** `PdfController.dispose()` disposes only
+  its `PageController`, so all three contract PDFs stayed resident in the pdf.js
+  worker from step 6 onward. A real leak, now released along with the
+  rendered-page bitmaps — but **not** the white screen's cause.
+
+**P-Loan save (`POST /ploan`)**
+
+- **A live submit succeeded** (2026-08-17, contract `SLOAN`) — the first ever. It
+  settled in one shot what nothing on paper could: the endpoint accepts
+  `multipart/form-data`, the CORS preflight passes, and the five-file body size
+  passes.
+- **The body is `multipart/form-data` again**, with five real file parts — the ID
+  card, the selfie, and the three consented contract PDFs. Unlike the old `:8082`
+  endpoint this needs **no `httpMultipart` bridge handler and no app release**:
+  `/ploan` sends `access-control-allow-origin: *`, so the upload goes direct
+  through `package:http` (`bypassHostBridge: true`).
+- **`latitude` / `longitude` come from the device GPS** now
+  (`navigator.geolocation`, captured un-awaited on the submit screen). No host
+  change was needed — the host already grants geolocation. A denial or timeout is
+  silent by design: the fields stay empty and the application still files.
+- **Five fields are blank on purpose**, no longer reported as unresolved: the two
+  GPS ids (they need a reverse lookup into srisawad's own id set that no endpoint
+  here provides) and the three host launch params a customer-initiated
+  application simply has none of.
+- **`/pdf/loan`'s `x-srisawad` override is prod-only** since 2026-08-07 — uat
+  sends the ordinary `x1` there like every other call.
+
+`flutter analyze` sits at its 39-info baseline (no errors or warnings) and
+`flutter test` is green at **150 tests**.
 
 ## Recent changes — 2026-08-04
 
@@ -373,8 +454,10 @@ gateway. Full detail in [CLAUDE.md](CLAUDE.md); the headlines:
 
 - **`x-srisawad: x1` on every `api_url_base` call.** The new uat gateway requires
   it (the old host did not); set once at `AppEnvironment.uat.srisawadHeader`, the
-  single chokepoint `SrisawadApi.headers()` reads. `pdf/loan` keeps its own
-  `x1_c3Jpc2F3YWQ` override.
+  single chokepoint `SrisawadApi.headers()` reads. `pdf/loan` used to override
+  this with `x1_c3Jpc2F3YWQ` everywhere; **since 2026-08-07 that override is
+  prod-only** and uat sends the ordinary `x1` there too
+  (`AppEnvironment.pdfLoanSrisawadHeader`).
 - **`sendApiRequest` timeout 30 s → 60 s**, giving the `/ploan` contract-filing
   POST headroom (it no longer rides the old 120 s multipart path). NDID keeps its
   own separate 30 s timeout.

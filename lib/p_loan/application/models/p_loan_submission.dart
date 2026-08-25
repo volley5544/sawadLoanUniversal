@@ -14,8 +14,10 @@
 /// not.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'loan_documents.dart';
 import 'p_loan_flow.dart';
 
 class PLoanSubmission {
@@ -229,17 +231,58 @@ class PLoanSubmission {
 /// | Server-assigned | `transNo`, `transDate` | not sent |
 /// | Also absent | — | `payDay`, `initialDate`, `lastPeriodPromo`, `remark` |
 ///
-/// The 30 fields below are exactly what the API's own sample call sends, in its
-/// order. Shared values are read back from [PLoanSubmission] rather than
+/// The 30 [fields] below are exactly what the API's own sample call sends, in
+/// its order. Shared values are read back from [PLoanSubmission] rather than
 /// re-derived, so the two payloads cannot disagree about the same number.
+///
+/// The request is `multipart/form-data`: [fields] are the form fields and
+/// [files] the file parts — see [files] for the three of those.
 class PLoanContractSubmission {
   const PLoanContractSubmission._(
-      this.fields, this.imageGroups, this.unresolvedFields);
+      this.fields, this.files, this.imageGroups, this.unresolvedFields);
 
   /// Scalar form fields, keyed by their `SavePloanContract` names.
+  ///
+  /// The 30 from the API's sample call plus **`ndid_reference_id`** (2026-08-14)
+  /// — all strings, which is also what a multipart form field is, so they go on
+  /// the wire unchanged.
+  ///
+  /// `ndid_reference_id` carries NDID's `reference_id` for the accepted identity
+  /// verification, so the server can confirm the result with NDID itself. Note
+  /// its **snake_case** spelling against the other 30's camelCase: that is the
+  /// name the API asked for. Blank when no real NDID hop happened, and reported
+  /// in [unresolvedFields] — never fabricated.
   final Map<String, String> fields;
 
+  /// The file parts, added 2026-08-07 — sent as **real `multipart/form-data`
+  /// file parts** alongside [fields], not base64 inside a JSON body.
+  ///
+  /// | Part field | Count | Source |
+  /// | --- | --- | --- |
+  /// | `cardIdImage` | 1 | the ID-card photo ([PLoanPhoto.idCard]) |
+  /// | `customerImage` | 1 | the selfie-with-ID-card ([PLoanPhoto.selfieWithIdCard]) |
+  /// | `documentImage[]` | 3 | the contract PDFs the customer consented to on the summary screen |
+  ///
+  /// Each part carries its own filename and content type, so the two photos go
+  /// as `image/jpeg` and the documents as `application/pdf`; the server can
+  /// tell them apart without sniffing bytes.
+  ///
+  /// ⚠ **The `[]` suffix is an assumption.** There is no spec for these three
+  /// yet. It follows `regmast_ploan.php`, which is where these field *names*
+  /// come from and which sends every group that way, while the two single files
+  /// go unsuffixed. If the server wants `[]` on all three — or on none — change
+  /// [_repeatedSuffix]; it is the one place that decides.
+  ///
+  /// A file the flow never captured is **omitted** rather than sent as an empty
+  /// part, and its field name is reported in [unresolvedFields] instead.
+  final List<PLoanFilePart> files;
+
   /// Image groups; each entry is sent as repeated `group[]` file parts.
+  ///
+  /// **This is the regmast view, not what `/ploan` receives** — that endpoint
+  /// takes only the three in [files]. Kept because the mock-mode payload
+  /// preview lists everything the flow collected, and because [PLoanSubmission]
+  /// is built from the same photos.
   final Map<String, List<Uint8List>> imageGroups;
 
   /// Fields this flow had no value for. The API decides whether it minds, but
@@ -292,22 +335,175 @@ class PLoanContractSubmission {
       'registerYear': v('registerYear'),
       'marketingConsent': v('marketingConsent'),
       'sensitiveConsent': v('sensitiveConsent'),
+      // The 31st field, added 2026-08-14 — the only one not in the API's own
+      // sample call, and **snake_case where the other 30 are camelCase**: that
+      // is the name the API asked for, so it is sent verbatim rather than
+      // normalised to match its neighbours.
+      'ndid_reference_id': flow.ndidReferenceId,
     };
+
+    // The two identity photos and the consented contract documents. Both photos
+    // are captured on the summary screen itself, so they are present on either
+    // entry point — unlike the collateral shots, which the top-up-card path
+    // skips along with the whole vehicle-photos step.
+    final files = <PLoanFilePart>[
+      ..._photoPart(flow, PLoanPhoto.idCard, 'cardIdImage', 'card_id.jpg'),
+      ..._photoPart(
+          flow, PLoanPhoto.selfieWithIdCard, 'customerImage', 'customer.jpg'),
+      ..._documentParts(flow),
+    ];
 
     // Same rule as the regmast payload: a field this product does not have is
     // not a field this flow failed to fill.
-    final absentByDesign = PLoanSubmission._absentByDesign(flow);
+    final absentByDesign = {
+      ...PLoanSubmission._absentByDesign(flow),
+      ...acceptedBlank,
+    };
+    final sentFields = files.map((f) => f.field).toSet();
+    final unresolved = [
+      ...fields.entries
+          .where((e) => e.value.isEmpty && !absentByDesign.contains(e.key))
+          .map((e) => e.key),
+      // A file with no part at all is reported like an empty scalar: `canSubmit`
+      // should have stopped it, so if one gets this far the refusal should say
+      // which. Reported under the plain name, not the `[]` field, so the message
+      // matches what the screens call it.
+      ...fileFieldNames.where((name) =>
+          !sentFields.contains(name) &&
+          !sentFields.contains('$name$_repeatedSuffix')),
+    ]..sort();
+
     return PLoanContractSubmission._(
       Map.unmodifiable(fields),
+      List.unmodifiable(files),
       shared.imageGroups,
-      List.unmodifiable(
-        (fields.entries
-            .where((e) =>
-                e.value.isEmpty && !absentByDesign.contains(e.key))
-            .map((e) => e.key)
-            .toList()
-          ..sort()),
-      ),
+      List.unmodifiable(unresolved),
     );
   }
+
+  /// The three file fields, under the names the screens and the refusal message
+  /// use — i.e. without [_repeatedSuffix].
+  static const List<String> fileFieldNames = [
+    'cardIdImage',
+    'customerImage',
+    'documentImage',
+  ];
+
+  /// Fields the API is sent as `''` **on purpose**, so they are not reported in
+  /// [unresolvedFields] (decided 2026-08-07).
+  ///
+  /// Each is still always **present** in [fields] — an empty form field, never
+  /// an omitted one. What changes is only that a blank one is no longer called
+  /// out as a problem, because for these five it is the intended value:
+  ///
+  /// | Field | Why blank is correct |
+  /// | --- | --- |
+  /// | `gpsProvinceId`, `gpsAumphurId` | srisawad's own province/district **ids**; deriving them needs a reverse lookup from lat/lng into that id set, which no endpoint here provides. Having GPS coordinates did not resolve them. |
+  /// | `empId`, `mktChannel`, `customerSource` | supplied by the native host as launch params. A customer-initiated application has no employee or marketing channel behind it, so absent is a true answer, not a gap. |
+  ///
+  /// ⚠ This does **not** blank a value that exists: when the host does pass
+  /// `?empId=…`, it is still read and sent. The set only stops an *empty* one
+  /// being flagged.
+  static const Set<String> acceptedBlank = {
+    'gpsProvinceId',
+    'gpsAumphurId',
+    'empId',
+    'mktChannel',
+    'customerSource',
+  };
+
+  /// Appended to a field that carries more than one part.
+  ///
+  /// `regmast_ploan.php` — where these names come from — repeats every group as
+  /// `group[]`, which is also what PHP needs to collect them into an array. The
+  /// two single files go unsuffixed. Unverified against `/ploan` itself; this is
+  /// the one place to change if it wants something else.
+  static const String _repeatedSuffix = '[]';
+
+  /// A captured photo as a one-element list, or empty when the slot is unset —
+  /// spreadable, so a missing photo contributes no part rather than an empty one.
+  ///
+  /// JPEG because that is what the host's camera bridge returns.
+  static List<PLoanFilePart> _photoPart(
+    PLoanFlow flow,
+    PLoanPhoto slot,
+    String field,
+    String filename,
+  ) {
+    final bytes = flow.photos[slot];
+    if (bytes == null || bytes.isEmpty) return const [];
+    return [
+      PLoanFilePart(
+        field: field,
+        filename: filename,
+        contentType: 'image/jpeg',
+        bytes: bytes,
+      ),
+    ];
+  }
+
+  /// The contract PDFs, in the fixed order the summary screen lists and consents
+  /// to them, skipping any that came back empty.
+  ///
+  /// `POST /pdf/loan` returns these as `data:application/pdf;base64,…` (the mock
+  /// fixtures build bare base64), so the prefix is stripped before decoding —
+  /// tolerating both means mock mode uploads the same shape production does.
+  /// The decoded bytes are the PDF the customer actually read: what is filed is
+  /// byte-identical to what they consented to.
+  static List<PLoanFilePart> _documentParts(PLoanFlow flow) {
+    final docs = flow.documents;
+    if (docs == null) return const [];
+    final parts = <PLoanFilePart>[];
+    for (final kind in LoanDocumentKind.values) {
+      final bytes = _decodeBase64(kind.base64From(docs));
+      if (bytes == null) continue;
+      parts.add(PLoanFilePart(
+        field: 'documentImage$_repeatedSuffix',
+        filename: '${kind.name}.pdf',
+        contentType: 'application/pdf',
+        bytes: bytes,
+      ));
+    }
+    return parts;
+  }
+
+  /// Bytes of a base64 blob that may or may not carry a `data:` prefix, or null
+  /// when it is empty or not decodable.
+  ///
+  /// Undecodable returns null rather than throwing: a malformed document must
+  /// surface as a reported missing file the customer can retry, not as an
+  /// exception out of a payload mapper.
+  static Uint8List? _decodeBase64(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final comma = trimmed.indexOf(',');
+    final payload =
+        trimmed.startsWith('data:') && comma >= 0 ? trimmed.substring(comma + 1) : trimmed;
+    try {
+      final bytes = base64Decode(payload);
+      return bytes.isEmpty ? null : bytes;
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+/// One `multipart/form-data` file part of a [PLoanContractSubmission].
+///
+/// A model-layer type on purpose: the mapper stays free of the transport, and
+/// `PLoanContractApi` converts these to the `http` package's parts — the same
+/// split [PLoanSubmission.imageGroups] and `PLoanApiService` already use.
+class PLoanFilePart {
+  const PLoanFilePart({
+    required this.field,
+    required this.filename,
+    required this.contentType,
+    required this.bytes,
+  });
+
+  /// Form field name, including the `[]` when the API expects repeats.
+  final String field;
+  final String filename;
+  final String contentType;
+  final Uint8List bytes;
 }

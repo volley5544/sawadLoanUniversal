@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'native_bridge.dart';
 
@@ -166,28 +167,32 @@ class MultipartFilePart {
 /// Posts `multipart/form-data` with any number of fields and repeated file
 /// parts, preferring the native host over the browser.
 ///
-/// Unlike [sendMultipartApiRequest] — which always uses `package:http` because
-/// its one caller talks to an endpoint that sends
-/// `access-control-allow-origin: *` — this routes through the host's
-/// `httpMultipart` bridge handler when running inside the host. It exists for
-/// the P-Loan save API, which sends **no** CORS headers and 401s the preflight,
-/// so a browser upload is blocked outright.
-///
-/// File bytes reach the handler as base64 inside its JSON envelope; the host
-/// rebuilds the real multipart body natively (see `native_bridge.dart`).
+/// By default this routes through the host's `httpMultipart` bridge handler
+/// when running inside the host, because it was written for an endpoint that
+/// sent **no** CORS headers and 401'd the preflight, so a browser upload was
+/// blocked outright. File bytes reach the handler as base64 inside its JSON
+/// envelope; the host rebuilds the real multipart body natively (see
+/// `native_bridge.dart`).
 ///
 /// If the host is too old to have the handler, this falls back to a direct
 /// browser upload rather than failing immediately — some WebView configurations
 /// allow it. When that fails too, the thrown message names the missing handler,
 /// because adding it is the actual fix.
+///
+/// [bypassHostBridge] skips all of that and always uses `package:http`, the way
+/// [sendMultipartApiRequest] does. Set it **only** for a host that sends
+/// `access-control-allow-origin: *` — the srisawad mobile API does, which is
+/// what lets the P-Loan save upload take this path and need no `httpMultipart`
+/// handler at all. Never set it for the NDID gateway.
 Future<ApiHttpResult> sendMultipartGroupsApiRequest(
   Uri url, {
   Map<String, String>? headers,
   Map<String, String> fields = const {},
   List<MultipartFilePart> files = const [],
   Duration timeout = const Duration(seconds: 120),
+  bool bypassHostBridge = false,
 }) async {
-  if (NativeCameraBridge.isSupported) {
+  if (NativeCameraBridge.isSupported && !bypassHostBridge) {
     Map<String, dynamic>? res;
     try {
       res = await NativeCameraBridge.sendHttpMultipart(
@@ -244,6 +249,11 @@ Future<ApiHttpResult> _postMultipartDirect(
       f.field,
       f.bytes,
       filename: f.filename,
+      // Honour the declared type. The bridge path always passed this through;
+      // omitting it here made the same upload arrive as application/octet-stream
+      // depending only on which transport ran — and it matters for the P-Loan
+      // save call, whose parts are a mix of image/jpeg and application/pdf.
+      contentType: MediaType.parse(f.contentType),
     ));
   }
   if (headers != null) {

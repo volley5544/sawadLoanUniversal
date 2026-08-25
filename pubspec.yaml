@@ -67,6 +67,11 @@ dependencies:
   # NDID local-node API client (lib/services/ndid_api.dart) — used only when
   # running inside the native host (real identity verification flow).
   http: ^1.2.2
+
+  # MediaType, so a multipart file part can declare its real content type
+  # (the P-Loan save upload mixes image/jpeg and application/pdf parts).
+  # Already a transitive dep of `http`; named here because we import it.
+  http_parser: ^4.0.2
   pdfx: 2.9.2
 
 dev_dependencies:

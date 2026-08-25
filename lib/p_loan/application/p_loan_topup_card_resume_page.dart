@@ -88,7 +88,8 @@ class _PLoanTopupCardResumePageState extends State<PLoanTopupCardResumePage> {
     try {
       final token = appState.authToken;
       // Same overlap as step 1: both are needed, neither depends on the other.
-      final profileRequest = PLoanApi.fetchCustomer(hashThaiId: hash);
+      final profileRequest =
+          PLoanApi.fetchCustomer(hashThaiId: hash, token: token);
       final contractsRequest =
           PLoanApi.listContracts(hashThaiId: hash, token: token);
       final customer = await profileRequest;

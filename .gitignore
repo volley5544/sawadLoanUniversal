@@ -73,3 +73,9 @@ api_data/
 
 # Stray compiled-Dart dump (a copy of a build's main.dart.js). Build artifact.
 /m.js
+
+# Pentest findings (2026-08-11) and the vendor requirements PDF. Same rule as
+# api_data/ and ndid_doc/ above: a findings report is a map of this system's
+# weak points, and the sheet is 43 MB of embedded evidence. Keep both local.
+/pentest_doc/
+/Digital Lending with Srisawad*.pdf

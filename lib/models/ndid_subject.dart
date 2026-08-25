@@ -22,4 +22,23 @@ abstract interface class NdidSubject {
   /// the verify page can be reached by back-navigation, and the choice has to
   /// survive that. Null in the plain-browser mock flow, which has no real IdP.
   String? ndidIdpId;
+
+  /// NDID's own `reference_id` for the accepted verification
+  /// (`POST /rp/verify` → `GET /rp/verify/{reference_id}`).
+  ///
+  /// Written by the verify page when a **real** request is accepted, and sent to
+  /// `POST /ploan` as `ndid_reference_id` so the backend can confirm the
+  /// verification with NDID itself instead of taking the client's word for it.
+  /// Mutable and on the flow for the same reason [ndidIdpId] is: the value is
+  /// produced two screens away from where it is used.
+  ///
+  /// Empty means **no proven verification is being claimed** — a simulated hop
+  /// in a plain browser, or a flow that never reached NDID. It is deliberately
+  /// not faked: an unprovable reference is worse than a blank one, which the
+  /// submit payload reports as unresolved.
+  ///
+  /// `abstract` because a non-nullable field on an interface would otherwise
+  /// need an initialiser here; this declares the getter/setter pair and leaves
+  /// the storage to each implementation.
+  abstract String ndidReferenceId;
 }

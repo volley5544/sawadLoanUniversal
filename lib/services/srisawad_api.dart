@@ -33,19 +33,34 @@ class SrisawadApi {
     return fromConfig ?? AppEnvironment.current.mobileApiBase;
   }
 
-  /// Standard headers. [contentType] is omitted for GETs.
+  /// Standard headers for **every** call on this base: `x-srisawad` and the
+  /// customer's Firebase `Authorization: Bearer`. [contentType] is omitted for
+  /// GETs.
+  ///
+  /// An empty [token] sends **no** `Authorization` at all rather than a bare
+  /// `Bearer ` — a header with no credential in it is worse than none, since it
+  /// looks authenticated in a capture. But an unauthenticated call is not
+  /// something to pass over quietly: the caller is about to be 401'd and the
+  /// cause is usually a missing `?token=` launch param, so say so once, on the
+  /// spot. Silence here is how `/user/detail` went unauthenticated unnoticed.
   static Map<String, String> headers(
     String token, {
     String? contentType,
     Map<String, String> extra = const {},
-  }) =>
-      {
-        if (AppEnvironment.current.srisawadHeader.isNotEmpty)
-          'x-srisawad': AppEnvironment.current.srisawadHeader,
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-        'Content-Type': ?contentType,
-        ...extra,
-      };
+  }) {
+    if (token.isEmpty) {
+      // ignore: avoid_print — intentional: surface in the WebView console.
+      print('[SawadLoanUniversal] WARNING: mobile-API call with no bearer '
+          'token — check the ?token= launch param');
+    }
+    return {
+      if (AppEnvironment.current.srisawadHeader.isNotEmpty)
+        'x-srisawad': AppEnvironment.current.srisawadHeader,
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      'Content-Type': ?contentType,
+      ...extra,
+    };
+  }
 
   /// GET/POST returning decoded JSON, or throwing [SrisawadApiException].
   static Future<dynamic> send(

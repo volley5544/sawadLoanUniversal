@@ -80,7 +80,8 @@ class _PLoanContractSelectPageState extends State<PLoanContractSelectPage> {
     try {
       final token = appState.authToken;
       // Kick both off before awaiting either, so they overlap.
-      final profileRequest = PLoanApi.fetchCustomer(hashThaiId: hash);
+      final profileRequest =
+          PLoanApi.fetchCustomer(hashThaiId: hash, token: token);
       final contractsRequest =
           PLoanApi.listContracts(hashThaiId: hash, token: token);
       final customer = await profileRequest;
