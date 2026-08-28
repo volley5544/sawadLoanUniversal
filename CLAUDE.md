@@ -58,6 +58,12 @@ projects, `prod` and `uat` (see Deploy below).
   default `https://dev.swpfin.com/dap`) — list IdPs → `POST /rp/verify` → poll
   status; otherwise the mock bank grid + "จำลองยืนยันตัวตนสำเร็จ" button remain
   (the bank's own app screens are third-party either way).
+- **The NDID hop is three screens, not two, and it starts with the agreement**
+  (2026-08-28): `ndid_terms` → `ndid_bank_select` → `ndid_verify`. Both callers
+  push `AppRoutes.ndidTerms` and still await one bool. Its customer-facing text —
+  the agreement, the IdP guidance, the waiting message and every failure — is
+  **the NDID standard's, quoted, not ours**; see **NDID Common Message
+  standard** before rewording anything on those screens.
 - **Mock data drives the UI.** `LoanRegisterForm.mock()` (matches "slide 7" of
   the design) seeds every field so screens render fully populated. Option lists
   (brands, models, provinces, installment counts, transfer types) are hardcoded
@@ -315,10 +321,12 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   plain browser; shows view/delete), plus a เอกสารประกอบสัญญา section
   whose ตรวจสอบเอกสาร row opens the NDID flow. On NDID success the card flips to
   a signed state (green check + ดาวน์โหลดเอกสาร) and the bottom "ถัดไป" unlocks →
-  pushes step 5. Gated by `form.ndidVerified`.
+  pushes step 5. Gated by `form.ndidVerified`. The NDID flow it opens now begins
+  at `ndid_terms_page`, not the IdP picker.
 - `document_review_page.dart` — **ตรวจสอบเอกสาร** (slide 8 frame 2). Contract-doc
   list + an acknowledge checkbox; the "ลงนามเอกสารและยืนยันตัวตน NDID" button
-  starts the NDID flow and, on success, pops `true` back to step 4.
+  starts the NDID flow — at `ndid_terms_page` since 2026-08-28 — and, on success,
+  pops `true` back to step 4.
 - `ndid_terms_page.dart` — **เงื่อนไขและข้อตกลงที่เกี่ยวข้อง NDID**, the NDID
   service agreement (added 2026-08-28). **This is now the first screen of the
   NDID sub-flow**, ahead of the IdP picker: both `document_review_page` (wizard
@@ -2057,8 +2065,10 @@ reason recorded.
    `/ploan`; nothing shared ships in the bundle now. (`kNdidApiKey` is the only
    baked-in secret left — a web build can't hide it regardless.)
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
-   to match the deployed `WEB_VERSION` (**50** as of 2026-07-31), or the host's
-   stale-cache auto-reload never fires.
+   to match the deployed `WEB_VERSION` (**72** as of 2026-08-28), or the host's
+   stale-cache auto-reload never fires. Note the number now moves on most
+   sessions, since the `Stop` hook deploys uat on any turn that changes source —
+   check what is actually live rather than trusting this figure.
 5. **`empId` / `mktChannel` / `customerSource`** reach the payload only if the
    host appends them as launch params. They are blank otherwise and reported.
 6. **A new-P-Loan document endpoint is needed.** `POST /pdf/loan` is keyed by a

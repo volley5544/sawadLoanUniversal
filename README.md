@@ -364,37 +364,18 @@ tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
 
-## Recent changes — 2026-08-28 (NDID review fixes)
-
-NDID **rejected** the app review. Three findings (`dap/NDID-Issues.txt`); two
-were code, and both are fixed:
-
-- **Transaction Ref** — the standard requires the RP to generate it, digits
-  only, at most 9 (guideline p.38). The screen was showing 12 hex characters of
-  NDID's own `ndid_request_id` (`8CB4B22F15A4`), which is neither. A reference is
-  now generated per request and put **both** on our waiting screen and inside the
-  `request_message` the bank's app displays, so the customer sees one number in
-  both places. `NdidApi.createVerifyRequest` requires it rather than defaulting.
-- **IdP & AS error messages** — all 18 documented codes (IdP `30000`–`30900`, AS
-  `40000`–`40500`) now use the published Common Message wording instead of four
-  sentences of our own. This needed a wire fix as well: `NdidVerifyStatus` read
-  only `status`, so the `error_code` inside `response_list` was thrown away — and
-  the gateway's two error statuses counted as "still pending", polling a dead
-  request for the full hour.
-- **NDID T&C** — no code change. The terms screen added earlier the same day
-  already carries the minimum-required text verbatim; the finding was that the
-  **video** did not show it, so it needs re-recording.
-
-The wording lives in `lib/services/ndid_common_message.dart`, quoted from the
-NDID guideline; see [CLAUDE.md](CLAUDE.md) → **NDID Common Message standard** for
-the two judgement calls (a dropped AS clause, and an unset RP contact).
-
 ## Recent changes — 2026-08-28
 
-**NDID now opens with its service agreement.** A new screen,
-**เงื่อนไขและข้อตกลงที่เกี่ยวข้อง NDID** (`lib/loan_register/ndid_terms_page.dart`),
-is the first step of the NDID sub-flow — ahead of the IdP picker, in **both**
-the wizard's step 4 and the P-Loan flow's step 6.
+One session, all of it NDID. It began with a missing terms screen and ended with
+NDID's own review rejection, which turned out to be about the same part of the
+flow.
+
+### The NDID sub-flow now opens with its service agreement
+
+A new screen, **เงื่อนไขและข้อตกลงที่เกี่ยวข้อง NDID**
+(`lib/loan_register/ndid_terms_page.dart`), is the first step of the NDID hop —
+ahead of the IdP picker, in **both** the wizard's step 4 and the P-Loan flow's
+step 6.
 
 - The agreement is **one continuous scroll** with ปฏิเสธ / ยอมรับ pinned at the
   bottom. It was first built as the design showed it — a three-page `PageView`
@@ -410,15 +391,56 @@ the wizard's step 4 and the P-Loan flow's step 6.
   `Index/Document.iwa` is Snappy-framed protobuf). Clause numbers are structural
   data, because the document itself only wrote some of them — 3, 4 and 6–9 had
   literal digits while 1, 2 and 5 were auto-numbered by Pages.
-- ⚠ A **decline is logged to the session only** (`Diagnostics.log`), which is
-  in-memory and gone when the WebView closes. The design's
-  "กรณีปฏิเสธมีเก็บ log" note probably wants a server-side record; no endpoint
-  exists for one — see CLAUDE.md → Outstanding #23.
 
-Tests: `test/ndid_terms_content_test.dart` pins clauses 1–9, clause 3's five
-sub-items and that no clause re-renders its own number;
-`test/ndid_terms_page_test.dart` renders the screen at phone size and scrolls
-from the first clause to the last.
+### NDID rejected the app review, and two of the three findings were code
+
+Reasons in the (git-ignored) `dap/NDID-Issues.txt`:
+
+- **Transaction Ref** — the standard requires the **RP** to generate it, digits
+  only, at most 9 (guideline p.38). The screen was showing 12 hex characters of
+  NDID's own `ndid_request_id` (`8CB4B22F15A4`), which is neither. A reference is
+  now generated per request and put **both** on the waiting screen and inside the
+  `request_message` the bank's app displays, so the customer sees one number in
+  both places. `NdidApi.createVerifyRequest` requires it rather than defaulting.
+- **IdP & AS error messages** — all 18 documented codes (IdP `30000`–`30900`, AS
+  `40000`–`40500`) now use the published Common Message wording instead of four
+  sentences of our own. This needed a wire fix as well: `NdidVerifyStatus` read
+  only `status`, so the `error_code` inside `response_list` was thrown away — and
+  the gateway's two error statuses counted as "still pending", polling an
+  already-dead request for the full hour.
+- **NDID T&C** — no code change. The terms screen above already carries the
+  minimum-required text verbatim (all 12 clause paragraphs match the Schedule 5
+  document once its own company-name placeholder is filled, as it instructs). The
+  finding was that the **video** did not show the screen.
+
+All of it is in this repo. The NDID backend (`ssw_ndid_api`) needed **no change**:
+its status route spreads DAP's response through unchanged, so the error code was
+always arriving — the app was discarding it.
+
+The wording lives in `lib/services/ndid_common_message.dart`, quoted from the
+NDID guideline; see [CLAUDE.md](CLAUDE.md) → **NDID Common Message standard** for
+the two judgement calls (a dropped AS clause, and an unset RP contact).
+
+### Still open after this session
+
+Neither is code, and both belong to someone other than this repo:
+
+1. **Re-record the review video** so it shows the T&C screen, and send NDID the
+   T&C text they asked for.
+2. **Check the Request Message against the submitted user-journey document.**
+   NDID also said the ref "did not match" that document, which is not in this
+   repo — and their reference image names an **AS** (ธนาคารกสิกรไทย) where this
+   build names none, because it sends no `data_request_list`.
+
+Also worth knowing: the error-code mapping is verified against the PDF and unit
+tested, but **no live IdP failure has ever flowed through it**. Triggering one on
+the NDID UAT console before resubmitting is cheap insurance.
+
+Tests added this session: `ndid_terms_content_test` (clauses 1–9, clause 3's five
+sub-items, no clause re-rendering its own number), `ndid_terms_page_test`
+(renders at phone size, scrolls first clause to last) and
+`ndid_common_message_test` (every documented code has its own message; a 10-digit
+or hex reference is rejected; the error code is parsed out of `response_list`).
 
 ## Recent changes — 2026-08-07 → 2026-08-25
 
