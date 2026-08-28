@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/native_bridge.dart';
+import '../services/diagnostics.dart';
 import '../services/ndid_api.dart';
+import '../services/ndid_common_message.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import '../models/ndid_subject.dart';
@@ -81,7 +83,13 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   bool _creating = false;
   String? _error;
   String? _referenceId;
-  String? _ndidRequestId;
+
+  /// The customer-facing Transaction Ref for this request (NDID guideline
+  /// p.38: RP-generated, digits only, 5-9 long). Generated once per request and
+  /// sent inside the IdP's `request_message`, so this screen and the bank's app
+  /// quote the same number. It is **not** derived from NDID's `reference_id`,
+  /// which is a UUID and satisfies neither rule.
+  String? _transactionRefValue;
 
   /// True while a [_pollStatus] call is in flight, so overlapping polls can't
   /// pile up — `Timer.periodic` fires on schedule regardless of whether the last
@@ -170,18 +178,26 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
       _creating = true;
       _error = null;
     });
+    final transactionRef =
+        _transactionRefValue ??= NdidTransactionRef.generate();
     try {
       final req = await NdidApi.createVerifyRequest(
         identifier: _citizenId,
         idpId: widget.form!.ndidIdpId!,
+        transactionRef: transactionRef,
         requestTimeoutSeconds: _requestTimeout.inSeconds,
       );
       if (!mounted) return;
       setState(() {
         _creating = false;
         _referenceId = req.referenceId;
-        _ndidRequestId = req.ndidRequestId;
       });
+      // The three ids that identify this request, in one line: ours (shown to
+      // the customer and to the IdP) and NDID's two. Chasing a failed
+      // verification with NDID support means quoting theirs, and the customer
+      // can only ever quote ours.
+      Diagnostics.log('ndid verify created txnRef=$transactionRef '
+          'ref=${req.referenceId} ndidRequestId=${req.ndidRequestId ?? '-'}');
       _startCountdown();
       _scheduleNextPoll();
     } on NdidApiException catch (e) {
@@ -246,13 +262,18 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
         _timer?.cancel();
       });
     } else {
+      // The NDID Common Message standard, not wording of our own: the IdP/AS
+      // error code picks the sentence, and the customer is told what happened
+      // and what to do next. Free-text messages here were issue 3 of the
+      // 2026-08-28 review rejection.
+      Diagnostics.log('ndid verify failed status=${status.status} '
+          'code=${status.errorCode ?? '-'}');
       setState(() {
-        _error = switch (status.status) {
-          'REJECTED' => 'การยืนยันตัวตนถูกปฏิเสธจากธนาคาร',
-          'TIMEOUT' => 'หมดเวลาการยืนยันตัวตน กรุณาทำรายการใหม่',
-          'CANCELLED' => 'รายการยืนยันตัวตนถูกยกเลิก',
-          _ => 'การยืนยันตัวตนไม่สำเร็จ (${status.status})',
-        };
+        _error = NdidCommonMessage.forStatus(
+          status.status,
+          errorCode: status.errorCode,
+          idpName: widget.form?.ndidIdpName ?? '',
+        );
         _referenceId = null;
       });
     }
@@ -357,9 +378,9 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
                   ),
                 ] else ...[
                   Text(
-                    'ทำรายการยืนยันตัวตนผ่านแอปพลิเคชันของธนาคารที่เลือก '
-                    'ภายในระยะเวลาที่กำหนด (จำกัด 1 ครั้ง/รายการ) '
-                    'กรุณาเปิดแอปธนาคารเพื่อยืนยันตัวตนของท่าน',
+                    // NDID Common Message 6.2.1 [3] — the standard wording for
+                    // this screen. Do not reword; see [NdidCommonMessage].
+                    NdidCommonMessage.waitingForIdp,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.notoSansThai(
                       fontSize: 13,
@@ -463,11 +484,15 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
 
   /// Short reference shown to the customer — the NDID request id (or local
   /// reference id) when the real request exists, a placeholder otherwise.
-  String _transactionRef() {
-    final id = _ndidRequestId ?? _referenceId;
-    if (id == null) return _useRealApi ? '-' : '1234ETE';
-    return id.length > 12 ? id.substring(0, 12).toUpperCase() : id.toUpperCase();
-  }
+  /// What the customer sees, and what the IdP app shows them.
+  ///
+  /// Until 2026-08-28 this was the first 12 characters of NDID's own
+  /// `ndid_request_id`, upper-cased — e.g. `8CB4B22F15A4`. NDID rejected the app
+  /// review over it (issue 2): the reference must be digits only and at most 9
+  /// of them, and it must match the one in the Request Message. Both now come
+  /// from the single [_transactionRefValue].
+  String _transactionRef() =>
+      _transactionRefValue ?? (_useRealApi ? '-' : '000000001');
 
   // ── Success ────────────────────────────────────────────────────────
   Widget _successBody() {

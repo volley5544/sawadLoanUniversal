@@ -23,6 +23,20 @@ abstract interface class NdidSubject {
   /// survive that. Null in the plain-browser mock flow, which has no real IdP.
   String? ndidIdpId;
 
+  /// The IdP's **marketing name**, as the bank-select grid showed it
+  /// (e.g. `ธนาคารกสิกรไทย`).
+  ///
+  /// Written beside [ndidIdpId] and read only by the error messages. §6.2.1
+  /// bullet 4 of the NDID guideline requires the customer be shown the IdP
+  /// Marketing Name rather than the word "IdP" or a node id, and one standard
+  /// message (code 30900, "outside that provider's service hours") names it.
+  /// Empty when unknown, which those messages degrade to a generic phrase for.
+  ///
+  /// `abstract` for the same reason [ndidReferenceId] is — an interface field
+  /// cannot carry an initialiser, so this declares the getter/setter pair and
+  /// leaves the storage to each implementation.
+  abstract String ndidIdpName;
+
   /// NDID's own `reference_id` for the accepted verification
   /// (`POST /rp/verify` → `GET /rp/verify/{reference_id}`).
   ///

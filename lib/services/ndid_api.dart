@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../config/app_environment.dart';
 import 'api_transport.dart';
 import 'app_config_api.dart';
+import 'ndid_common_message.dart';
 
 /// Client for the **NDID local-node API** (the `localhost:7088` wrapper in
 /// `ndid_doc/NDID_Local_API.postman_collection.json`; it fronts the NDID
@@ -135,18 +136,29 @@ class NdidApi {
   /// offered under.
   ///
   /// Sends **no `request_type`** unless one is configured — see [requestType].
+  /// [transactionRef] is the RP-generated customer-facing reference (digits
+  /// only, 5-9 of them — see [NdidTransactionRef]). It goes into the
+  /// `request_message` the IdP app displays, so the number the customer reads
+  /// on our waiting screen is the same one their bank shows them. Required
+  /// rather than defaulted: a request that quotes no reference, or a different
+  /// one, is what NDID rejected the app review over.
   static Future<NdidVerifyRequest> createVerifyRequest({
     required String identifier,
     required String idpId,
-    String requestMessage = 'ขอยืนยันตัวตนเพื่อสมัครสินเชื่อกับ ศรีสวัสดิ์',
+    required String transactionRef,
+    String? requestMessage,
     int requestTimeoutSeconds = 3600,
     String? requestType,
   }) async {
+    assert(NdidTransactionRef.isValid(transactionRef),
+        'Transaction Ref must be 5-9 digits: $transactionRef');
+    final message = requestMessage ??
+        NdidCommonMessage.requestMessage(transactionRef: transactionRef);
     final type = requestType ?? await NdidApi.requestType();
     final json = await _post('/rp/verify', {
       'namespace': citizenIdNamespace,
       'identifier': identifier,
-      'request_message': requestMessage,
+      'request_message': message,
       'idp_id_list': [idpId],
       'min_idp': 1,
       'min_aal': minAal,
@@ -289,18 +301,65 @@ class NdidVerifyRequest {
 /// Result of `GET /rp/verify/{referenceId}`.
 /// Status: CREATED | PENDING | ACCEPTED | REJECTED | TIMEOUT | CANCELLED.
 class NdidVerifyStatus {
-  const NdidVerifyStatus({required this.status});
+  const NdidVerifyStatus({required this.status, this.errorCode});
 
   final String status;
 
+  /// The IdP or AS error code, when the request failed with one.
+  ///
+  /// This is what selects the customer-facing wording — see
+  /// [NdidCommonMessage.forErrorCode]. It arrives inside `response_list`
+  /// (per-IdP) rather than at the top level, which is why it was being dropped
+  /// before 2026-08-28: the old model read `status` and nothing else, so every
+  /// distinct failure showed the same generic sentence.
+  final int? errorCode;
+
   factory NdidVerifyStatus.fromJson(Map<String, dynamic> json) =>
-      NdidVerifyStatus(status: (json['status'] ?? '').toString().toUpperCase());
+      NdidVerifyStatus(
+        status: (json['status'] ?? '').toString().toUpperCase(),
+        errorCode: _errorCode(json),
+      );
+
+  /// Digs the error code out wherever this gateway put it: on the envelope, or
+  /// on the first `response_list` entry that carries one. Tolerant of a string
+  /// because the API returns numbers as both (see `json_coerce.dart` for the
+  /// same problem on the mobile API).
+  static int? _errorCode(Map<String, dynamic> json) {
+    int? asInt(Object? v) => v == null
+        ? null
+        : v is int
+            ? v
+            : int.tryParse(v.toString());
+
+    final top = asInt(json['error_code']);
+    if (top != null) return top;
+    final list = json['response_list'];
+    if (list is List) {
+      for (final entry in list) {
+        if (entry is Map) {
+          final code = asInt(entry['error_code']);
+          if (code != null) return code;
+        }
+      }
+    }
+    return null;
+  }
 
   bool get isAccepted => status == 'ACCEPTED';
   bool get isRejected => status == 'REJECTED';
   bool get isTimeout => status == 'TIMEOUT';
   bool get isCancelled => status == 'CANCELLED';
 
+  /// The gateway's two error statuses (`API_USAGE.md` in the backend repo):
+  /// NDID itself failed the request, or an IdP/AS answered with an error code.
+  bool get isError => status == 'REQUESTED_ERROR' || status == 'IDP_OR_AS_ERROR';
+
   /// Still waiting for the customer to act in their bank app.
-  bool get isPending => !isAccepted && !isRejected && !isTimeout && !isCancelled;
+  ///
+  /// Anything not known to be final counts as pending, so a status this build
+  /// has never heard of keeps polling instead of failing the customer — but
+  /// [isError] is listed explicitly, because those two used to fall in here and
+  /// poll forever against a request that was already dead.
+  bool get isPending =>
+      !isAccepted && !isRejected && !isTimeout && !isCancelled && !isError;
 }

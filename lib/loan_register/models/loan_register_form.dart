@@ -82,6 +82,11 @@ class LoanRegisterForm implements NdidSubject {
   @override
   String? ndidIdpId;
 
+  /// [NdidSubject.ndidIdpName] — the picked bank's display name, written
+  /// alongside [ndidIdpId] so the NDID standard messages can name it.
+  @override
+  String ndidIdpName = '';
+
   /// [NdidSubject.ndidReferenceId] — recorded by [NdidVerifyPage] for symmetry
   /// with the P-Loan flow. **Unused here:** this wizard submits nowhere, so
   /// nothing reads it back. It exists because both flows share those screens.

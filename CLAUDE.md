@@ -90,7 +90,8 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 157 tests (models, payloads, headers, NDID terms, mock-mode guard) — green
+flutter test               # 174 tests (models, payloads, headers, NDID terms +
+                           # common messages, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1691,6 +1692,79 @@ the flow now asks about the actual customer everywhere. Note the node also sends
 drawn from the hardcoded `_knownBankStyles` colour list, and an IdP outside it
 falls back to an orange tile with its id upper-cased.
 
+### NDID Common Message standard (`services/ndid_common_message.dart`)
+
+**NDID rejected the app review on 2026-08-28**; the reasons are in the
+(git-ignored) `dap/NDID-Issues.txt`. Two of the three were code:
+
+| # | NDID's finding | Fix |
+| --- | --- | --- |
+| 1 | The User Journey ppt shows the NDID T&C, the video does not | **No code change needed** — see below |
+| 2 | The Transaction Ref is wrong; it must be **digits only, ≤ 9** | `NdidTransactionRef` + the standard Request Message |
+| 3 | IdP & AS errors must use the standard Common Messages | `NdidCommonMessage.forErrorCode` |
+
+Everything here is quoted from **005 แนวทางการพัฒนาบริการ NDID สำหรับสมาชิก**
+Rev. 1.0 (11 Feb 2021) §6.2.1, pages 31–39 (`dap/005_*.pdf`). Extracting it is
+fiddly and worth recording: `pdftotext` **drops Thai entirely** on this file, and
+`pypdf` keeps it but splits `ำ` (U+0E33) into a space plus `า` — so text lifted
+from it must be re-joined before comparison or it will never match.
+
+**Issue 2 — the Transaction Ref is ours to generate, not NDID's.**
+Page 38: *"RP ทำการ generate เอง … ต้องมีความยาวขั้นต่ำ 5 ตัว แต่ไม่เกิน 9 ตัว
+และเป็นเฉพาะตัวเลขเท่านั้น"*. The screen had been showing the first 12
+characters of NDID's own `ndid_request_id`, upper-cased (`8CB4B22F15A4`) — hex,
+and 12 long, so it failed both halves of the rule. NDID's `reference_id` is a
+UUID and cannot be reshaped into a legal value, so a **separate** reference is
+generated per request and carried alongside it.
+
+The same number must appear in two places, which is the other half of the
+finding: on our waiting screen **and** inside the `request_message` the IdP app
+shows. So `NdidApi.createVerifyRequest` now **requires** `transactionRef` and
+builds the standard message from it — a request that quotes no reference, or a
+different one, is exactly what was rejected.
+
+⚠ **The Request Message drops the standard's AS clause.** The template is
+*"…ของ [RP] และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …] (Transaction Ref:…)"*, but
+this flow calls `POST /rp/verify` in mode 2 with **no `data_request_list`** —
+there is no Authoritative Source in the request, and naming a bank would tell the
+customer their data is being fetched when it is not. §6.2.1 bullet 2 permits
+adjusting wording for clarity. If a data request is ever added, put the AS names
+back. **The reviewer's reference image shows an AS**, so confirm this against the
+submitted user-journey document.
+
+**Issue 3 — the error messages are the standard's, not ours.** The verify page
+used four sentences of its own (`'การยืนยันตัวตนถูกปฏิเสธจากธนาคาร'`, …). Now
+`NdidCommonMessage.forErrorCode` maps all 18 documented codes — IdP `30000`–
+`30900`, AS `40000`–`40500` — to their published wording, and an unknown code
+falls back to the standard's own catch-all rather than showing a raw number.
+
+That needed a wire change too: `NdidVerifyStatus` **read `status` and nothing
+else**, so the IdP's `error_code` — which arrives inside `response_list` — was
+being discarded and every distinct failure showed one generic sentence. It also
+never handled the gateway's two error statuses (`REQUESTED_ERROR`,
+`IDP_OR_AS_ERROR`), which fell into `isPending` and polled a dead request for the
+full hour.
+
+Two supporting details:
+
+- **`NdidSubject.ndidIdpName`** was added because §6.2.1 bullet 4 requires
+  showing the **IdP Marketing Name**, never the word "IdP" or a node id. One
+  message (30900) names it; the bank-select page records it beside `ndidIdpId`.
+- **`NdidCommonMessage.rpContact` is empty by default.** Four AS messages end
+  "ติดต่อ RP Contact XXX". Rather than invent a phone number, an unset value
+  degrades to "ติดต่อผู้ให้บริการ". Set the real one with
+  `--dart-define=NDID_RP_CONTACT=…` — see Outstanding #24.
+
+**Issue 1 needs no code.** `ndid_terms_page` (built earlier the same day) already
+carries the NDID minimum-required T&C: all **12** clause paragraphs match
+`dap/010_NDID-minimum-required-TandC/…/Schedule 5 Minimum required tem Thai
+[26052020]_RP.docx` **verbatim**, once that template's own
+`[กรุณาระบุชื่อบริษัทของสมาชิก]` placeholder is filled with the company name as
+it instructs. Only the page heading is ours. The finding was that the **video**
+did not show the screen — so the action is to re-record it, not to change code.
+`dap/` is git-ignored, so this cannot be a test; re-check it by diffing the docx
+text against `ndid_terms_content.dart`.
+
 ### Web ↔ native bridge (`lib/services/`)
 
 - `native_bridge.dart` exports `NativeCameraBridge` via a conditional import:
@@ -2126,6 +2200,22 @@ reason recorded.
     server-side record of who declined and when — there is no endpoint for that,
     so nothing is posted. If a durable consent log is wanted, that endpoint is
     what is missing; the call site is the one `Diagnostics.log` in `_decline`.
+
+24. **Set `NDID_RP_CONTACT`.** Four AS-error Common Messages tell the customer
+    to contact us ("ติดต่อ RP Contact XXX" in the standard). No real contact is
+    configured, so they currently say "ติดต่อผู้ให้บริการ" — correct, but less
+    useful than a number. Build with
+    `--dart-define=NDID_RP_CONTACT=<call centre>` once it is confirmed. A wrong
+    number in front of a customer is worse than none, which is why it was not
+    guessed.
+25. **Re-record the NDID review video, and re-check the Request Message against
+    the user-journey document.** NDID's issue 1 was that the video never showed
+    the T&C screen — that screen exists now, so this is a recording task. While
+    re-recording, note the reviewer's reference image shows the Request Message
+    naming an **AS** (ธนาคารกสิกรไทย); this build names none, because it sends no
+    `data_request_list`. If the submitted user journey promises AS data, either
+    the journey or the request has to change — see **NDID Common Message
+    standard**.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

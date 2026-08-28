@@ -6,6 +6,7 @@ import '../router/app_router.dart';
 import '../services/diagnostics.dart';
 import '../services/native_bridge.dart';
 import '../services/ndid_api.dart';
+import '../services/ndid_common_message.dart';
 import 'components/env_version_tag.dart';
 import 'components/loan_register_styles.dart';
 import '../models/ndid_subject.dart';
@@ -277,6 +278,15 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // NDID Common Message 6.2.1 [2] — the standard tells the customer
+          // what makes a provider usable before they pick one. Do not reword.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Text(
+              NdidCommonMessage.chooseIdp,
+              style: LoanRegisterStyles.labelStyle(),
+            ),
+          ),
           _groupTitle('ผู้ให้บริการที่เคยลงทะเบียน NDID'),
           if (_registered.isEmpty)
             Text('ไม่พบผู้ให้บริการที่ท่านเคยลงทะเบียน NDID',
@@ -489,6 +499,9 @@ class _NdidBankSelectPageState extends State<NdidBankSelectPage> {
     final bank = _selected;
     if (bank == null) return;
     widget.form?.ndidIdpId = bank.idpId; // null in the mock browser flow
+    // The IdP Marketing Name, which NDID's standard messages must show instead
+    // of the word "IdP" or a node id (guideline 6.2.1 bullet 4).
+    widget.form?.ndidIdpName = bank.name;
     final ok = await context.push<bool>(AppRoutes.ndidVerify,
         extra: widget.form);
     if (ok == true && mounted) context.pop(true);

@@ -514,6 +514,11 @@ class PLoanFlow implements NdidSubject {
   @override
   String? ndidIdpId;
 
+  /// [NdidSubject.ndidIdpName] — that IdP's display name, for the NDID
+  /// standard messages that must name the provider rather than say "IdP".
+  @override
+  String ndidIdpName = '';
+
   /// [NdidSubject.ndidReferenceId] — NDID's `reference_id` for the accepted
   /// verification, written by the verify page and sent to `POST /ploan` as
   /// **`ndid_reference_id`** so the backend can confirm the result with NDID

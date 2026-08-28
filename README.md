@@ -27,7 +27,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 157 tests
+flutter test                                  # 174 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -364,6 +364,31 @@ tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
 
+## Recent changes — 2026-08-28 (NDID review fixes)
+
+NDID **rejected** the app review. Three findings (`dap/NDID-Issues.txt`); two
+were code, and both are fixed:
+
+- **Transaction Ref** — the standard requires the RP to generate it, digits
+  only, at most 9 (guideline p.38). The screen was showing 12 hex characters of
+  NDID's own `ndid_request_id` (`8CB4B22F15A4`), which is neither. A reference is
+  now generated per request and put **both** on our waiting screen and inside the
+  `request_message` the bank's app displays, so the customer sees one number in
+  both places. `NdidApi.createVerifyRequest` requires it rather than defaulting.
+- **IdP & AS error messages** — all 18 documented codes (IdP `30000`–`30900`, AS
+  `40000`–`40500`) now use the published Common Message wording instead of four
+  sentences of our own. This needed a wire fix as well: `NdidVerifyStatus` read
+  only `status`, so the `error_code` inside `response_list` was thrown away — and
+  the gateway's two error statuses counted as "still pending", polling a dead
+  request for the full hour.
+- **NDID T&C** — no code change. The terms screen added earlier the same day
+  already carries the minimum-required text verbatim; the finding was that the
+  **video** did not show it, so it needs re-recording.
+
+The wording lives in `lib/services/ndid_common_message.dart`, quoted from the
+NDID guideline; see [CLAUDE.md](CLAUDE.md) → **NDID Common Message standard** for
+the two judgement calls (a dropped AS clause, and an unset RP contact).
+
 ## Recent changes — 2026-08-28
 
 **NDID now opens with its service agreement.** A new screen,
@@ -470,7 +495,7 @@ headlines:
   sends the ordinary `x1` there like every other call.
 
 `flutter analyze` sits at its 39-info baseline (no errors or warnings) and
-`flutter test` is green at **157 tests**.
+`flutter test` is green at **174 tests**.
 
 ## Recent changes — 2026-08-04
 
