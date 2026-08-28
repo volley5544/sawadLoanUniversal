@@ -144,15 +144,31 @@ firebase deploy --only hosting -P prod
 
 ### Auto-deploy to uat (`tools/deploy-uat.sh`)
 
-⚠ **The `Stop` hook this section used to describe is no longer configured.**
-`.claude/settings.local.json` currently holds a `permissions` block and nothing
-else — no `hooks` key — so finishing a turn deploys **nothing**. Verified
-2026-07-31. What actually ships uat today is **CI**: any push to the `uat` branch
-runs `.github/workflows/deploy-uat.yml`, which is why the deployed `WEB_VERSION`
-tracks the GitHub Actions **run number** rather than this script's counter. Run
-`tools/deploy-uat.sh [--force]` by hand when you want a deploy without a push.
+**The `Stop` hook is configured again** — verified 2026-08-28, when it deployed
+this session's work. `.claude/settings.local.json` holds a `hooks.Stop` entry
+running `bash tools/deploy-uat.sh` (async, 600 s), so **finishing a turn deploys
+uat** whenever `lib/`, `web/`, `assets/` or the pubspec files changed. (The note
+here previously said the opposite; that was true on 2026-07-31 and is not now.)
 
-If the hook is restored, note it was deliberately **not** a
+So **two** things ship uat, and they number builds differently:
+
+| | Fires on | `WEB_VERSION` |
+| --- | --- | --- |
+| The `Stop` hook | finishing a turn with a source change | live version + 1 |
+| CI (`.github/workflows/deploy-uat.yml`) | a push to `uat` | GitHub Actions run number |
+
+⚠ Because both are live, a turn that edits code **and** pushes runs both, and
+whichever finishes last wins. That is also why `.deploy-version-uat` can sit one
+ahead of what the site reports — it records the version the hook *built*, and a
+CI release landing after it replaces that build. It is self-correcting (the next
+run re-derives from the live site), so a one-off mismatch is not worth chasing.
+
+⚠ **Do not verify a deploy by grepping the bundle for a Thai string** — dart2js
+escapes non-ASCII literals, so `grep 'เงื่อนไข' main.dart.js` returns 0 on a
+build that plainly contains it. Cost half an hour on 2026-08-28. Grep an ASCII
+marker instead (a route path, a `Diagnostics.log` message) or just open the page.
+
+Note the hook was deliberately **not** a
 `PostToolUse`/`Write|Edit` hook: that fires after every single edit and would
 push dozens of half-finished refactors per task.
 
