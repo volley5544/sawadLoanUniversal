@@ -146,7 +146,7 @@ class _DocumentReviewPageState extends State<DocumentReviewPage> {
   Future<void> _startNdid() async {
     if (!_acknowledged) return;
     final ok = await context.push<bool>(
-      AppRoutes.ndidBankSelect,
+      AppRoutes.ndidTerms,
       extra: _form,
     );
     if (ok == true && mounted) context.pop(true);

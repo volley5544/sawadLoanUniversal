@@ -90,7 +90,7 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 150 tests (models, payloads, headers, mock-mode guard) — green
+flutter test               # 157 tests (models, payloads, headers, NDID terms, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -231,7 +231,8 @@ node tools/firestore-import/import-config.mjs             # write to the uat ali
 - `router/app_router.dart` — **go_router** config + `AppRoutes` path constants.
   Each wizard page has its own URL (`/customerInfoPage`, `/collateralInfoPage`,
   `/loanInfoPage`, `/installmentPicker`, `/transferTypePicker`,
-  `/documentAttachPage`, `/documentReviewPage`, `/ndidBankSelectPage`,
+  `/documentAttachPage`, `/documentReviewPage`, `/ndidTermsPage`,
+  `/ndidBankSelectPage`,
   `/ndidVerifyPage`, `/appointmentPage`, `/documentsToPreparePage`). Navigate
   with `context.push(AppRoutes.x, extra: form)`; pickers and the NDID sub-flow
   return their value via `context.pop(value)` (the NDID flow pops `true`/`false`
@@ -301,8 +302,42 @@ page → page as go_router `extra` (see `router/app_router.dart`).
 - `document_review_page.dart` — **ตรวจสอบเอกสาร** (slide 8 frame 2). Contract-doc
   list + an acknowledge checkbox; the "ลงนามเอกสารและยืนยันตัวตน NDID" button
   starts the NDID flow and, on success, pops `true` back to step 4.
+- `ndid_terms_page.dart` — **เงื่อนไขและข้อตกลงที่เกี่ยวข้อง NDID**, the NDID
+  service agreement (added 2026-08-28). **This is now the first screen of the
+  NDID sub-flow**, ahead of the IdP picker: both `document_review_page` (wizard
+  step 4) and `p_loan_conclusion_page` (P-Loan step 6) push
+  `AppRoutes.ndidTerms`, and it forwards to `ndidBankSelect` on ยอมรับ,
+  propagating that chain's `true` back unchanged — so neither caller changed
+  shape, they still await one bool. ปฏิเสธ pops `false` and ends the hop.
+  Takes an `NdidSubject` purely to hand onward, like the two screens after it.
+
+  **The agreement is one continuous scroll**, not a pager. A three-page
+  `PageView` with a `1 of 3` counter was built first (it is what the design
+  showed) and replaced on request the same day. That is also the more robust
+  shape: a `PageView` on Flutter web cannot be dragged with a **mouse** — the
+  default `ScrollBehavior` leaves `PointerDeviceKind.mouse` out of
+  `dragDevices` — so in a desktop browser, which is how this flow is usually
+  tested, the later pages were unreachable without adding arrows for them.
+
+  Wording lives in `ndid_terms_content.dart`, **generated** from the supplied
+  Apple Pages file rather than retyped: `.pages` is a zip whose
+  `Index/Document.iwa` is Snappy-framed protobuf, so the text was decompressed
+  and lifted out verbatim. Clause numbers are structural
+  (`NdidTermsClause.number` / `NdidTermsItem.marker`), because the source had
+  literal `3.<tab>` prefixes on clauses 3, 4 and 6–9 while 1, 2 and 5 were
+  auto-numbered by Pages and carried no digits at all. `test/
+  ndid_terms_content_test.dart` pins clauses 1–9, clause 3's five sub-items,
+  and that no clause re-renders its own number.
+
+  Acceptance is **not** stored on the flow — every run of the NDID hop shows
+  the agreement again, which is what a per-verification consent means.
+  ⚠ ปฏิเสธ is recorded with `Diagnostics.log` only (the design's
+  "กรณีปฏิเสธมีเก็บ log" note). That trail is **session-local**, readable from
+  the `(UAT ver…)` tag; there is no consent-log endpoint to post it to — see
+  Outstanding #23.
 - `ndid_bank_select_page.dart` — **เลือกผู้ให้บริการ NDID** (slide 8 frames 3–4).
-  **Shared with the P-Loan flow's step 6.** It and `ndid_verify_page` take a
+  **Shared with the P-Loan flow's step 6**, and reached from `ndid_terms_page`
+  rather than from either caller directly. It and `ndid_verify_page` take a
   `NdidSubject` (`models/ndid_subject.dart`) rather than a `LoanRegisterForm`:
   they only ever needed the Thai ID and the picked IdP id, so `LoanRegisterForm`
   and `PLoanFlow` both implement that interface instead of the pages being
@@ -1228,11 +1263,12 @@ was seeded from the profile.
 
 Two deliberate differences from step 4:
 
-- It goes **straight to `ndidBankSelect`**, skipping the wizard's
-  `document_review_page`. That screen exists to show the contract documents
-  before signing, and step 6 already does — with the real PDFs from `/pdf/loan`
-  instead of the wizard's mock list. So the gate here is the document consents:
-  tapping the row before all three are accepted says so. Read, then sign.
+- It enters the NDID sub-flow at `ndidTerms` like the wizard does, but skips
+  the wizard's `document_review_page`. That screen exists to show the contract
+  documents before signing, and step 6 already does — with the real PDFs from
+  `/pdf/loan` instead of the wizard's mock list. So the gate here is the
+  document consents: tapping the row before all three are accepted says so.
+  Read, then sign.
 - **ดาวน์โหลดเอกสาร actually opens the PDF** (`pdf_opener.dart`), where the
   wizard's equivalent is a stub SnackBar — that flow has no documents to open.
 
@@ -2066,6 +2102,14 @@ reason recorded.
     accepted knowingly. A stopgap, if testing can't wait for the build: point
     `ndid_url_base` back at `https://dev.swpfin.com/dap` **and** reinstate a
     test-identity path — both, since either alone still fails.
+
+23. **A declined NDID agreement is logged only in the session.** ปฏิเสธ on
+    `ndid_terms_page` calls `Diagnostics.log`, which is an in-memory breadcrumb
+    trail readable from the `(UAT ver…)` tag and gone when the WebView closes.
+    The design note says "กรณีปฏิเสธมีเก็บ log", which most likely means a
+    server-side record of who declined and when — there is no endpoint for that,
+    so nothing is posted. If a durable consent log is wanted, that endpoint is
+    what is missing; the call site is the one `Diagnostics.log` in `_decline`.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

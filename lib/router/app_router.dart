@@ -14,6 +14,7 @@ import '../loan_register/loan_info_page.dart';
 import '../loan_register/loan_register_list_page.dart';
 import '../loan_register/models/loan_register_form.dart';
 import '../loan_register/ndid_bank_select_page.dart';
+import '../loan_register/ndid_terms_page.dart';
 import '../loan_register/ndid_verify_page.dart';
 import '../loan_register/transfer_type_picker_page.dart';
 import '../models/ndid_subject.dart';
@@ -45,6 +46,7 @@ abstract final class AppRoutes {
   // Step 4: เอกสารแนบ + ลงนาม/ยืนยันตัวตน NDID (slide 8)
   static const String documentAttach = '/documentAttachPage';
   static const String documentReview = '/documentReviewPage';
+  static const String ndidTerms = '/ndidTermsPage';
   static const String ndidBankSelect = '/ndidBankSelectPage';
   static const String ndidVerify = '/ndidVerifyPage';
   // Step 5: นัดหมายส่งเอกสาร (slide 9)
@@ -215,9 +217,17 @@ final GoRouter appRouter = GoRouter(
           DocumentReviewPage(form: state.extra as LoanRegisterForm?),
     ),
     GoRoute(
+      path: AppRoutes.ndidTerms,
+      // The NDID sub-flow starts here: the service agreement is accepted before
+      // an IdP is picked. Takes NdidSubject for the same reason the two screens
+      // after it do — both flows share these three pages.
+      builder: (context, state) =>
+          NdidTermsPage(form: state.extra as NdidSubject?),
+    ),
+    GoRoute(
       path: AppRoutes.ndidBankSelect,
-      // NdidSubject, not LoanRegisterForm: both the wizard's step 4 and the
-      // P-Loan flow's step 6 push here with their own state object.
+      // NdidSubject, not LoanRegisterForm: the wizard's step 4 and the P-Loan
+      // flow's step 6 each hand their own state object down this chain.
       builder: (context, state) =>
           NdidBankSelectPage(form: state.extra as NdidSubject?),
     ),

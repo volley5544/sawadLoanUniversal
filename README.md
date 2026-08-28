@@ -27,7 +27,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 125 tests
+flutter test                                  # 157 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -84,8 +84,9 @@ documents and verifies their identity via NDID:
 ```
 document_attach_page  (Step 4: เอกสารแนบ)
   └─ ตรวจสอบเอกสาร → document_review_page   (acknowledge + sign)
-       └─ ndid_bank_select_page             (pick the IDP bank)
-            └─ ndid_verify_page             (countdown → ยืนยันตัวตนสำเร็จ)
+       └─ ndid_terms_page                   (NDID service agreement)
+            └─ ndid_bank_select_page        (pick the IDP bank)
+                 └─ ndid_verify_page        (countdown → ยืนยันตัวตนสำเร็จ)
 ```
 
 `ndid_verify_page` pops `true` back up the chain; that flips the contract-docs
@@ -93,9 +94,16 @@ card on step 4 to its verified state (green check + ดาวน์โหลด�
 the bottom **ถัดไป** → step 5. The NDID verified flag lives on
 `LoanRegisterForm.ndidVerified`.
 
-The two NDID screens are **shared with the P-Loan flow's step 6**: they take a
-`NdidSubject` (`lib/models/ndid_subject.dart`), which both `LoanRegisterForm`
+The three NDID screens are **shared with the P-Loan flow's step 6**: they take
+a `NdidSubject` (`lib/models/ndid_subject.dart`), which both `LoanRegisterForm`
 and `PLoanFlow` implement, so neither flow needs a copy of them.
+
+`ndid_terms_page` is the sub-flow's entry point (added 2026-08-28) — the NDID
+service agreement, read as **one continuous scroll** and answered ยอมรับ /
+ปฏิเสธ. Its wording is generated from the supplied Apple Pages document into
+`lib/loan_register/ndid_terms_content.dart` rather than retyped. ยอมรับ goes on
+to the IdP picker and passes its result straight back, so both callers still
+just await one bool.
 
 > The **bank's own app** screens (K+ PIN pad, NDID provider consent/terms) are
 > **third-party — not rebuilt here**. `ndid_verify_page` simulates that hop with
@@ -339,6 +347,9 @@ lib/
     device_location.dart        GPS for the submit payload (+ _web / _stub)
   loan_register/
     *_page.dart                 the wizard steps & pickers
+    ndid_terms_page.dart        NDID service agreement — the NDID sub-flow's
+                                first screen, shared with P-Loan step 6
+    ndid_terms_content.dart     its wording, generated from the Pages document
     models/loan_register_form.dart   in-memory wizard model (+ mock data)
     components/                  shared field rows, styles, step indicator, etc.
   p_loan/
@@ -352,6 +363,37 @@ tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
+
+## Recent changes — 2026-08-28
+
+**NDID now opens with its service agreement.** A new screen,
+**เงื่อนไขและข้อตกลงที่เกี่ยวข้อง NDID** (`lib/loan_register/ndid_terms_page.dart`),
+is the first step of the NDID sub-flow — ahead of the IdP picker, in **both**
+the wizard's step 4 and the P-Loan flow's step 6.
+
+- The agreement is **one continuous scroll** with ปฏิเสธ / ยอมรับ pinned at the
+  bottom. It was first built as the design showed it — a three-page `PageView`
+  with a `1 of 3` counter — and changed on request. The scroll is also the
+  sturdier shape: Flutter web leaves the **mouse** out of a `PageView`'s
+  `dragDevices`, so in a desktop browser the later pages could not be swiped to
+  at all.
+- ยอมรับ continues to the IdP picker and passes that chain's result **straight
+  back**, so `document_review_page` and `p_loan_conclusion_page` still just
+  `await` one bool — neither caller changed shape. ปฏิเสธ ends the hop.
+- The wording is **generated, not retyped**, from the supplied Apple Pages file
+  into `ndid_terms_content.dart` (a `.pages` file is a zip whose
+  `Index/Document.iwa` is Snappy-framed protobuf). Clause numbers are structural
+  data, because the document itself only wrote some of them — 3, 4 and 6–9 had
+  literal digits while 1, 2 and 5 were auto-numbered by Pages.
+- ⚠ A **decline is logged to the session only** (`Diagnostics.log`), which is
+  in-memory and gone when the WebView closes. The design's
+  "กรณีปฏิเสธมีเก็บ log" note probably wants a server-side record; no endpoint
+  exists for one — see CLAUDE.md → Outstanding #23.
+
+Tests: `test/ndid_terms_content_test.dart` pins clauses 1–9, clause 3's five
+sub-items and that no clause re-renders its own number;
+`test/ndid_terms_page_test.dart` renders the screen at phone size and scrolls
+from the first clause to the last.
 
 ## Recent changes — 2026-08-07 → 2026-08-25
 
@@ -428,7 +470,7 @@ headlines:
   sends the ordinary `x1` there like every other call.
 
 `flutter analyze` sits at its 39-info baseline (no errors or warnings) and
-`flutter test` is green at **150 tests**.
+`flutter test` is green at **157 tests**.
 
 ## Recent changes — 2026-08-04
 

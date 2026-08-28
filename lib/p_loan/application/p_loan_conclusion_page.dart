@@ -268,7 +268,8 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   /// Opens the NDID sign + identity-verification flow, and flips to the
   /// verified state when it reports success.
   ///
-  /// Goes straight to the IdP picker rather than through the wizard's
+  /// Enters the NDID sub-flow at its own first screen — the NDID service
+  /// agreement (`ndid_terms_page`) — and skips the wizard's
   /// `document_review_page`: that screen exists to show the contract documents
   /// before signing, and this page already does — with the real PDFs from
   /// `/pdf/loan` rather than the wizard's mock list. So the gate here is the
@@ -280,7 +281,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
       return;
     }
     final ok = await context.push<bool>(
-      AppRoutes.ndidBankSelect,
+      AppRoutes.ndidTerms,
       extra: _flow,
     );
     if (ok == true && mounted) {
