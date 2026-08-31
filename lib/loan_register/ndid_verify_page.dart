@@ -85,10 +85,14 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   String? _referenceId;
 
   /// The customer-facing Transaction Ref for this request (NDID guideline
-  /// p.38: RP-generated, digits only, 5-9 long). Generated once per request and
-  /// sent inside the IdP's `request_message`, so this screen and the bank's app
-  /// quote the same number. It is **not** derived from NDID's `reference_id`,
-  /// which is a UUID and satisfies neither rule.
+  /// p.38: digits only, 5-9 long).
+  ///
+  /// **Supplied by the gateway** as of 2026-08-31 — `transaction_ref` on the
+  /// `POST /rp/verify` response, echoed on every poll — because the same
+  /// gateway appends it to the Request Message the IdP app shows. One generator
+  /// means this screen and the bank's app cannot quote different numbers, which
+  /// is the failure NDID rejected the app review over. It is **not** derived
+  /// from NDID's `reference_id`, which is a UUID and satisfies neither rule.
   String? _transactionRefValue;
 
   /// True while a [_pollStatus] call is in flight, so overlapping polls can't
@@ -178,25 +182,27 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
       _creating = true;
       _error = null;
     });
-    final transactionRef =
-        _transactionRefValue ??= NdidTransactionRef.generate();
     try {
+      // No `transactionRef` argument: the gateway generates the Transaction Ref
+      // and appends it to the IdP's Request Message itself, then hands it back
+      // on the response below.
       final req = await NdidApi.createVerifyRequest(
         identifier: _citizenId,
         idpId: widget.form!.ndidIdpId!,
-        transactionRef: transactionRef,
         requestTimeoutSeconds: _requestTimeout.inSeconds,
       );
       if (!mounted) return;
       setState(() {
         _creating = false;
         _referenceId = req.referenceId;
+        _transactionRefValue = _acceptTransactionRef(req.transactionRef);
       });
-      // The three ids that identify this request, in one line: ours (shown to
-      // the customer and to the IdP) and NDID's two. Chasing a failed
+      // The three ids that identify this request, in one line: the one the
+      // customer and the IdP both see, and NDID's two. Chasing a failed
       // verification with NDID support means quoting theirs, and the customer
-      // can only ever quote ours.
-      Diagnostics.log('ndid verify created txnRef=$transactionRef '
+      // can only ever quote the Transaction Ref.
+      Diagnostics.log(
+          'ndid verify created txnRef=${_transactionRefValue ?? '-'} '
           'ref=${req.referenceId} ndidRequestId=${req.ndidRequestId ?? '-'}');
       _startCountdown();
       _scheduleNextPoll();
@@ -246,6 +252,15 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
         _pollFailures = 0;
         _pollWarning = null;
       });
+    }
+    // Backstop for a create response that carried no `transaction_ref`: every
+    // poll echoes it, so the reference can still appear a few seconds in rather
+    // than staying a dash for the whole hour. Only when we have none — re-reading
+    // it on all ~70 polls would log a "missing" breadcrumb per poll on a gateway
+    // that never sends the field.
+    if (_transactionRefValue == null && status.transactionRef != null) {
+      final adopted = _acceptTransactionRef(status.transactionRef);
+      if (adopted != null) setState(() => _transactionRefValue = adopted);
     }
     if (status.isPending) return;
     _pollTimer?.cancel();
@@ -482,17 +497,39 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
     );
   }
 
-  /// Short reference shown to the customer — the NDID request id (or local
-  /// reference id) when the real request exists, a placeholder otherwise.
+  /// Short reference shown to the customer — the gateway's `transaction_ref`
+  /// when the real request exists, a placeholder in the simulated hop.
   /// What the customer sees, and what the IdP app shows them.
   ///
   /// Until 2026-08-28 this was the first 12 characters of NDID's own
   /// `ndid_request_id`, upper-cased — e.g. `8CB4B22F15A4`. NDID rejected the app
   /// review over it (issue 2): the reference must be digits only and at most 9
-  /// of them, and it must match the one in the Request Message. Both now come
-  /// from the single [_transactionRefValue].
+  /// of them, and it must match the one in the Request Message.
+  ///
+  /// A dash means the gateway sent no `transaction_ref`. That is deliberately
+  /// not filled with a locally generated number: the IdP app is quoting the
+  /// gateway's clause, so any reference of our own would be one the customer's
+  /// bank never showed them — the same mismatch, pointed the other way.
   String _transactionRef() =>
       _transactionRefValue ?? (_useRealApi ? '-' : '000000001');
+
+  /// Takes the gateway's `transaction_ref` if there is one, leaving a breadcrumb
+  /// when it is missing or breaks the standard's format rule.
+  ///
+  /// It is displayed even when invalid — it is what the IdP app is quoting, so
+  /// hiding it would leave the customer unable to match the two screens — but
+  /// the trail is what turns "the reference looks wrong" into a report the
+  /// backend team can act on, since this is the exact rule the review failed on.
+  String? _acceptTransactionRef(String? ref) {
+    if (ref == null || ref.isEmpty) {
+      Diagnostics.log('ndid transaction_ref absent from gateway response');
+      return _transactionRefValue;
+    }
+    if (!NdidTransactionRef.isValid(ref)) {
+      Diagnostics.log('ndid transaction_ref "$ref" is not 5-9 digits');
+    }
+    return ref;
+  }
 
   // ── Success ────────────────────────────────────────────────────────
   Widget _successBody() {

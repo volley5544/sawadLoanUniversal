@@ -96,8 +96,9 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 174 tests (models, payloads, headers, NDID terms +
-                           # common messages, mock-mode guard) — green
+flutter test               # 180 tests (models, payloads, headers, NDID terms +
+                           # common messages + transaction_ref, mock-mode
+                           # guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1588,7 +1589,9 @@ failures throw `ApiTransportException`.
 `localhost:7088` wrapper; Postman collection + proxy spec live in the
 untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
 `listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
-mode 2, `request_type` per **gateway** — see below), `getVerifyStatus()`
+mode 2, `request_type` per **gateway** — see below; returns the gateway's
+`transaction_ref`, see **Issue 2** under **NDID Common Message standard**),
+`getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body).
@@ -1708,7 +1711,7 @@ falls back to an orange tile with its id upper-cased.
 | # | NDID's finding | Fix |
 | --- | --- | --- |
 | 1 | The User Journey ppt shows the NDID T&C, the video does not | **No code change needed** — see below |
-| 2 | The Transaction Ref is wrong; it must be **digits only, ≤ 9** | `NdidTransactionRef` + the standard Request Message |
+| 2 | The Transaction Ref is wrong; it must be **digits only, ≤ 9** | the gateway's `transaction_ref` + the standard Request Message |
 | 3 | IdP & AS errors must use the standard Common Messages | `NdidCommonMessage.forErrorCode` |
 
 Everything here is quoted from **005 แนวทางการพัฒนาบริการ NDID สำหรับสมาชิก**
@@ -1717,19 +1720,62 @@ fiddly and worth recording: `pdftotext` **drops Thai entirely** on this file, an
 `pypdf` keeps it but splits `ำ` (U+0E33) into a space plus `า` — so text lifted
 from it must be re-joined before comparison or it will never match.
 
-**Issue 2 — the Transaction Ref is ours to generate, not NDID's.**
+**Issue 2 — the Transaction Ref is the RP's, not NDID's.**
 Page 38: *"RP ทำการ generate เอง … ต้องมีความยาวขั้นต่ำ 5 ตัว แต่ไม่เกิน 9 ตัว
 และเป็นเฉพาะตัวเลขเท่านั้น"*. The screen had been showing the first 12
 characters of NDID's own `ndid_request_id`, upper-cased (`8CB4B22F15A4`) — hex,
 and 12 long, so it failed both halves of the rule. NDID's `reference_id` is a
 UUID and cannot be reshaped into a legal value, so a **separate** reference is
-generated per request and carried alongside it.
+needed.
+
+⚠ **Nothing in the DAP proxy spec supplies one.** Searched all 236 pages of
+`dap/NDID_Proxy_Specification_V4.0.pdf` on 2026-08-31: the string
+"Transaction Ref" does not appear. `POST /ndidproxy/api/v2/identity/verify`
+(p.43–47) takes no client reference field, and the two ids it returns are both
+illegal as one — `reference_id` (a UUID, *"the identifier for using to access the
+status later"*, p.47) and `ndid_request_id` (64 hex chars). Its only carrier is
+the free-text `request_message`, which the spec describes as *"Message or content
+which are sent to IdPs to inform the users about the detail for identity
+request"*. So the reference is generated on the RP side, by design, and travels
+inside that string.
+
+**The srisawad gateway generates it — this app does not** (changed 2026-08-31 on
+instruction). Between 2026-08-28 and 2026-08-31 `NdidTransactionRef.generate()`
+minted one per request and `NdidApi.createVerifyRequest` **required** it, building
+the standard Request Message around it. The backend then added a
+**`transaction_ref`** field: the gateway generates the reference, appends the
+`(Transaction Ref: …)` clause to the message it forwards to the IdP, and returns
+the value on **`POST /rp/verify`** *and* on every **`GET /rp/verify/{ref}`**.
+
+So now:
+
+- `NdidApi.createVerifyRequest`'s `transactionRef` is **optional and normally
+  omitted**, and `NdidCommonMessage.requestMessage()` renders **no
+  `(Transaction Ref: …)` clause** when it is null. Passing one would put a
+  *second, different* reference in front of the customer — the review failure
+  wearing the opposite mistake. It stays supported for a gateway that composes no
+  clause of its own (the DAP/SIT node).
+- `NdidVerifyRequest.transactionRef` / `NdidVerifyStatus.transactionRef` carry the
+  gateway's value (`readTransactionRef` in `ndid_api.dart`, tolerant of a
+  camelCase spelling and of an empty string). The 60-minute countdown screen
+  displays it.
+- **The poll is the backstop, not a second source.** `ndid_verify_page` adopts
+  `transaction_ref` from the create response, and from a poll **only when it has
+  none** — re-reading it on all ~70 polls of an hour would log a "missing"
+  breadcrumb per poll on a gateway that never sends the field.
+- **No local fallback, deliberately.** With no `transaction_ref` the screen shows
+  `-` and `Diagnostics.log` records it. Filling that with
+  `NdidTransactionRef.generate()` would show the customer a number their bank
+  never displayed, since the IdP is quoting the gateway's clause. `generate()`
+  survives as the RP-side fallback for the SIT node and is called by nothing in
+  the live flow; **`isValid` is the load-bearing member now** — it checks the
+  *gateway's* value against p.38's rule and leaves a breadcrumb when it fails,
+  which is what turns "the reference looks wrong" into something the backend team
+  can act on.
 
 The same number must appear in two places, which is the other half of the
 finding: on our waiting screen **and** inside the `request_message` the IdP app
-shows. So `NdidApi.createVerifyRequest` now **requires** `transactionRef` and
-builds the standard message from it — a request that quotes no reference, or a
-different one, is exactly what was rejected.
+shows. One generator is what guarantees that, and it is now the backend's.
 
 ⚠ **The Request Message drops the standard's AS clause.** The template is
 *"…ของ [RP] และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …] (Transaction Ref:…)"*, but

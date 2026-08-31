@@ -60,6 +60,19 @@ void main() {
       expect(msg, startsWith('ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ'));
     });
 
+    test('omits the clause entirely when the gateway composes it', () {
+      // Since 2026-08-31 the srisawad NDID gateway generates the Transaction Ref
+      // and appends "(Transaction Ref: N)" to this message itself. Quoting one
+      // of ours here would put a second, different reference in front of the
+      // customer — the review failure wearing the opposite mistake.
+      final msg = NdidCommonMessage.requestMessage();
+      expect(msg, contains(NdidCommonMessage.rpMarketingName));
+      expect(msg, isNot(contains('Transaction Ref')));
+      expect(msg, isNot(endsWith(' ')), reason: 'no dangling separator');
+      // An empty string is the same statement as null, not a reference.
+      expect(NdidCommonMessage.requestMessage(transactionRef: ''), msg);
+    });
+
     test('claims no Authoritative Source, because the request asks for none',
         () {
       // Mode 2 with no data_request_list: naming a bank here would tell the

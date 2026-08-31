@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/services/ndid_api.dart';
+import 'package:sawad_loan_universal/services/ndid_common_message.dart';
 
 /// One `id_providers` entry exactly as the uat gateway returns it, including
 /// `logo_url` / `has_logo` — the fields the bank grid draws its tiles from.
@@ -61,6 +62,69 @@ void main() {
       });
       expect(idp.id, 'idp4');
       expect(idp.displayNameTh, 'IdP 4');
+    });
+  });
+
+  /// The gateway owns the customer-facing Transaction Ref as of 2026-08-31: it
+  /// generates the value, appends the `(Transaction Ref: …)` clause to the
+  /// Request Message the IdP app shows, and returns it as `transaction_ref`.
+  /// `ndid_verify_page` displays exactly what comes back — so these pin that it
+  /// is actually read off both responses. Dropping either reader would put a
+  /// dash on the waiting screen while the bank's app quotes a number, which is
+  /// the mismatch NDID rejected the app review over.
+  group('transaction_ref', () {
+    test('is read off the poll response', () {
+      final status = NdidVerifyStatus.fromJson(const {
+        'reference_id': '9bcc18bb-9bb4-4302-8c48-514a17c08e08',
+        'transaction_ref': '000123456',
+        'status': 'PENDING',
+        'response_list': <dynamic>[],
+      });
+      expect(status.transactionRef, '000123456');
+      expect(status.isPending, isTrue);
+    });
+
+    test('survives an accepted response, alongside the error-code digging', () {
+      final status = NdidVerifyStatus.fromJson(const {
+        'transaction_ref': '987654321',
+        'status': 'ACCEPTED',
+        'response_list': [
+          {'aal': 2.2, 'ial': 2.3, 'idp_id': 'idp1', 'status': 'accept'},
+        ],
+      });
+      expect(status.transactionRef, '987654321');
+      expect(status.isAccepted, isTrue);
+      expect(status.errorCode, isNull);
+    });
+
+    test('reads null when the gateway sends none, or sends it empty', () {
+      // The DAP/SIT node predates the field. The screen shows a dash rather
+      // than inventing a reference the customer's bank never displayed.
+      expect(
+          NdidVerifyStatus.fromJson(const {'status': 'PENDING'}).transactionRef,
+          isNull);
+      expect(
+          NdidVerifyStatus.fromJson(
+                  const {'status': 'PENDING', 'transaction_ref': '  '})
+              .transactionRef,
+          isNull);
+    });
+
+    test('tolerates the camelCase spelling', () {
+      // The gateway is snake_case everywhere, but this field is new.
+      expect(
+          NdidVerifyStatus.fromJson(
+                  const {'status': 'PENDING', 'transactionRef': '55555'})
+              .transactionRef,
+          '55555');
+    });
+
+    test('a gateway value is still checked against the standard', () {
+      // isValid is what the waiting screen uses to decide whether to leave a
+      // breadcrumb: the format rule (p.38) now applies to the backend's value,
+      // and a 12-hex reference is exactly what was rejected.
+      expect(NdidTransactionRef.isValid('000123456'), isTrue);
+      expect(NdidTransactionRef.isValid('8CB4B22F15A4'), isFalse);
     });
   });
 }

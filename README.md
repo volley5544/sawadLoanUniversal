@@ -364,6 +364,43 @@ tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
 
+## Recent changes — 2026-08-31
+
+**The Transaction Ref now comes from the API.** The backend added a
+`transaction_ref` field to the NDID gateway, so the reference the 60-minute
+countdown screen shows is the gateway's, not one this app mints.
+
+Why that is the right way round: NDID's review finding was that the number on our
+waiting screen and the number in the IdP's app must be the same one. The gateway
+appends the `(Transaction Ref: …)` clause to the Request Message it forwards to
+the bank, so having it generate the value too leaves exactly one generator and no
+way for the two screens to disagree.
+
+- `NdidVerifyRequest.transactionRef` and `NdidVerifyStatus.transactionRef` read
+  `transaction_ref` off `POST /rp/verify` and off every `GET /rp/verify/{ref}`.
+  The create response is the normal source; the poll is a backstop, adopted only
+  when the screen still has no reference.
+- `NdidApi.createVerifyRequest`'s `transactionRef` argument is now **optional and
+  normally omitted**, and `NdidCommonMessage.requestMessage()` renders no
+  `(Transaction Ref: …)` clause without one — sending ours would put a second,
+  different reference in front of the customer. It stays supported for the
+  DAP/SIT node, which composes no clause of its own.
+- **No local fallback.** With no `transaction_ref` the screen shows `-` and logs
+  it; a locally generated number would be one the customer's bank never
+  displayed. `NdidTransactionRef.generate()` is kept for the SIT gateway and is
+  called by nothing in the live flow — `isValid` is the member that matters now,
+  checking the *gateway's* value against the standard's 5–9-digits rule and
+  leaving a breadcrumb when it fails.
+
+Also recorded while confirming this: the DAP proxy spec supplies no Transaction
+Ref of any kind — the phrase appears nowhere in its 236 pages, `POST
+/ndidproxy/api/v2/identity/verify` accepts no client reference field, and both
+ids it returns (`reference_id`, a UUID; `ndid_request_id`, 64 hex) are illegal as
+one. `request_message` is its only carrier, which is why the reference is an RP
+concern at all.
+
+180 tests (was 174), analyzer still at its 39-info baseline.
+
 ## Recent changes — 2026-08-28
 
 One session, all of it NDID. It began with a missing terms screen and ended with
@@ -398,10 +435,18 @@ Reasons in the (git-ignored) `dap/NDID-Issues.txt`:
 
 - **Transaction Ref** — the standard requires the **RP** to generate it, digits
   only, at most 9 (guideline p.38). The screen was showing 12 hex characters of
-  NDID's own `ndid_request_id` (`8CB4B22F15A4`), which is neither. A reference is
-  now generated per request and put **both** on the waiting screen and inside the
-  `request_message` the bank's app displays, so the customer sees one number in
-  both places. `NdidApi.createVerifyRequest` requires it rather than defaulting.
+  NDID's own `ndid_request_id` (`8CB4B22F15A4`), which is neither. Nothing in the
+  DAP proxy spec supplies a legal one — the phrase does not appear in its 236
+  pages, and both ids it returns are hex or a UUID — so the reference has to come
+  from the RP side and ride inside the free-text `request_message`.
+
+  **Since 2026-08-31 the srisawad gateway generates it**, appends the
+  `(Transaction Ref: …)` clause to the message it forwards to the IdP, and
+  returns it as `transaction_ref` on `POST /rp/verify` and on every poll. The
+  60-minute countdown screen displays that value; the app generates nothing, so
+  there is no way for our screen and the bank's app to quote different numbers.
+  With no `transaction_ref` the screen shows `-` rather than a locally minted
+  number the customer's bank never displayed.
 - **IdP & AS error messages** — all 18 documented codes (IdP `30000`–`30900`, AS
   `40000`–`40500`) now use the published Common Message wording instead of four
   sentences of our own. This needed a wire fix as well: `NdidVerifyStatus` read

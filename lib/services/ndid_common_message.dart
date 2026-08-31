@@ -84,9 +84,22 @@ abstract final class NdidCommonMessage {
   /// permits adjusting the wording as long as the customer understands what is
   /// happening, and omitting a party we do not call is the honest reading.
   /// If a data request is ever added, put the AS names back.
-  static String requestMessage({required String transactionRef}) =>
-      'ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ$rpMarketingName '
-      '(Transaction Ref: $transactionRef)';
+  ///
+  /// ⚠ **[transactionRef] is normally omitted now** (2026-08-31). The srisawad
+  /// NDID gateway generates the Transaction Ref itself and appends the
+  /// `(Transaction Ref: …)` clause to this message server-side, then returns the
+  /// value on `POST /rp/verify` and every `GET /rp/verify/{ref}` so the waiting
+  /// screen can quote it. Passing one here would put a *second*, different
+  /// reference in front of the customer — which is the state NDID rejected the
+  /// review over, wearing the opposite mistake. Pass one only for a gateway that
+  /// does not compose the clause itself (the DAP/SIT node).
+  static String requestMessage({String? transactionRef}) {
+    const base =
+        'ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ$rpMarketingName';
+    return transactionRef == null || transactionRef.isEmpty
+        ? base
+        : '$base (Transaction Ref: $transactionRef)';
+  }
 
   /// The standard message for an IdP or AS error code (§6.2.1 [10]–[27]).
   ///
@@ -180,9 +193,21 @@ abstract final class NdidCommonMessage {
 /// long. That was issue 2 of the 2026-08-28 review rejection.
 ///
 /// The same value must appear in two places — on our waiting screen and inside
-/// the Request Message the IdP app displays — so it is generated once per
-/// verification request and carried alongside NDID's own reference, not derived
-/// from it.
+/// the Request Message the IdP app displays — so one party has to own it.
+///
+/// **Since 2026-08-31 that party is the gateway, not this app.** The srisawad
+/// NDID backend generates the reference, appends it to the Request Message it
+/// forwards to the IdP, and returns it as `transaction_ref` on `POST /rp/verify`
+/// and on every `GET /rp/verify/{reference_id}`. The waiting screen displays
+/// what comes back. That is strictly better than generating it here: with one
+/// generator there is no way for the screen and the IdP app to disagree, which
+/// is the failure NDID actually rejected.
+///
+/// So [isValid] is now the load-bearing member — it checks the *gateway's*
+/// value against the standard's rule, and `ndid_verify_page` leaves a
+/// breadcrumb when it fails. [generate] is kept as the RP-side fallback for a
+/// gateway that composes no clause of its own (the DAP/SIT node); nothing in
+/// the live flow calls it.
 abstract final class NdidTransactionRef {
   /// Longest the standard allows, and what this app uses.
   static const int digits = 9;
@@ -190,6 +215,12 @@ abstract final class NdidTransactionRef {
   static final Random _random = Random();
 
   /// A fresh reference: exactly [digits] digits, zero-padded.
+  ///
+  /// ⚠ **Not used by the live flow** — the gateway supplies `transaction_ref`.
+  /// This is the fallback for a gateway that doesn't, and it must be paired with
+  /// `NdidCommonMessage.requestMessage(transactionRef: …)` so the IdP quotes the
+  /// same number; using it alone shows the customer a reference their bank
+  /// never saw.
   ///
   /// Leading zeros are fine — the standard's own example is `000000001` — so
   /// this pads rather than forcing a first digit of 1-9, which would quietly
