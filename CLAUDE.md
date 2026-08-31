@@ -63,7 +63,11 @@ projects, `prod` and `uat` (see Deploy below).
   push `AppRoutes.ndidTerms` and still await one bool. Its customer-facing text —
   the agreement, the IdP guidance, the waiting message and every failure — is
   **the NDID standard's, quoted, not ours**; see **NDID Common Message
-  standard** before rewording anything on those screens.
+  standard** before rewording anything on those screens. The **Transaction Ref**
+  on the waiting screen is the gateway's `transaction_ref` as of **2026-08-31** —
+  this app generates none, and reintroducing a local one would put a second,
+  different reference in front of the customer. Not yet seen on a live request
+  (Outstanding #26).
 - **Mock data drives the UI.** `LoanRegisterForm.mock()` (matches "slide 7" of
   the design) seeds every field so screens render fully populated. Option lists
   (brands, models, provinces, installment counts, transfer types) are hardcoded
@@ -1777,6 +1781,10 @@ The same number must appear in two places, which is the other half of the
 finding: on our waiting screen **and** inside the `request_message` the IdP app
 shows. One generator is what guarantees that, and it is now the backend's.
 
+⚠ **None of this has been seen working on a live request** — no NDID test-case
+account was available the day it shipped. What to check, and what each failure
+looks like, is Outstanding #26.
+
 ⚠ **The Request Message drops the standard's AS clause.** The template is
 *"…ของ [RP] และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …] (Transaction Ref:…)"*, but
 this flow calls `POST /rp/verify` in mode 2 with **no `data_request_list`** —
@@ -2111,7 +2119,7 @@ reason recorded.
    `/ploan`; nothing shared ships in the bundle now. (`kNdidApiKey` is the only
    baked-in secret left — a web build can't hide it regardless.)
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
-   to match the deployed `WEB_VERSION` (**72** as of 2026-08-28), or the host's
+   to match the deployed `WEB_VERSION` (**74** as of 2026-08-31), or the host's
    stale-cache auto-reload never fires. Note the number now moves on most
    sessions, since the `Stop` hook deploys uat on any turn that changes source —
    check what is actually live rather than trusting this figure.
@@ -2271,7 +2279,33 @@ reason recorded.
     naming an **AS** (ธนาคารกสิกรไทย); this build names none, because it sends no
     `data_request_list`. If the submitted user journey promises AS data, either
     the journey or the request has to change — see **NDID Common Message
-    standard**.
+    standard**. ⚠ Do the run in #26 first — the Transaction Ref the video must
+    show is the gateway's now, and nobody has yet seen one arrive.
+26. **⏳ `transaction_ref` has never been seen on a live request.** Shipped
+    2026-08-31 (uat `WEB_VERSION` 74) and **untested** — there was no NDID
+    test-case account to hand, one is coming from another team. Shipped on that
+    basis deliberately; two things need a real run, and the second is the one
+    that could fail the review again:
+
+    - **that the field arrives.** Probing `POST /rp/verify` with an empty body
+      shows `transaction_ref` is not *required* on the request, which says
+      nothing about the response. If the deployed gateway predates the change the
+      screen shows `-`, and the breadcrumb trail (tap the `(UAT ver…)` tag) reads
+      `ndid transaction_ref absent from gateway response`. A value that arrives
+      but breaks p.38's format logs `… is not 5-9 digits` — it is still
+      displayed, because it is what the IdP is quoting.
+    - **that the IdP app really shows the `(Transaction Ref: …)` clause.**
+      `request_message` is still required by the gateway, so this build keeps
+      sending it — now *without* a reference, because the backend appends its
+      own. If the backend does not in fact append it, the bank's app shows **no
+      reference at all**: NDID's issue 2 failed from the other side, and our own
+      screen would look perfectly correct. One glance at the IdP screen settles
+      it.
+
+    If the clause turns out to be ours to add after all, the revert is small and
+    named: pass `transactionRef` to `NdidApi.createVerifyRequest` again
+    (`NdidTransactionRef.generate()` is still there for exactly this) and prefer
+    the local value over the response's on screen.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

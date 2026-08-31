@@ -399,7 +399,26 @@ ids it returns (`reference_id`, a UUID; `ndid_request_id`, 64 hex) are illegal a
 one. `request_message` is its only carrier, which is why the reference is an RP
 concern at all.
 
-180 tests (was 174), analyzer still at its 39-info baseline.
+180 tests (was 174), analyzer still at its 39-info baseline. Live on uat as
+`WEB_VERSION` **74**.
+
+**⏳ Not tested against a live request yet** — there was no NDID test-case
+account to hand; one is coming from another team member. Two things want a real
+run:
+
+- **that `transaction_ref` arrives at all.** Probing `POST /rp/verify` with an
+  empty body only proves the field is not *required* on the request, which says
+  nothing about the response. If the deployed gateway predates the change the
+  screen shows `-`, and the breadcrumb trail behind the `(UAT ver…)` tag says
+  `ndid transaction_ref absent from gateway response`. A value that arrives but
+  breaks the 5–9-digit rule logs that too, and is still displayed — it is what
+  the IdP is quoting.
+- **that the IdP app really shows the `(Transaction Ref: …)` clause.**
+  `request_message` is still required by the gateway, so this build keeps sending
+  it, now without a reference. If the backend does not append its own after all,
+  the bank's app shows **no** reference — NDID's finding failed from the other
+  side, with our screen looking perfectly correct. One glance at the IdP screen
+  settles it, and it is worth doing before the review video is re-recorded.
 
 ## Recent changes — 2026-08-28
 
