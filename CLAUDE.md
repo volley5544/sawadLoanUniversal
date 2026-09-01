@@ -1861,6 +1861,38 @@ never handled the gateway's two error statuses (`REQUESTED_ERROR`,
 `IDP_OR_AS_ERROR`), which fell into `isPending` and polled a dead request for the
 full hour.
 
+**Verified verbatim against the PDF on 2026-09-01.** All 18 error messages,
+plus [2], [3] and the p.39 catch-all, appear character-for-character in the
+document's own extracted text (whitespace normalised, `ำ` mapped to `า` — see the
+extraction note above). Exactly **two** strings deviate, both declared in the
+source:
+
+| Row | Deviation | Why |
+| --- | --- | --- |
+| [5] | doc writes `กรุณาเลือก IdP รายอื่น`; we write `ผู้ให้บริการยืนยันตัวตนรายอื่น` | bullet 4 forbids showing the literal word "IdP", and every other row spells it out — the document contradicts itself in this one row |
+| [28] | the `และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …]` clause is dropped | mode 2 requests no AS data; naming a bank would claim a fetch that does not happen |
+
+⚠ **No test enforces the wording**, and the header comment in
+`ndid_common_message.dart` used to claim one did — corrected 2026-09-01. The test
+pins *structure* (every code distinct, no `[IdP]`/`XXX` leak, unknown → catch-all);
+it cannot read the PDF, because `dap/` is git-ignored and CI would fail on the
+missing file. Re-run the comparison by hand after editing any string.
+
+**A bare `REJECTED` shows the catch-all, not row [6].** `forStatus` special-cases
+only `CANCELLED`; `REJECTED` and `TIMEOUT` fall through to `generalFailure`. In
+practice a rejection carries an `error_code` and gets that code's row, so this
+only bites when the gateway sends none. The standard *does* have dedicated
+wording at [6] — left out because the PDF marks it
+`***ขอยกเลิกกรณีนี้เมื่อ IdP ปรับเป็น API V.5 แล้ว***` — so if a reviewer looks
+for it, that is where it went. Adding it is two lines in `forStatus` plus a test.
+
+**Five of the 13 IdP codes cannot be produced from a handset** (`30000`, `30200`,
+`30400`, `30700`, `30900`) — they need NDID or the bank to inject them — and the
+**five AS codes can never occur at all**, since `POST /rp/verify` goes out mode 2
+with no `data_request_list`, so no Authoritative Source is in the request. So
+finding 3 cannot be fully evidenced by device testing alone; the AS half is
+evidenced by the unit tests. Ask for injection support when booking the retest.
+
 Two supporting details:
 
 - **`NdidSubject.ndidIdpName`** was added because §6.2.1 bullet 4 requires
@@ -2294,7 +2326,19 @@ reason recorded.
     useful than a number. Build with
     `--dart-define=NDID_RP_CONTACT=<call centre>` once it is confirmed. A wrong
     number in front of a customer is worse than none, which is why it was not
-    guessed.
+    guessed. ⚠ This is the **one loose end inside finding 3's own scope** — the
+    18 messages are otherwise verbatim (verified 2026-09-01).
+24b. **Decide whether a bare `REJECTED` should use row [6].** Today it shows the
+    p.39 catch-all; the standard has dedicated wording that the PDF also marks
+    for retirement at IdP API V5. Two lines in `NdidCommonMessage.forStatus`
+    plus a test. See **NDID Common Message standard** → *Issue 3*.
+24c. **Ask NDID for error-code injection on the uat node.** Five IdP codes
+    (`30000`, `30200`, `30400`, `30700`, `30900`) cannot be produced from a
+    handset, so finding 3 cannot be fully evidenced by device testing without
+    NDID's help. The five AS codes cannot occur at all (mode 2, no
+    `data_request_list`) and are evidenced by unit test instead. Device runbook:
+    the **NDID Common Message Runbook** artifact (2026-09-01) —
+    https://claude.ai/code/artifact/bbafc7f1-640b-4853-9604-0596fd4a51f0
 25. **Re-record the NDID review video, and re-check the Request Message against
     the user-journey document.** NDID's issue 1 was that the video never showed
     the T&C screen — that screen exists now, so this is a recording task. While

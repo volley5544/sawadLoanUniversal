@@ -7,10 +7,21 @@ import 'dart:math';
 /// pages 31–39. Added 2026-08-28 after NDID rejected the app review — issue 3
 /// asked for exactly these strings.
 ///
-/// The wording here is **quoted from that document**; `test/
-/// ndid_common_message_test.dart` checks every message still appears verbatim in
-/// the PDF's own text, so a well-meant reword cannot silently drift off the
-/// standard. Three rules from the same section shape the API:
+/// The wording here is **quoted from that document**, and was checked against
+/// the PDF's own extracted text on **2026-09-01**: all 18 IdP/AS messages,
+/// [chooseIdp], [waitingForIdp] and [generalFailure] matched verbatim, with
+/// exactly the two deviations declared below ([cancelledOrChangedIdp] and
+/// [requestMessage]).
+///
+/// ⚠ **No test enforces that** — `test/ndid_common_message_test.dart` checks
+/// structure (every documented code has its own message, no `[IdP]`/`XXX`
+/// placeholder leaks, an unknown code degrades to the catch-all), not the text.
+/// It cannot: the guideline lives in git-ignored `dap/`, so a test reading it
+/// would fail in CI on a missing file. Re-run the comparison by hand after
+/// touching any string here — normalise whitespace and map `ำ` to `า`, since the
+/// PDF stores that vowel decomposed.
+///
+/// Three rules from the same section shape the API:
 ///
 /// * §6.2.1 bullet 4 — where the document writes `[RP]` or `[IdP]`, the member
 ///   must substitute the **marketing name**, not the literal word. Hence

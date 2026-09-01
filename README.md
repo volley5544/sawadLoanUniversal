@@ -27,7 +27,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 174 tests
+flutter test                                  # 180 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -363,6 +363,79 @@ tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
+
+## Recent changes — 2026-09-01
+
+Verification and tooling, not new behaviour: finding 3 was checked against the
+guideline itself, and the payload preview was made usable on a real device.
+
+### Finding 3 is verbatim — checked, not assumed
+
+NDID's third review finding asked for the standard IdP & AS Common Messages. The
+code for it shipped on 2026-08-28; this session compared it against the PDF's own
+extracted text (`dap/005_*.pdf`, pages 31–39):
+
+- **all 18 error messages match character-for-character** — IdP `30000`–`30900`,
+  AS `40000`–`40500` — as do [2] (provider grid), [3] (waiting screen) and the
+  p.39 catch-all;
+- **exactly two strings deviate, both declared in the source.** [5] spells out
+  "ผู้ให้บริการยืนยันตัวตน" where the document writes the literal `IdP` — bullet 4
+  of the same section forbids showing that word, and every other row spells it
+  out, so the document contradicts itself there. [28] drops the
+  `และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …]` clause, because the request is mode 2
+  with no `data_request_list` and naming a bank would claim a fetch that never
+  happens.
+
+**A correction went with it.** The header comment in `ndid_common_message.dart`
+claimed the test checked every message against the PDF. It does not, and cannot —
+`dap/` is git-ignored, so CI would fail on a missing file. The test pins
+*structure* (every code distinct, no `[IdP]`/`XXX` placeholder leak, unknown code
+→ catch-all). The comment now says that, and records how to redo the text
+comparison by hand: normalise whitespace and map `ำ` to `า`, since the PDF stores
+that vowel decomposed.
+
+Two things the check surfaced, both recorded in CLAUDE.md → **Outstanding**:
+
+- **a bare `REJECTED` shows the catch-all, not row [6]**, whose wording the PDF
+  also marks for retirement at IdP API V5. In practice a rejection carries an
+  `error_code` and gets that code's row, so this only bites when the gateway
+  sends none;
+- **finding 3 cannot be fully evidenced on a handset.** Five IdP codes need NDID
+  or the bank to inject them, and the five AS codes cannot occur at all in a
+  mode-2 request with no Authoritative Source — those are evidenced by unit test.
+  A device runbook covering the rest was written for the retest.
+
+### The step-6 payload preview works on uat, and copies
+
+The **ดู Payload** button was gated on `PLoanApi.isMocked` — backwards for the
+thing it is useful for, since mock mode previews the fixtures, i.e. the one
+payload already known. What had no way of being seen was a **real** submit's body
+on a real device. It is now on every non-prod build, hidden on prod like
+`EnvVersionTag` and the diagnostics sheet, and relabelled
+**ดู/คัดลอก Payload (POST /ploan)**.
+
+The dump now describes the request rather than just the field map:
+
+- the URL is **resolved** through `SrisawadApi.baseUrl()`, so a build pointing at
+  an unexpected gateway shows it here instead of leaving it inferred from the env
+  label;
+- the headers are listed, with the bearer **masked to its length** — the same
+  rule as `Diagnostics.report`, because this text exists to be pasted into a
+  chat;
+- fields and file parts carry their counts, so 31 form fields and 5 file parts
+  can be checked at a glance against the API's own sample.
+
+Everything else is verbatim, **customer data included** — that is the point of
+the dump — so the dialog leads with `มีข้อมูลส่วนบุคคลของลูกค้า — ระวังก่อนแชร์`.
+**คัดลอก** copies it and deliberately leaves the dialog open: selecting monospace
+text in a scrolling dialog on a phone is most of the reason a payload never
+reached a bug report.
+
+⚠ It renders as soon as the screen does, so an early open shows a blank
+`ndid_reference_id` and no `documentImage[]` parts. For the body as posted, open
+it immediately before **ยืนยัน**.
+
+180 tests, analyzer still at its 39-info baseline.
 
 ## Recent changes — 2026-08-31
 
