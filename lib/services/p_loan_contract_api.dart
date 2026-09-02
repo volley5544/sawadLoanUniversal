@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import '../p_loan/application/models/p_loan_submission.dart';
 import 'api_transport.dart';
+import 'diagnostics.dart';
 import 'srisawad_api.dart';
 
 /// Client for the **P-Loan save API** — `POST /ploan`, where a completed P-Loan
@@ -113,13 +116,26 @@ class PLoanContractApi {
         bypassHostBridge: true,
       );
     } on ApiTransportException catch (e) {
-      throw SrisawadApiException('ส่งคำขอไม่สำเร็จ: ${e.message}');
+      // No HTTP response at all — nothing to dump but the request itself, which
+      // is still the useful half: it names the URL the build actually reached.
+      final details = failureReport(url, submission, transportError: e.message);
+      Diagnostics.log('ploan submit failed: transport: ${e.message}');
+      throw SrisawadApiException(
+        'ส่งคำขอไม่สำเร็จ: ${e.message}',
+        details: details,
+      );
     }
 
+    final details = failureReport(url, submission, res: res);
     if (res.statusCode < 200 || res.statusCode >= 300) {
+      // A bounded excerpt, so the breadcrumb trail still says something about
+      // the cause after the dialog is closed. The whole body is in `details`.
+      Diagnostics.log('ploan submit failed: HTTP ${res.statusCode} '
+          '${_excerpt(res.body)}');
       throw SrisawadApiException(
         _refusalMessage(res, submission),
         statusCode: res.statusCode,
+        details: details,
       );
     }
 
@@ -127,12 +143,88 @@ class PLoanContractApi {
     // Some endpoints in this family answer 200 with an error in the body.
     final error = _firstString(decoded, const ['error', 'errorMessage']);
     if (error.isNotEmpty) {
-      throw SrisawadApiException(error, statusCode: res.statusCode);
+      Diagnostics.log('ploan submit refused in a 200 body: $error');
+      throw SrisawadApiException(
+        error,
+        statusCode: res.statusCode,
+        details: details,
+      );
     }
     return _firstString(
       decoded,
       const ['transNo', 'trans_no', 'contractNo', 'contract_no', 'refNo', 'id'],
     );
+  }
+
+  /// The whole failure, as text a tester can copy out of the error dialog.
+  ///
+  /// This exists because of an HTTP **500**: the screen showed
+  /// `ส่งคำขอไม่สำเร็จ (HTTP 500)` and nothing else, while the body — which is
+  /// where a 500 says what actually broke — was decoded, found to hold no
+  /// `error`/`message` key, and dropped on the floor. A gateway stack trace, an
+  /// HTML error page or an empty body are three very different bugs that all
+  /// rendered as that one sentence.
+  ///
+  /// So the body goes in **verbatim and untruncated**, exactly as received: a
+  /// 500 page is often HTML rather than JSON, and truncating it tends to cut off
+  /// the one line that names the cause. The request side is summarised (field
+  /// and part counts, not values) because [PLoanContractSubmission] already has
+  /// a full dump behind the ดู/คัดลอก Payload button and this text is meant to be
+  /// short enough to paste into a chat.
+  ///
+  /// ⚠ Response headers are only available on the direct `package:http` path;
+  /// the host bridge returns `{status, body}` only, so inside the app that
+  /// section says so rather than looking like a server that sent none. `/ploan`
+  /// always takes the direct path today ([sendMultipartGroupsApiRequest] with
+  /// `bypassHostBridge: true`), so in practice they are there.
+  @visibleForTesting
+  static String failureReport(
+    Uri url,
+    PLoanContractSubmission submission, {
+    ApiHttpResult? res,
+    String? transportError,
+  }) {
+    final body = res?.body ?? '';
+    return [
+      'POST $url',
+      if (transportError != null) 'transport error: $transportError',
+      if (res != null) 'HTTP ${res.statusCode}',
+      'sent: ${submission.fields.length} fields, '
+          '${submission.files.length} file parts '
+          '(${_totalKb(submission)} KB)',
+      if (submission.unresolvedFields.isNotEmpty)
+        'blank: ${submission.unresolvedFields.join(', ')}',
+      if (res != null) ...[
+        '',
+        'response headers:',
+        if (res.headers.isEmpty)
+          '  (none — the host bridge does not return them)'
+        else
+          for (final e in res.headers.entries) '  ${e.key}: ${e.value}',
+        '',
+        // Verbatim: on a 500 this is the only thing that says what broke, and
+        // it is as likely to be an HTML page as JSON.
+        'response body (${body.length} chars):',
+        if (body.trim().isEmpty) '  (empty)' else body,
+      ],
+    ].join('\n');
+  }
+
+  /// A one-line, length-capped view of a response body for the breadcrumb
+  /// trail — which is persisted to `SharedPreferences` on every crumb, so a
+  /// whole HTML error page does not belong in it.
+  static String _excerpt(String body, {int max = 160}) {
+    final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (flat.isEmpty) return '(empty body)';
+    return flat.length <= max ? flat : '${flat.substring(0, max)}…';
+  }
+
+  /// Total upload size, which is the first thing to suspect when a submit that
+  /// used to work starts failing — five files, easily megabytes.
+  static String _totalKb(PLoanContractSubmission submission) {
+    final bytes =
+        submission.files.fold<int>(0, (sum, f) => sum + f.bytes.length);
+    return (bytes / 1024).toStringAsFixed(1);
   }
 
   /// The server's message when it gives one, plus the blank fields it may have

@@ -100,9 +100,9 @@ projects, `prod` and `uat` (see Deploy below).
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 180 tests (models, payloads, headers, NDID terms +
-                           # common messages + transaction_ref, mock-mode
-                           # guard) — green
+flutter test               # 188 tests (models, payloads, headers, NDID terms +
+                           # common messages + transaction_ref, the /ploan
+                           # failure report, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1068,6 +1068,49 @@ to /ploan".
 ⚠ The request carries five files, so it is **large**. A timeout or a
 request-size limit is the first thing to suspect if a submit that used to work
 starts failing.
+
+**A failed submit shows the whole response** (added 2026-09-02, prompted by an
+HTTP **500**). The dialog used to say `ส่งคำขอไม่สำเร็จ (HTTP 500)` and nothing
+else: `_refusalMessage` decoded the body, looked for an `error`/`message` key,
+found none — a 500 is usually an HTML page or a stack trace, not this API's JSON
+envelope — and **discarded it**. A gateway trace, an error page and an empty
+body all rendered as that one sentence.
+
+So every throw path now attaches `SrisawadApiException.details`
+(`PLoanContractApi.failureReport`) and step 6's error dialog renders it under
+the message with a **คัดลอก** button:
+
+| Line | Why |
+| --- | --- |
+| `POST <resolved url>` | which gateway this build actually reached — a transport failure has nothing else |
+| `HTTP <status>` / `transport error: …` | one or the other, never both |
+| `sent: 31 fields, 5 file parts (N KB)` | counts, not values; the size is the first suspect on a large upload |
+| `blank: …` | `unresolvedFields`, so a 400 can be matched to a missing one |
+| response headers | direct-`http` path only — see below |
+| **response body, verbatim and untruncated** | the point of the whole thing |
+
+- **The body is never truncated or summarised.** On a 500 the cause is often the
+  last line of a long page, which is exactly what a cap would remove. A test
+  pins this (`test/p_loan_contract_api_test.dart`), as it is the one property
+  that would silently undo the fix.
+- **It is non-prod only**, like `EnvVersionTag`, the diagnostics sheet and the
+  payload preview: a gateway stack trace is what a developer needs and what a
+  customer must not read. The customer-facing `message` is unchanged either way.
+- **`ApiHttpResult` now carries `headers`** — filled on the direct
+  `package:http` path, empty from the host's `httpRequest`/`httpMultipart`
+  bridge, which answers `{status, body}` only. The report says *"(none — the
+  host bridge does not return them)"* rather than printing an empty list, since
+  "not available here" and "the server sent none" are different findings. This
+  is the same limitation behind the NDID 429 backoff using a fixed delay instead
+  of `ratelimit-reset`. `/ploan` always takes the direct path
+  (`bypassHostBridge: true`), so in practice they are there.
+- A **bounded** one-line excerpt (160 chars, whitespace collapsed) also goes to
+  `Diagnostics.log`, so the trail behind the `(UAT ver…)` tag still says
+  something once the dialog is closed. Bounded because that trail is persisted
+  to `SharedPreferences` on every crumb.
+
+⚠ It can contain personal data — same rule as `Diagnostics.report`. The bearer
+token is not in it, but the response body is whatever the server sent.
 
 This **deleted** `kPLoanSaveApiBase` (`:8082`) and `kPLoanSaveApiAuth` (the Basic
 credential) from `app_environment.dart` — the pentest's high-severity

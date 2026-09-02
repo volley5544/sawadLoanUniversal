@@ -8,10 +8,23 @@ import 'native_bridge.dart';
 
 /// Raw result of an API call made through [sendApiRequest].
 class ApiHttpResult {
-  const ApiHttpResult({required this.statusCode, required this.body});
+  const ApiHttpResult({
+    required this.statusCode,
+    required this.body,
+    this.headers = const {},
+  });
 
   final int statusCode;
   final String body;
+
+  /// Response headers, **when the transport can supply them**.
+  ///
+  /// The direct `package:http` path always does. The host's `httpRequest` /
+  /// `httpMultipart` bridge handlers answer `{status, body}` only, so on that
+  /// path this is empty — which is also why the NDID 429 backoff uses a fixed
+  /// delay rather than reading `ratelimit-reset`. Empty therefore means "not
+  /// available here", never "the server sent none".
+  final Map<String, String> headers;
 }
 
 /// Thrown when a request never produced an HTTP response (network error,
@@ -99,7 +112,10 @@ Future<ApiHttpResult> sendApiRequest(
     throw ApiTransportException('unreachable: $e');
   }
   return ApiHttpResult(
-      statusCode: res.statusCode, body: utf8.decode(res.bodyBytes));
+    statusCode: res.statusCode,
+    body: utf8.decode(res.bodyBytes),
+    headers: res.headers,
+  );
 }
 
 /// Uploads [fileBytes] as a single `multipart/form-data` file part.
@@ -144,7 +160,10 @@ Future<ApiHttpResult> sendMultipartApiRequest(
     throw ApiTransportException('unreachable: $e');
   }
   return ApiHttpResult(
-      statusCode: res.statusCode, body: utf8.decode(res.bodyBytes));
+    statusCode: res.statusCode,
+    body: utf8.decode(res.bodyBytes),
+    headers: res.headers,
+  );
 }
 
 /// One file part of a [sendMultipartGroupsApiRequest] upload.
@@ -274,5 +293,8 @@ Future<ApiHttpResult> _postMultipartDirect(
     throw ApiTransportException('unreachable: $e');
   }
   return ApiHttpResult(
-      statusCode: res.statusCode, body: utf8.decode(res.bodyBytes));
+    statusCode: res.statusCode,
+    body: utf8.decode(res.bodyBytes),
+    headers: res.headers,
+  );
 }

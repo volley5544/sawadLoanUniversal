@@ -394,7 +394,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
     } on SrisawadApiException catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      _showSubmitError(e.message);
+      _showSubmitError(e.message, details: e.details);
     } on StateError catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -411,7 +411,23 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
   /// fields that went out blank — and a transport failure names the bridge
   /// handler that would fix it. All of that is too long for a strip that
   /// truncates and then disappears.
-  void _showSubmitError(String message) {
+  ///
+  /// [details] is the full response dump from [SrisawadApiException.details]:
+  /// the request line, the status, the response headers and the **whole
+  /// response body**. It is shown **below** the message, not instead of it, and
+  /// on every non-prod build — the same rule as the payload preview. The
+  /// occasion for it was an HTTP **500**, where the server's own words are not
+  /// in a `message` key at all but somewhere in an HTML page or a stack trace,
+  /// and the dialog said only `ส่งคำขอไม่สำเร็จ (HTTP 500)`.
+  ///
+  /// It is **not** shown on prod: a gateway stack trace is exactly what a
+  /// developer needs and exactly what a customer should not read.
+  void _showSubmitError(String message, {String? details}) {
+    final showDetails =
+        details != null && details.isNotEmpty && !AppEnvironment.current.isProd;
+    // The copy action takes the message with it — pasted on its own, a raw body
+    // with no status line above it loses which submit it came from.
+    final copyText = showDetails ? '$message\n\n$details' : message;
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -420,12 +436,47 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           style: LoanRegisterStyles.appBarTitleStyle().copyWith(fontSize: 16),
         ),
         content: SingleChildScrollView(
-          child: SelectableText(
-            message,
-            style: GoogleFonts.notoSansThai(fontSize: 14, height: 1.5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SelectableText(
+                message,
+                style: GoogleFonts.notoSansThai(fontSize: 14, height: 1.5),
+              ),
+              if (showDetails) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Text(
+                  'รายละเอียดจากเซิร์ฟเวอร์ (สำหรับผู้พัฒนา)',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Monospace and unwrapped-looking, because a 500 body is often
+                // HTML or a stack trace where the indentation is the structure.
+                SelectableText(
+                  details,
+                  style:
+                      const TextStyle(fontFamily: 'monospace', fontSize: 11.5),
+                ),
+              ],
+            ],
           ),
         ),
         actions: [
+          if (showDetails)
+            // Same reasoning as the payload dump: selecting monospace text in a
+            // scrolling dialog on a phone is most of the reason a 500 body
+            // never reaches a bug report, and one tap is not.
+            TextButton(
+              onPressed: () => _copyText(copyText, 'คัดลอกข้อผิดพลาดแล้ว'),
+              child: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('ปิด'),
@@ -533,7 +584,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
           // Selecting monospace text inside a scrolling dialog on a phone is
           // most of the reason the trail was never captured; one tap is not.
           TextButton(
-            onPressed: () => _copyPayload(text),
+            onPressed: () => _copyText(text, 'คัดลอก payload แล้ว'),
             child: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
           ),
           TextButton(
@@ -545,18 +596,18 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
     );
   }
 
-  /// Puts the payload dump on the clipboard and confirms it.
+  /// Puts a dump on the clipboard and confirms it with [confirmation].
   ///
   /// The dialog stays open: a tester comparing the body against the API's sample
   /// usually wants to keep reading it, and reopening means re-deriving the
-  /// submission.
-  Future<void> _copyPayload(String text) async {
+  /// submission — or, for a failure, re-running a submit that just failed.
+  Future<void> _copyText(String text, String confirmation) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('คัดลอก payload แล้ว',
-            style: GoogleFonts.notoSansThai(fontSize: 13)),
+        content:
+            Text(confirmation, style: GoogleFonts.notoSansThai(fontSize: 13)),
         duration: const Duration(seconds: 2),
       ),
     );

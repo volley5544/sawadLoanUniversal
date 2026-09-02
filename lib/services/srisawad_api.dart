@@ -133,10 +133,23 @@ class SrisawadApi {
 
 /// Failure from any srisawad mobile-API group.
 class SrisawadApiException implements Exception {
-  SrisawadApiException(this.message, {this.statusCode});
+  SrisawadApiException(this.message, {this.statusCode, this.details});
 
   final String message;
   final int? statusCode;
+
+  /// The full technical account of the failure, for a screen that offers to
+  /// show it — the request line, the status, the response headers and the
+  /// **whole response body, untruncated**.
+  ///
+  /// Deliberately separate from [message], which is what the customer reads:
+  /// an HTML 500 page or a stack trace from the gateway is exactly what a
+  /// developer needs and exactly what a customer should not be shown. Null
+  /// when the caller collected none.
+  ///
+  /// ⚠ It can contain personal data and must be treated like
+  /// `Diagnostics.report` — mask credentials before putting them in here.
+  final String? details;
 
   @override
   String toString() => 'SrisawadApiException: $message';
