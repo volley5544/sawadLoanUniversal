@@ -259,19 +259,27 @@ class PLoanContractSubmission {
   ///
   /// | Part field | Count | Source |
   /// | --- | --- | --- |
-  /// | `cardIdImage` | 1 | the ID-card photo ([PLoanPhoto.idCard]) |
-  /// | `customerImage` | 1 | the selfie-with-ID-card ([PLoanPhoto.selfieWithIdCard]) |
+  /// | `cardIdImage[]` | 2 | the ID-card photo ([PLoanPhoto.idCard]) then the selfie-with-ID-card ([PLoanPhoto.selfieWithIdCard]) |
   /// | `documentImage[]` | 3 | the contract PDFs the customer consented to on the summary screen |
   ///
   /// Each part carries its own filename and content type, so the two photos go
   /// as `image/jpeg` and the documents as `application/pdf`; the server can
   /// tell them apart without sniffing bytes.
   ///
-  /// ⚠ **The `[]` suffix is an assumption.** There is no spec for these three
+  /// **Both identity photos ride one repeated field** (changed 2026-09-02 on
+  /// instruction): `/ploan` has **no `customerImage` part any more** — the
+  /// selfie is the second element of `cardIdImage[]`, so **order is the only
+  /// thing distinguishing them** and the ID card is always sent first.
+  /// [PLoanPhoto.selfieWithIdCard] keeps its own `customerImage` group in
+  /// [imageGroups] (that is the regmast view) and is still reported under that
+  /// name in [unresolvedFields], because a customer missing the selfie needs to
+  /// be told which photo is missing, not which wire field.
+  ///
+  /// ⚠ **The `[]` suffix is an assumption.** There is no spec for these parts
   /// yet. It follows `regmast_ploan.php`, which is where these field *names*
-  /// come from and which sends every group that way, while the two single files
-  /// go unsuffixed. If the server wants `[]` on all three — or on none — change
-  /// [_repeatedSuffix]; it is the one place that decides.
+  /// come from and which sends every group that way. If the server wants `[]`
+  /// on both — or on neither — change [_repeatedSuffix]; it is the one place
+  /// that decides.
   ///
   /// A file the flow never captured is **omitted** rather than sent as an empty
   /// part, and its field name is reported in [unresolvedFields] instead.
@@ -346,10 +354,21 @@ class PLoanContractSubmission {
     // are captured on the summary screen itself, so they are present on either
     // entry point — unlike the collateral shots, which the top-up-card path
     // skips along with the whole vehicle-photos step.
+    //
+    // Both go out under `cardIdImage[]`, ID card first: the endpoint no longer
+    // takes a `customerImage` part, so position is what tells them apart. They
+    // are kept in a map keyed by their *logical* slot so a missing one can
+    // still be named individually below — `sentFields` cannot distinguish them
+    // once they share a field.
+    final photoParts = <String, List<PLoanFilePart>>{
+      'cardIdImage':
+          _photoPart(flow, PLoanPhoto.idCard, _identityPhotoField, 'card_id.jpg'),
+      'customerImage': _photoPart(
+          flow, PLoanPhoto.selfieWithIdCard, _identityPhotoField, 'customer.jpg'),
+    };
     final files = <PLoanFilePart>[
-      ..._photoPart(flow, PLoanPhoto.idCard, 'cardIdImage', 'card_id.jpg'),
-      ..._photoPart(
-          flow, PLoanPhoto.selfieWithIdCard, 'customerImage', 'customer.jpg'),
+      ...photoParts['cardIdImage']!,
+      ...photoParts['customerImage']!,
       ..._documentParts(flow),
     ];
 
@@ -366,11 +385,11 @@ class PLoanContractSubmission {
           .map((e) => e.key),
       // A file with no part at all is reported like an empty scalar: `canSubmit`
       // should have stopped it, so if one gets this far the refusal should say
-      // which. Reported under the plain name, not the `[]` field, so the message
-      // matches what the screens call it.
-      ...fileFieldNames.where((name) =>
-          !sentFields.contains(name) &&
-          !sentFields.contains('$name$_repeatedSuffix')),
+      // which. Reported under the plain slot name, not the `[]` field, so the
+      // message matches what the screens call it — and so the two identity
+      // photos stay individually nameable now that they share one field.
+      ...photoParts.entries.where((e) => e.value.isEmpty).map((e) => e.key),
+      if (!sentFields.contains('documentImage$_repeatedSuffix')) 'documentImage',
     ]..sort();
 
     return PLoanContractSubmission._(
@@ -381,13 +400,20 @@ class PLoanContractSubmission {
     );
   }
 
-  /// The three file fields, under the names the screens and the refusal message
-  /// use — i.e. without [_repeatedSuffix].
+  /// The three file **slots**, under the names the screens and the refusal
+  /// message use — i.e. without [_repeatedSuffix].
+  ///
+  /// These are logical slots, not wire fields: `cardIdImage` and
+  /// `customerImage` both go out as `cardIdImage[]` parts. The names are kept
+  /// distinct so a refusal can say *which photo* is missing.
   static const List<String> fileFieldNames = [
     'cardIdImage',
     'customerImage',
     'documentImage',
   ];
+
+  /// The one multipart field both identity photos are sent under.
+  static const String _identityPhotoField = 'cardIdImage$_repeatedSuffix';
 
   /// Fields the API is sent as `''` **on purpose**, so they are not reported in
   /// [unresolvedFields] (decided 2026-08-07).
@@ -415,9 +441,10 @@ class PLoanContractSubmission {
   /// Appended to a field that carries more than one part.
   ///
   /// `regmast_ploan.php` — where these names come from — repeats every group as
-  /// `group[]`, which is also what PHP needs to collect them into an array. The
-  /// two single files go unsuffixed. Unverified against `/ploan` itself; this is
-  /// the one place to change if it wants something else.
+  /// `group[]`, which is also what PHP needs to collect them into an array.
+  /// Both fields `/ploan` now receives carry more than one part, so both are
+  /// suffixed. Unverified against `/ploan` itself; this is the one place to
+  /// change if it wants something else.
   static const String _repeatedSuffix = '[]';
 
   /// A captured photo as a one-element list, or empty when the slot is unset —

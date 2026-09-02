@@ -21,9 +21,11 @@ import 'srisawad_api.dart';
 ///     mobile-API call (`x1` on both prod and the new uat gateway);
 ///   - **Body** = `multipart/form-data` (2026-08-07, was JSON): the 30 scalar
 ///     fields from the API's sample call **plus `ndid_reference_id`**
-///     (2026-08-14) as form fields, plus five real file parts — `cardIdImage`,
-///     `customerImage` and `documentImage[]` ×3 carrying the contract PDFs the
-///     customer consented to.
+///     (2026-08-14) as form fields, plus five real file parts —
+///     `cardIdImage[]` ×2 (the ID-card photo then the selfie; the separate
+///     `customerImage` part was folded into this field on 2026-09-02) and
+///     `documentImage[]` ×3 carrying the contract PDFs the customer consented
+///     to.
 ///
 /// **The upload goes direct through `package:http`, never the host bridge**
 /// (`bypassHostBridge: true`). That is the whole reason multipart is affordable
@@ -68,8 +70,10 @@ class PLoanContractApi {
     // verification (a simulated hop) — precisely the thing the server will
     // refuse, and worth naming so the refusal is legible.
     'ndid_reference_id',
-    // The file fields. `canSubmit` gates on all three, so a blank one here is
-    // worth naming rather than leaving the server to say "HTTP 400".
+    // The file slots. `canSubmit` gates on all three, so a blank one here is
+    // worth naming rather than leaving the server to say "HTTP 400". These are
+    // slot names, not wire fields — both photos travel as `cardIdImage[]`
+    // parts, but a refusal has to say *which* photo was missing.
     'cardIdImage',
     'customerImage',
     'documentImage',

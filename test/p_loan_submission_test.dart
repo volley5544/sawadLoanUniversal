@@ -53,8 +53,9 @@ const _saveApiNdidFields = <String>{'ndid_reference_id'};
 const _saveApiAllFields = <String>{..._saveApiFields, ..._saveApiNdidFields};
 
 /// Those 30 stay **form fields**; the files added on 2026-08-07 go as real
-/// multipart file parts beside them — `cardIdImage`, `customerImage` and
-/// `documentImage[]` ×3 (the contract PDFs). See the `file parts` group.
+/// multipart file parts beside them — `cardIdImage[]` ×2 (the ID-card photo
+/// then the selfie) and `documentImage[]` ×3 (the contract PDFs). See the
+/// `file parts` group.
 
 /// The 12 image groups from `_imageGroups` in the same file.
 const _formImageGroups = <String>{
@@ -376,13 +377,17 @@ void main() {
     group('file parts', () {
       test('sends five parts: two photos and the three contract PDFs', () {
         final files = PLoanContractSubmission.fromFlow(_completedFlow()).files;
+        // Both identity photos share `cardIdImage[]` (2026-09-02) — there is no
+        // `customerImage` part any more, so their order is what tells the
+        // server which is which: ID card first, selfie second.
         expect(files.map((f) => f.field).toList(), [
-          'cardIdImage',
-          'customerImage',
+          'cardIdImage[]',
+          'cardIdImage[]',
           'documentImage[]',
           'documentImage[]',
           'documentImage[]',
         ]);
+        expect(files.map((f) => f.field), isNot(contains('customerImage')));
         // The scalar fields are unaffected by the files — still exactly 31.
         expect(PLoanContractSubmission.fromFlow(_completedFlow()).fields.length,
             31);
@@ -390,12 +395,20 @@ void main() {
 
       test('the identity photos carry their bytes and an image type', () {
         final flow = _completedFlow();
-        final files = PLoanContractSubmission.fromFlow(flow).files;
-        final card = files.firstWhere((f) => f.field == 'cardIdImage');
-        final selfie = files.firstWhere((f) => f.field == 'customerImage');
+        final photos = PLoanContractSubmission.fromFlow(flow)
+            .files
+            .where((f) => f.field == 'cardIdImage[]')
+            .toList();
+        expect(photos.length, 2);
+        final card = photos[0];
+        final selfie = photos[1];
 
         expect(card.bytes, flow.photos[PLoanPhoto.idCard]);
         expect(selfie.bytes, flow.photos[PLoanPhoto.selfieWithIdCard]);
+        // The filenames are the only other hint at which is which, so they stay
+        // distinct even though the field no longer does.
+        expect(card.filename, 'card_id.jpg');
+        expect(selfie.filename, 'customer.jpg');
         for (final f in [card, selfie]) {
           expect(f.contentType, 'image/jpeg');
           expect(f.filename, endsWith('.jpg'));
@@ -451,11 +464,31 @@ void main() {
         final submission = PLoanContractSubmission.fromFlow(flow);
 
         // An empty part is worse than no part — it looks like a zero-byte file.
-        expect(submission.files.map((f) => f.field), ['customerImage']);
+        // The selfie is still sent, so `cardIdImage[]` carries one part, not
+        // two: a shared field must not hide which photo went missing.
+        expect(submission.files.map((f) => f.field), ['cardIdImage[]']);
+        expect(submission.files.single.bytes,
+            flow.photos[PLoanPhoto.selfieWithIdCard]);
         expect(submission.unresolvedFields,
             containsAll(<String>['cardIdImage', 'documentImage']));
         // The selfie is still there, so it must not be reported.
         expect(submission.unresolvedFields, isNot(contains('customerImage')));
+      });
+
+      test('a missing selfie is named, not hidden by the shared field', () {
+        // The regression the shared `cardIdImage[]` field invites: with both
+        // photos on one field, presence of the field says nothing about which
+        // photo it holds. Reporting has to key off the slot, not the wire name.
+        final flow = _completedFlow();
+        flow.photos.remove(PLoanPhoto.selfieWithIdCard);
+        final submission = PLoanContractSubmission.fromFlow(flow);
+
+        final photos =
+            submission.files.where((f) => f.field == 'cardIdImage[]').toList();
+        expect(photos.length, 1);
+        expect(photos.single.bytes, flow.photos[PLoanPhoto.idCard]);
+        expect(submission.unresolvedFields, contains('customerImage'));
+        expect(submission.unresolvedFields, isNot(contains('cardIdImage')));
       });
 
       test('an undecodable document is reported, not thrown', () {

@@ -1019,9 +1019,22 @@ It is the one field in **snake_case**; that is the name the API asked for.
 
 | Part field | Count | Source | Type |
 | --- | --- | --- | --- |
-| `cardIdImage` | 1 | `PLoanPhoto.idCard` — the ID-card photo | `image/jpeg` |
-| `customerImage` | 1 | `PLoanPhoto.selfieWithIdCard` — the selfie | `image/jpeg` |
+| `cardIdImage[]` | **2** | `PLoanPhoto.idCard` — the ID-card photo (`card_id.jpg`), **then** `PLoanPhoto.selfieWithIdCard` — the selfie (`customer.jpg`) | `image/jpeg` |
 | `documentImage[]` | **3** | the contract PDFs from `/pdf/loan` the customer consented to (`request.pdf`, `receipt.pdf`, `agreement.pdf`, in screen order) | `application/pdf` |
+
+⚠ **There is no `customerImage` part any more** (changed 2026-09-02 on
+instruction). Both identity photos ride `cardIdImage[]`, so **order is the only
+thing that tells them apart** — ID card first, selfie second — with the
+filenames as the only other hint. If the server ever needs them separated
+again, that ordering is the contract to preserve.
+
+The **slot names stay three**, though: `PLoanContractSubmission.fileFieldNames`
+is still `cardIdImage` / `customerImage` / `documentImage`, because a refusal
+has to say *which photo* is missing and a shared wire field can't. Reporting
+therefore keys off the slot, not off what went out — `test/
+p_loan_submission_test.dart` pins both one-photo cases so a shared field can
+never hide a missing one. `customerImage` also remains a real group in
+`imageGroups` (the regmast view) and in `submit_form/`, which is unaffected.
 
 **The upload goes direct through `package:http`, bypassing the host bridge**
 (`bypassHostBridge: true`, added to `sendMultipartGroupsApiRequest` for this).
@@ -1034,14 +1047,15 @@ already uploads the ID card directly. So this needs **no host change and no app
 release**, and works in the host and a plain browser alike. Outstanding #2 stays
 closed.
 
-⚠ **The `[]` suffix on the repeated field is an assumption, not a spec.** There
-is no documentation for these three parts yet; it follows `regmast_ploan.php`,
-which is where the field *names* come from and which repeats every group that
-way, while the two single files go unsuffixed. `PLoanContractSubmission.
-_repeatedSuffix` is the one place to change it.
+⚠ **The `[]` suffix on the repeated fields is an assumption, not a spec.** There
+is no documentation for these parts yet; it follows `regmast_ploan.php`, which
+is where the field *names* come from and which repeats every group that way.
+Both fields carry more than one part now, so both are suffixed — the 2026-08-17
+live submit only proved `documentImage[]`, so `cardIdImage[]` is **unverified**.
+`PLoanContractSubmission._repeatedSuffix` is the one place to change it.
 
 A file the flow never captured sends **no part at all** — an empty part reads as
-a zero-byte file — and its name is reported in `unresolvedFields` instead;
+a zero-byte file — and its slot name is reported in `unresolvedFields` instead;
 `canSubmit` gates on all three anyway. An undecodable PDF is reported the same
 way rather than throwing out of the mapper. The `data:application/pdf;base64,`
 prefix live `/pdf/loan` returns is stripped before decoding (the mock fixtures
@@ -1078,7 +1092,7 @@ the same:
 | Branch | `branchID` | `branchId` (lower `d`) |
 | Not sent | — | `transNo`, `transDate`, `payDay`, `initialDate`, `lastPeriodPromo`, `remark` |
 | NDID | — | `ndid_reference_id` |
-| Files | 12 multipart groups | 3 fields / **5 parts** |
+| Files | 12 multipart groups | 2 fields / **5 parts** |
 | Count | 34 | 31 form fields + 5 file parts |
 
 Shared values are **read back from `PLoanSubmission`** rather than re-derived, so
@@ -2172,9 +2186,11 @@ reason recorded.
     settled every question the 2026-08-07 multipart change opened, none of which
     was specified anywhere (the sample curl is JSON-only and predates the file
     fields, so it proved nothing about any of it):
-    - `/ploan` **accepts `multipart/form-data`** and takes the five file parts
-      under `cardIdImage` / `customerImage` / `documentImage[]` — so
-      `_repeatedSuffix`'s `[]` naming assumption holds;
+    - `/ploan` **accepts `multipart/form-data`** and takes the five file parts —
+      then under `cardIdImage` / `customerImage` / `documentImage[]`, so
+      `_repeatedSuffix`'s `[]` naming assumption holds. ⚠ The two photos were
+      merged into `cardIdImage[]` on **2026-09-02**, *after* that submit, so
+      that half of the shape is once again unproven on the wire;
     - the **CORS preflight passes**. A multipart POST with `authorization` +
       `x-srisawad` is not a simple request, so the browser sends `OPTIONS` first;
       the mobile API answers it. `bypassHostBridge: true` is therefore right, and

@@ -490,7 +490,7 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
         '  ${f.field}: ${f.filename} (${f.contentType}, '
             '${(f.bytes.length / 1024).toStringAsFixed(1)} KB)',
       '',
-      // The regmast multipart grouping. /ploan takes only the three above, so
+      // The regmast multipart grouping. /ploan takes only the parts above, so
       // the collateral shots are collected for the flow but never filed.
       'images (collected, NOT sent to /ploan):',
       for (final e in images.entries)
