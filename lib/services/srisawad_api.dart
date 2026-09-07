@@ -4,6 +4,7 @@ import '../config/app_environment.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import 'api_transport.dart';
 import 'app_config_api.dart';
+import 'auth_token.dart';
 
 /// Shared plumbing for the srisawad **mobile API** groups ([TopupApi],
 /// [PLoanApi] and [UserApi]).
@@ -62,6 +63,29 @@ class SrisawadApi {
     };
   }
 
+  /// [headers], with the bearer resolved from the native host rather than
+  /// taken on trust from the caller.
+  ///
+  /// Every mobile-API call goes through here or through [headers] directly, and
+  /// the `token` each group threads through is the `?token=` launch param —
+  /// which is an hour-lived credential that also does not survive a reload.
+  /// [AuthToken.resolve] asks the host for a live one and treats
+  /// [launchToken] as the fallback, so callers keep passing exactly what they
+  /// passed before.
+  ///
+  /// [headers] itself stays synchronous and unchanged: it is the pure
+  /// credential-shaping rule, pinned by `test/srisawad_api_headers_test.dart`.
+  static Future<Map<String, String>> authHeaders(
+    String launchToken, {
+    String? contentType,
+    Map<String, String> extra = const {},
+  }) async =>
+      headers(
+        await AuthToken.resolve(launchToken),
+        contentType: contentType,
+        extra: extra,
+      );
+
   /// GET/POST returning decoded JSON, or throwing [SrisawadApiException].
   static Future<dynamic> send(
     String method,
@@ -75,7 +99,7 @@ class SrisawadApi {
       res = await sendApiRequest(
         method,
         url,
-        headers: headers(
+        headers: await authHeaders(
           token,
           contentType: body == null ? null : 'application/json',
           extra: extraHeaders,

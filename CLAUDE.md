@@ -79,8 +79,31 @@ projects, `prod` and `uat` (see Deploy below).
   `_loadCustomerProfile()`: `UserApi.fetchUserDetail(hash, token: …)` →
   `appState.customerDetail` (persists + notifies) and
   `UserApi.fetchAddressBook(hash, token: …)` → `appState.customerAddressBook`
-  (in-memory). **Both send the bearer token** — so a launch URL without `?token=`
-  now fails both fetches rather than half of them (see **API groups**). While the
+  (in-memory). **Both send the bearer token** (see **API groups**).
+  - ⚠ **The launch `?token=` is only the FALLBACK now (2026-09-07).** Firebase ID
+    tokens expire after an hour and a P-Loan application routinely runs longer, so
+    the bearer is resolved **per request** from the host's `getAuthToken` handler
+    via `AuthToken.resolve` (`lib/services/auth_token.dart`), wired in at
+    `SrisawadApi.authHeaders` — the single credential seam, reached from four
+    places (`SrisawadApi.send`, `UserApi._headers`, the `/vision/thai-id-validate`
+    upload, and the `/ploan` submit). `appState.authToken` is what a plain browser
+    and an outdated host fall back to.
+  - ⚠ **Neither launch param survives a reload.** Path URL strategy is on, so
+    go_router replaces the whole location on the first navigation and the query is
+    gone from `window.location`; they live on only in `AppState`, in memory. Any
+    reload the host triggers (stale-build reload, iOS content-process reload, its
+    retry button) re-boots this app with both empty. The token recovers itself
+    through `getAuthToken`; **`hashThaiId` does not**, so a reload mid-flow still
+    lands on `ไม่พบข้อมูลผู้ใช้ กรุณาเปิดหน้านี้จากแอปพลิเคชันอีกครั้ง`. Fixing that means
+    stashing the non-secret launch params in `sessionStorage` — never the token —
+    and is not done. (`PLoanFlow` is in-memory only, so a reload discards all six
+    steps regardless.)
+  - No caching and no 401-retry in the resolver, deliberately: the host's
+    `getIdToken()` is itself a cached read that refreshes near expiry, and the app
+    force-refreshes every 60 s while its home page is mounted, so a bridge hop
+    always returns a token minted seconds ago. It does carry a 10 s timeout and
+    in-flight de-duplication — nothing else bounds the round trip, and two screens
+    fire their customer + contract reads in parallel on purpose. While the
   fetch is in flight `AppState.profileLoading` is true
   (set/cleared around `_loadCustomerProfile`, only when a `hashThaiId` exists)
   and step 1 shows a blocking spinner overlay ("กำลังโหลดข้อมูลลูกค้า...") so

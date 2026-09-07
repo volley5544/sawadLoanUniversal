@@ -405,7 +405,9 @@ class PLoanFlow implements NdidSubject {
   /// Hashed Thai ID identifying the customer; every call needs it.
   final String hashThaiId;
 
-  /// Bearer token from the `?token=` launch param.
+  /// Bearer token from the `?token=` launch param — the **fallback** only.
+  /// The live one is resolved per request from the native host, see
+  /// `AuthToken.resolve`.
   final String authToken;
 
   /// Attribution passed straight through to the submit payload.

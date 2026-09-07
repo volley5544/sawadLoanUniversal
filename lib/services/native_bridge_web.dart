@@ -31,6 +31,17 @@ const String _kHttpRequestHandlerName = 'httpRequest';
 /// P-Loan save API, which needs file parts and sends no CORS headers.
 const String _kHttpMultipartHandlerName = 'httpMultipart';
 
+/// Name of the JavaScript handler the native host registers to hand us a
+/// **currently valid** Firebase ID token
+/// (`addJavaScriptHandler(handlerName: 'getAuthToken', ...)`).
+///
+/// The `?token=` launch param cannot serve a whole session: Firebase ID tokens
+/// expire after an hour, and because path URL strategy is on, go_router drops
+/// the launch query from `window.location` on the first navigation — so any
+/// reload re-boots this app with no token at all. The host answers this from
+/// the Firebase SDK instead. See `native_bridge.dart`.
+const String _kGetAuthTokenHandlerName = 'getAuthToken';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -109,6 +120,37 @@ class NativeCameraBridge {
 
     final decoded = jsonDecode(json);
     return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  /// Asks the native host for a currently-valid Firebase ID token.
+  ///
+  /// Returns `''` when the host has nobody signed in, and `null` when the host
+  /// is too old to implement the handler — an unregistered handler resolves its
+  /// JS promise with `null`, so those two cases are only distinguishable
+  /// because the host answers signed-out as an empty **string**. Both mean
+  /// "fall back to the launch param", but only `null` means "and this host
+  /// needs updating". Deliberately does not collapse `''` to `null` the way
+  /// [captureDocument] and [pickBranch] do.
+  ///
+  /// Throws if the bridge is unavailable (plain browser) — call
+  /// [isSupported] first, as `AuthToken.resolve` does.
+  static Future<String?> fetchAuthToken() async {
+    final host = _host;
+    if (host == null) {
+      throw UnsupportedError(
+        'Not running inside the flutter_inappwebview host '
+        '(window.flutter_inappwebview is undefined).',
+      );
+    }
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kGetAuthTokenHandlerName.toJS,
+        )
+        .toDart;
+
+    return result.isUndefinedOrNull ? null : (result as JSString).toDart;
   }
 
   /// Asks the native host to perform an HTTP request natively (no CORS) and

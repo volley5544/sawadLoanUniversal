@@ -17,9 +17,12 @@ import 'srisawad_api.dart';
 ///   - **Base URL** = `api_url['api_url_base']` from the Firestore config
 ///     document `application/public_config` — the same per-project base
 ///     [SrisawadApi.baseUrl] resolves, so uat lands on `dev.swpfin.com:7076`;
-///   - **Auth** = the customer's own Firebase **bearer token** (the `?token=`
-///     launch param), so no service credential ships in the bundle — this is
-///     what closed that pentest finding;
+///   - **Auth** = the customer's own Firebase **bearer token**, so no service
+///     credential ships in the bundle — this is what closed that pentest
+///     finding. Resolved per request from the native host
+///     ([SrisawadApi.authHeaders]); the `?token=` launch param is only the
+///     fallback, because it expires an hour into a flow that often runs
+///     longer and is gone entirely after a reload;
 ///   - **Header** `x-srisawad` from [SrisawadApi.headers] like every other
 ///     mobile-API call (`x1` on both prod and the new uat gateway);
 ///   - **Body** = `multipart/form-data` (2026-08-07, was JSON): the 30 scalar
@@ -100,7 +103,9 @@ class PLoanContractApi {
       res = await sendMultipartGroupsApiRequest(
         url,
         // No Content-Type: MultipartRequest has to append its own boundary.
-        headers: SrisawadApi.headers(token),
+        // Resolved from the host immediately before a multi-MB upload, so the
+        // bearer has a full hour of headroom for the POST itself.
+        headers: await SrisawadApi.authHeaders(token),
         fields: submission.fields,
         files: [
           for (final f in submission.files)

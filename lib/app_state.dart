@@ -41,8 +41,15 @@ class AppState extends ChangeNotifier {
   String hashThaiId = '';
 
   /// Firebase auth token passed in by the native WebView host as a launch
-  /// query param (`?token=...`, appended by the สมัครสินเชื่อ button). Sent as
-  /// `Authorization: Bearer` on the mobile API's address endpoint.
+  /// query param (`?token=...`, appended by the สมัครสินเชื่อ button).
+  ///
+  /// The **fallback** credential, not the live one: it expires an hour after
+  /// launch, and it is absent altogether after any reload (path URL strategy
+  /// means go_router drops the launch query from `window.location` on the
+  /// first navigation). Mobile-API calls get their bearer from
+  /// `AuthToken.resolve`, which asks the host per request and only falls back
+  /// to this. Still the right value in a plain browser, where there is no host
+  /// to ask.
   String authToken = '';
 
   /// True while the startup profile + address fetch (`_loadCustomerProfile`

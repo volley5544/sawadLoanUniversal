@@ -101,6 +101,45 @@
 /// `URL not allowed`, and fixing it needs an app release, not a web deploy.
 /// Keep the two in step.
 ///
+/// ## `getAuthToken` — a currently-valid Firebase ID token
+///
+/// The host launches this build with the customer's token in the URL
+/// (`?token=`), which `main.dart` reads once into `AppState.authToken`. That
+/// cannot carry a whole session:
+///
+///   * Firebase ID tokens expire after **an hour**, and a P-Loan application
+///     routinely runs longer — the tail of a long flow 401s, `/ploan` submit
+///     included.
+///   * Path URL strategy is on, so go_router replaces the whole location on
+///     navigation: after step 1 the launch query is gone from
+///     `window.location`. Every reload the host can trigger (stale-build
+///     reload, iOS content-process reload, its retry button) therefore
+///     re-boots this app with **no token at all**.
+///
+/// So the token is resolved per request through this handler
+/// (`AuthToken.resolve`, `lib/services/auth_token.dart`), with the launch param
+/// kept only as the fallback for a plain browser or an older host.
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'getAuthToken',
+///   // Ask the SDK, never a cached copy in storage: the cached one is only
+///   // rewritten by an idTokenChanges listener and can be an hour stale.
+///   callback: (args) async => await currentFirebaseToken(), // '' = signed out
+/// );
+/// ```
+///
+/// Return a plain **string**, and `''` — never `null` — when nobody is signed
+/// in. An unregistered handler resolves its JS promise with `null`, so `null`
+/// is how this side detects an outdated host; answering signed-out with `null`
+/// too would make the two indistinguishable.
+///
+/// (Implemented in the srisawad host's `loan_universal_web_widget.dart`, which
+/// also injects a fresh bearer onto mobile-API calls that come through
+/// `httpRequest` — that covers a cached web build too old to call this handler,
+/// but **not** the two direct uploads below, which is why this handler is the
+/// actual fix.)
+///
 /// ## `httpMultipart` — CORS-free multipart upload
 ///
 /// **No longer needed as of 2026-08-04, and never implemented.** It existed for

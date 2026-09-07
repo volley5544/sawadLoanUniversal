@@ -232,7 +232,7 @@ class PLoanApi {
     try {
       res = await sendMultipartApiRequest(
         Uri.parse('$base/vision/thai-id-validate'),
-        headers: SrisawadApi.headers(token),
+        headers: await SrisawadApi.authHeaders(token),
         fileField: 'file',
         fileName: 'idcard.jpg',
         fileBytes: imageBytes,

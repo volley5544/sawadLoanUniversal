@@ -34,8 +34,18 @@ import '../services/diagnostics.dart';
 /// (path strategy is enabled in main.dart), e.g.
 /// `https://sawad-loan-universal-uat.web.app/customerInfoPage?hashThaiId=<...>`.
 ///
-/// Any query string (e.g. `?hashThaiId=`) is preserved by the browser and read
-/// in `main.dart` via `Uri.base` — it is not part of the route definitions.
+/// The launch query (`?hashThaiId=`, `?token=`) is read **once** at boot in
+/// `main.dart` via `Uri.base`; it is not part of the route definitions.
+///
+/// ⚠ It does **not** survive navigation. Path strategy is on, so go_router
+/// replaces the whole location on `go`/`push` — after the first step the URL is
+/// the bare route path and the launch params are gone from `window.location`.
+/// They live on only in `AppState`, in memory. So any **reload** (the native
+/// host's stale-build reload, the iOS content-process reload, its retry button,
+/// a devtools refresh) re-boots this app with them empty. That is why the
+/// bearer is resolved from the host per request (`AuthToken.resolve`) rather
+/// than from `AppState.authToken`, and it is also why a reload mid-flow still
+/// loses `hashThaiId`.
 abstract final class AppRoutes {
   static const String home = '/';
   static const String customerInfo = '/customerInfoPage';

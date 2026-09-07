@@ -26,6 +26,14 @@ class NativeCameraBridge {
   }
 
   /// Always throws off-web. See `native_bridge.dart` for the contract.
+  static Future<String?> fetchAuthToken() {
+    throw UnsupportedError(
+      'NativeCameraBridge is only available on web (inside the native '
+      'WebView host).',
+    );
+  }
+
+  /// Always throws off-web. See `native_bridge.dart` for the contract.
   static Future<Map<String, dynamic>?> sendHttpRequest({
     required String method,
     required String url,
