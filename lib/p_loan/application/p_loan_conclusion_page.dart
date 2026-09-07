@@ -13,7 +13,6 @@ import '../../router/app_router.dart';
 import '../../services/device_location.dart';
 import '../../services/native_bridge.dart';
 import '../../services/p_loan_api.dart';
-import '../../services/p_loan_contract_api.dart';
 import '../../services/srisawad_api.dart';
 import 'components/p_loan_components.dart';
 import 'models/loan_documents.dart';
@@ -486,121 +485,10 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
     );
   }
 
-  /// Shows the payload this flow would send.
-  ///
-  /// **No longer kind-aware**: since 2026-07-31 both kinds file with the P-Loan
-  /// save API (`POST /ploan`, `multipart/form-data`), so this previews
-  /// [PLoanContractSubmission] for either. It used to show the `regmast_ploan.php` mapping for an Extra, which
-  /// would now be a preview of a body nothing sends — worse than no preview,
-  /// because a QA check against it would pass while the real payload differed.
-  ///
-  /// A QA affordance, mirroring the submit form's ดู Payload button, so the
-  /// field mapping can be checked against the API's own sample.
-  ///
-  /// **Offered on every non-prod build, not only in mock mode** (2026-09-01).
-  /// Mock mode previews the *fixtures*, which is the one case where the payload
-  /// is already known; what nobody could see was a **real** submit's body on a
-  /// real device. It is hidden on prod, like [EnvVersionTag] and the diagnostics
-  /// sheet — not something a customer should see.
-  ///
-  /// It reports the request as actually sent: the resolved URL (from the
-  /// Firestore config, so it shows which gateway this build reached), the
-  /// headers, the form fields and the file parts. **The bearer token is masked**
-  /// — same rule as [Diagnostics.report], because this text exists to be pasted
-  /// into a chat. Everything else is verbatim, customer data included; that is
-  /// the point of the dump, and the warning line says so.
-  Future<void> _previewPLoanPayload() async {
-    // Resolved rather than assumed: the base URL comes from the runtime config,
-    // so a build pointing at an unexpected gateway is visible here instead of
-    // being inferred from the env label.
-    final base = await SrisawadApi.baseUrl();
-    if (!mounted) return;
-    final submission = PLoanContractSubmission.fromFlow(_flow);
-    final fields = submission.fields;
-    final images = submission.imageGroups;
-    final unresolved = submission.unresolvedFields;
-    final token = _flow.authToken;
-    final lines = [
-      'POST $base${PLoanContractApi.path}',
-      'Content-Type: multipart/form-data',
-      'x-srisawad: ${AppEnvironment.current.srisawadHeader}',
-      // Length kept so "no token" and "token present" stay distinguishable
-      // without printing the credential itself.
-      'Authorization: Bearer <redacted:${token.length} chars>',
-      '',
-      'kind: ${_flow.kind.shortLabel}   env: ${AppEnvironment.current.name}'
-          '   ver: $kWebVersion${PLoanApi.isMocked ? '   MOCK DATA' : ''}',
-      '',
-      'form fields (${fields.length}):',
-      for (final e in fields.entries) '  ${e.key}: ${e.value}',
-      '',
-      // Sizes and content types rather than bytes: enough to tell a JPEG from a
-      // PDF from a missing part, which is what a field-mapping check needs.
-      'file parts (${submission.files.length}):',
-      for (final f in submission.files)
-        '  ${f.field}: ${f.filename} (${f.contentType}, '
-            '${(f.bytes.length / 1024).toStringAsFixed(1)} KB)',
-      '',
-      // The regmast multipart grouping. /ploan takes only the parts above, so
-      // the collateral shots are collected for the flow but never filed.
-      'images (collected, NOT sent to /ploan):',
-      for (final e in images.entries)
-        '  ${e.key}[]: ${e.value.length} file(s)',
-      if (unresolved.isNotEmpty) ...[
-        '',
-        'NO SOURCE IN THIS FLOW:',
-        ...unresolved.map((f) => '  $f'),
-      ],
-    ];
-    final text = lines.join('\n');
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('P-Loan payload',
-            style: LoanRegisterStyles.appBarTitleStyle().copyWith(fontSize: 16)),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // The token is masked but the body is not, and it carries a real
-              // citizen id, phone and bank account. Say so before it is pasted
-              // somewhere, rather than after.
-              Text(
-                'มีข้อมูลส่วนบุคคลของลูกค้า — ระวังก่อนแชร์',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: LoanRegisterStyles.primary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(text,
-                  style:
-                      const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-            ],
-          ),
-        ),
-        actions: [
-          // Selecting monospace text inside a scrolling dialog on a phone is
-          // most of the reason the trail was never captured; one tap is not.
-          TextButton(
-            onPressed: () => _copyText(text, 'คัดลอก payload แล้ว'),
-            child: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ปิด'),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Puts a dump on the clipboard and confirms it with [confirmation].
   ///
-  /// The dialog stays open: a tester comparing the body against the API's sample
-  /// usually wants to keep reading it, and reopening means re-deriving the
-  /// submission — or, for a failure, re-running a submit that just failed.
+  /// The dialog stays open: reopening it would mean re-running the submit that
+  /// just failed, so a tester who copies the report can keep reading it.
   Future<void> _copyText(String text, String confirmation) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
@@ -852,18 +740,6 @@ class _PLoanConclusionPageState extends State<PLoanConclusionPage> {
               style: GoogleFonts.notoSansThai(
                 fontSize: 12,
                 color: LoanRegisterStyles.label,
-              ),
-            ),
-          // Non-prod, not mock-only: the body worth inspecting is a real
-          // submit's. Hidden on prod like the version tag and diagnostics sheet.
-          if (!AppEnvironment.current.isProd)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _previewPLoanPayload,
-                icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text('ดู/คัดลอก Payload (POST /ploan)',
-                    style: GoogleFonts.notoSansThai(fontSize: 13)),
               ),
             ),
           if (!_flow.canSubmit) ...[

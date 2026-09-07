@@ -937,7 +937,7 @@ fields and 12 image groups `submit_form/p_loan_form_page.dart` collects by hand.
 Nothing is sent to *that* endpoint from the wizard; what actually ships a new
 P-Loan is `PLoanContractSubmission` → `POST /SavePloanContract` (see **P-Loan save
 API** below), which reuses these values under its own field names. This mapper
-stays as the regmast view of the same data, and as the preview for an Extra:
+stays as the regmast view of the same data:
 
 ```dart
 final s = PLoanSubmission.fromFlow(flow);
@@ -979,11 +979,16 @@ await PLoanApiService().submit(fields: s.fields, imageGroups: s.imageGroups);
   step is what would fill them.
 - Step 4 gained two **optional** attachments for the P-Loan-only groups
   (เล่มทะเบียนรถ, หน้าสมุดบัญชี); being optional they never block the Next button.
-- In mock mode step 6 shows a **ดู Payload (P-Loan)** button that dumps the
-  fields, file counts and unresolved list — the same QA affordance the submit
-  form has. It is **kind-aware**: for a new P-Loan it previews the
-  `SavePloanContract` payload that will actually be sent, for an Extra the
-  regmast one.
+- ⚠ **Step 6 no longer previews the payload.** A non-prod **ดู/คัดลอก Payload
+  (POST /ploan)** button used to dump the resolved URL, the form fields, the
+  file parts and `unresolvedFields` into a copyable dialog; it was **removed
+  2026-09-07** on request. `submit_form/`'s own **ดู Payload** button is a
+  different feature and is untouched. What remains for inspecting a real submit
+  is the **failure report** on a failed one (see **P-Loan save API**) — which
+  only appears when the submit fails, so a *successful* body can no longer be
+  read off a device. If that is wanted back, the mapper is unchanged: build
+  `PLoanContractSubmission.fromFlow(flow)` and print `fields` / `files` /
+  `unresolvedFields`.
 
 ### P-Loan save API (`services/p_loan_contract_api.dart`)
 
@@ -1062,8 +1067,7 @@ prefix live `/pdf/loan` returns is stripped before decoding (the mock fixtures
 build bare base64), so both upload identical bytes.
 
 The **other** photos (collateral, เล่มทะเบียนรถ, หน้าสมุดบัญชี) are still not sent:
-`imageGroups` is the regmast view and the preview labels it "collected, NOT sent
-to /ploan".
+`imageGroups` is the regmast view, not this endpoint's.
 
 ⚠ The request carries five files, so it is **large**. A timeout or a
 request-size limit is the first thing to suspect if a submit that used to work
@@ -1093,9 +1097,9 @@ the message with a **คัดลอก** button:
   last line of a long page, which is exactly what a cap would remove. A test
   pins this (`test/p_loan_contract_api_test.dart`), as it is the one property
   that would silently undo the fix.
-- **It is non-prod only**, like `EnvVersionTag`, the diagnostics sheet and the
-  payload preview: a gateway stack trace is what a developer needs and what a
-  customer must not read. The customer-facing `message` is unchanged either way.
+- **It is non-prod only**, like `EnvVersionTag` and the diagnostics sheet: a
+  gateway stack trace is what a developer needs and what a customer must not
+  read. The customer-facing `message` is unchanged either way.
 - **`ApiHttpResult` now carries `headers`** — filled on the direct
   `package:http` path, empty from the host's `httpRequest`/`httpMultipart`
   bridge, which answers `{status, body}` only. The report says *"(none — the
