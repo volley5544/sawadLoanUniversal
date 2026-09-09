@@ -21,6 +21,14 @@ Hosting: the uat project also serves a runtime-config document over the
 (`services/firebase_auth_rest.dart`, `services/app_config_api.dart`). Two
 projects, `prod` and `uat` (see Deploy below).
 
+**Resolved history lives in [`docs/HISTORY.md`](docs/HISTORY.md)**, not here —
+replaced designs, closed Outstanding items, the full pentest list, and the
+evidence behind decisions that are now just one line below. It is **not**
+`@`-imported, so it costs nothing per session: read it when a change touches one
+of those areas, and put new history there rather than growing this file. This
+file stays under the 150k-character limit Claude Code loads per session; if it
+passes that again, archive the next round the same way.
+
 ## Current state (read this first)
 
 - **The P-Loan application flow is the live one.** Its screens have no mock
@@ -207,14 +215,11 @@ Note the hook was deliberately **not** a
 `PostToolUse`/`Write|Edit` hook: that fires after every single edit and would
 push dozens of half-finished refactors per task.
 
-Two consequences of CI owning the deploy, both seen on 2026-07-31:
-
-- **Rapid consecutive pushes cancel each other.** Runs #49 and #50 were 23 s
-  apart; #49 was cancelled and only #50 (the branch tip) shipped. Harmless when
-  the later commit is a superset, which it was — but "cancelled" in the run list
-  is not a failure to chase.
-- The version stamp jumps to whatever the run number is, so `WEB_VERSION` is not
-  contiguous with what `.deploy-version-uat` last recorded.
+Two consequences of CI owning the deploy: **rapid consecutive pushes cancel
+each other** (only the branch tip ships — "cancelled" in the run list is not a
+failure to chase), and the version stamp jumps to the run number, so
+`WEB_VERSION` is not contiguous with what `.deploy-version-uat` last recorded.
+[History](docs/HISTORY.md#ci-deploy-consequences).
 
 The script declines to deploy when:
 
@@ -364,13 +369,9 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   shape, they still await one bool. ปฏิเสธ pops `false` and ends the hop.
   Takes an `NdidSubject` purely to hand onward, like the two screens after it.
 
-  **The agreement is one continuous scroll**, not a pager. A three-page
-  `PageView` with a `1 of 3` counter was built first (it is what the design
-  showed) and replaced on request the same day. That is also the more robust
-  shape: a `PageView` on Flutter web cannot be dragged with a **mouse** — the
-  default `ScrollBehavior` leaves `PointerDeviceKind.mouse` out of
-  `dragDevices` — so in a desktop browser, which is how this flow is usually
-  tested, the later pages were unreachable without adding arrows for them.
+  **The agreement is one continuous scroll**, not a pager — a `PageView` was
+  built first and replaced the same day; it also cannot be mouse-dragged on
+  Flutter web. See [docs/HISTORY.md](docs/HISTORY.md#ndid-terms-pageview).
 
   Wording lives in `ndid_terms_content.dart`, **generated** from the supplied
   Apple Pages file rather than retyped: `.pages` is a zip whose
@@ -445,24 +446,20 @@ page → page as go_router `extra` (see `router/app_router.dart`).
   `request_timeout` matching the countdown) and polls every 3 s.
 
   **Polling only runs while this page is visible**, and verifying means leaving
-  it — the bank's app for a customer, the **NDID UAT console** for a tester
-  (enter the ref, set the status to success). A backgrounded WebView has its JS
-  timers throttled or suspended, so the 3 s poll is not running while you are
-  away, and returning meant waiting on whatever the timer did next. Reported
-  2026-07-31 as "status is success but the page keeps counting down". Fixed with
-  four changes, all in `ndid_verify_page.dart`:
+  it — the bank's app for a customer, the **NDID UAT console** for a tester. A
+  backgrounded WebView throttles or suspends its JS timers, so the poll is not
+  running while you are away. Four things in `ndid_verify_page.dart` handle
+  that, all load-bearing
+  ([why](docs/HISTORY.md#ndid-verify-polling)):
 
-  - an `AppLifecycleListener(onResume:)` **polls immediately** when the page
-    becomes visible again — this is what turns "eventually" into "at once";
+  - an `AppLifecycleListener(onResume:)` **polls immediately** on return;
   - a **ตรวจสอบสถานะ** button, so a tester never depends on the timer;
-  - **poll failures are no longer silent.** They are still ignored individually
-    (one flaky response must not kill a live request) but after 3 consecutive
-    ones a warning names the error and says it is retrying. Silence here made a
-    check that could not reach the gateway look exactly like a customer who
-    hadn't approved yet — which is how the DNS outage stayed invisible;
-  - the countdown hitting 00:00 now **cancels the poll** and shows the timeout.
-    The two timers were independent, so polling outlived the countdown and only
-    stopped if NDID happened to report `TIMEOUT`.
+  - **poll failures are not silent** — individually ignored (one flaky response
+    must not kill a live request), but after 3 consecutive ones a warning names
+    the error. Silence made an unreachable gateway look exactly like a customer
+    who hadn't approved yet;
+  - the countdown hitting 00:00 **cancels the poll** and shows the timeout —
+    the two timers are otherwise independent.
 
   A `_polling` guard also stops overlapping requests piling up, since
   `Timer.periodic` fires regardless of whether the previous poll finished and one
@@ -883,29 +880,12 @@ read-consent-sign step has nothing to work on:
   to device time**. The server re-checks on submit.
 
 **Read the source's history before changing this.** Its `lib/p_loan` folder is a
-copy-paste fork of `lib/customer_topup`, only lightly renamed — `ploan_status_page`
-differs from `topup_status_page` by 36 lines, all of them class/route names — and
-it was left half-finished:
-
-- Its final submit was **unreachable** (`if (!false) { Navigator.pop(); return; }`
-  sat directly above `saveNewTopupCall`), so this port is the first version that
-  actually posts. **It submits `POST /topup`, not `regmast_ploan.php`** — that
-  endpoint family is what the whole flow reads from, so the feature is a top-up
-  request wearing P-Loan naming. Rename it if that's wrong.
-- Step 2's amount field/slider/validation sat behind
-  `if (FFAppState().savePLoanData.isNewPLoan)`, and `savePLoanData` was never
-  assigned, so the screen always rendered read-only. **The input is enabled here**
-  per the behaviour that dead code documented (bounds from `/topup/detail`, round
-  down to the nearest 100, re-run the calculator). That flag turned out to be the
-  new-loan product: it is read in exactly one place in the source and assigned
-  nowhere, so the new-P-Loan path was designed there and never built. It is
-  `PLoanKind` here.
-- Its ID check accepted **four hardcoded Thai IDs** alongside the customer's own,
-  which let anyone holding one of those cards verify against *any* account. That
-  backdoor is **deliberately not reproduced** — `test/p_loan_flow_test.dart` pins
-  it shut. Also dropped: a hardcoded dev `hash_thai_id`, a hardcoded contract no.
-  in the upload path, a never-cancelled 1 Hz `while(true) setState()` heartbeat
-  on three pages, and ~a dozen `if (false)` branches.
+copy-paste fork of `lib/customer_topup` that was left half-finished — an
+unreachable final submit, an always-read-only amount field behind a flag that
+was never assigned (which turned out to be `PLoanKind`), and an ID check with
+**four hardcoded Thai IDs** that is **deliberately not reproduced**
+(`test/p_loan_flow_test.dart` pins it shut). Full account in
+[docs/HISTORY.md](docs/HISTORY.md#flutterflow-fork).
 
 Structure:
 
@@ -1346,17 +1326,12 @@ flow and, on success, flips to a green check + banner + ดาวน์โหล
 **Every environment verifies the applicant's own Thai ID.**
 `PLoanFlow.ndidThaiId` is simply `customerThaiIdDigits`.
 
-> **Retired 2026-07-31: the non-prod test-identity substitution.** Between
-> 2026-07-30 and 2026-07-31 non-prod builds asked NDID about `1234567890123`
-> instead of the customer, via `kNdidTestThaiId` /
-> `AppEnvironment.ndidThaiIdOverride`. The reason was the **DAP** uat node, which
-> had a registered identity for that one id only, so a real customer found no IdP
-> and the hop couldn't be exercised at all. The uat gateway
-> (`api_url.ndid_url_base`, now `uat.ndid.srisawadpower.com`) carries **real**
-> identities, so the define, the getter and its prod-only gate are all **deleted**
-> — not defaulted to empty — and `--dart-define=NDID_TEST_THAI_ID` is now
-> ignored. Don't reintroduce it: the whole point of UAT here is verifying real
-> people.
+> **Retired 2026-07-31: the non-prod test-identity substitution.** `kNdidTestThaiId`
+> / `AppEnvironment.ndidThaiIdOverride` made non-prod builds ask NDID about
+> `1234567890123` instead of the customer. All of it is **deleted** — not
+> defaulted to empty — and `--dart-define=NDID_TEST_THAI_ID` is ignored.
+> **Don't reintroduce it**; why it existed is in
+> [docs/HISTORY.md](docs/HISTORY.md#ndid-test-thai-id).
 
 What that changes for testing: a customer who has not onboarded with any IdP now
 gets an **empty registered grid** — `ndid_bank_select_page` renders
@@ -1739,17 +1714,12 @@ polls, so the old check would have skipped the timeout message half the time.
 past validation to `20005 - No IdP found` in both cases — and uat does not use
 it, so it is omitted.
 
-It got here the hard way. The body carried a hardcoded `'Authen Only'`, which the
-SIT node accepts and the uat gateway refuses with **`20091 - Invalid request
-type`** (hit on a real device right after the bank grid started working). Each
-environment publishes its own set at **`GET /request-types`** — wired as
-`NdidApi.listRequestTypes()`, kept purely as the diagnostic for a 20091 — and the
-sets are **disjoint**:
-
-| Gateway | Valid values |
-| --- | --- |
-| `dev.swpfin.com/dap` (SIT) | `Authen Only`, `TestRequestType`, `dContract` |
-| `uat.ndid.srisawadpower.com` | `dsign.accountopening`, `dsign.dcontract`, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
+It got here the hard way: a hardcoded `'Authen Only'` that the SIT node accepts
+and the uat gateway refuses with **`20091 - Invalid request type`**. Each
+environment publishes its own set at **`GET /request-types`**
+(`NdidApi.listRequestTypes()`, kept purely as the diagnostic for a 20091) and
+the two sets are **disjoint** — both listed in
+[docs/HISTORY.md](docs/HISTORY.md#ndid-request-type).
 
 Because those don't overlap, the seam is **kept but opt-in** rather than deleted:
 `ndid_request_type` (top level of the config document, *not* inside `api_url` — it
@@ -2024,11 +1994,11 @@ grids are built eagerly in a `Wrap` with no viewport culling, so all 16 appeared
 at once. That is past what one content process gets, and worse with the
 LandAndHouseWeb WebView still resident underneath.
 
-Proven from a tester's breadcrumb trail: it ended at `push /ndidBankSelectPage`
-with **no `ERROR` crumb** (no Dart exception) and **no `lifecycle hidden` before
-it** (foreground). It only reproduced when the customer lingered — a run that
-tapped a bank within ~3 s beat the image loads, which is why it looked
-intermittent.
+Proven from a tester's breadcrumb trail (no `ERROR` crumb, no `lifecycle hidden`
+before it). It only reproduced when the customer lingered, which is why it
+looked intermittent — see [docs/HISTORY.md](docs/HISTORY.md#ios-white-screen)
+for the trail and for the five hypotheses ruled out along the way, **recorded so
+they are not re-litigated**.
 
 **Fixed web-side by rationing logos:** `_kMaxLogoTiles = 4`, granted to the
 **registered** grid only; every other tile falls back to `_codeMark` initials.
@@ -2036,18 +2006,11 @@ Registered is the right grid to spend the budget on — it is the bank the custo
 actually uses, and it is normally one or two tiles. Shipped as uat **webVersion
 74**.
 
-Hypotheses ruled out along the way, recorded so they are not re-litigated:
 
-| Ruled out | Why |
-| --- | --- |
-| Dart exception / lost go_router `extra` | no `ERROR` crumb, ever |
-| Background jettison | no lifecycle change before the death |
-| iOS edge-swipe (`allowsBackForwardNavigationGestures`) | a real defect, fixed host-side — but not this |
-| The host's stale-version force-reload | `sawad_loan_universal_version_uat` is **5** in the QA Firestore, far below the deployed number, so it never fires |
-| The pdf.js document leak | real, fixed (see **Step 6 documents**) — but not the cause |
-
-⚠ On that fourth row: if `sawad_loan_universal_version_uat` is ever set *above*
-the live `WEB_VERSION` it forces a cold multi-MB reload on every open, and its
+⚠ One of those ruled-out rows carries a warning of its own — the host's
+stale-version force-reload. If `sawad_loan_universal_version_uat` is ever set
+*above* the live `WEB_VERSION` it forces a cold multi-MB reload on every open,
+and its
 `clearAllCache` is static/global — so it would wipe the sibling LandAndHouseWeb
 WebView's cache too.
 
@@ -2188,20 +2151,15 @@ reason recorded.
    readable by anyone while the uat rules were open. Closing the rules does not
    un-leak them.
 2. ~~Implement the `httpMultipart` bridge handler in the host app.~~
-   **Resolved 2026-08-04, still resolved 2026-08-07.** The P-Loan save endpoint
-   moved to `POST /ploan` on the mobile API base, bearer-authenticated, so it
-   needs no multipart handler and no `:8082` allowlist entry. **Both submit
-   blockers are gone for the Extra path.** The 2026-08-07 change back to a
-   `multipart/form-data` body does **not** reopen this: that handler existed for
-   the old host's missing CORS, and this one sends
-   `access-control-allow-origin: *`, so the upload goes direct
-   (`bypassHostBridge: true`). The remaining verification is a live submit (#12)
-   and confirming `/ploan` really does send CORS — which now matters more, since
-   a multipart POST with `authorization` + `x-srisawad` triggers a preflight.
-3. ~~Do something about `kPLoanSaveApiAuth`.~~ **Resolved 2026-08-04.** The Basic
-   service credential was **deleted** when the endpoint moved to bearer auth on
-   `/ploan`; nothing shared ships in the bundle now. (`kNdidApiKey` is the only
-   baked-in secret left — a web build can't hide it regardless.)
+   **Resolved 2026-08-04, still resolved 2026-08-07.** `/ploan` is on the
+   mobile API base, bearer-authenticated and CORS-enabled, so the multipart
+   upload goes direct (`bypassHostBridge: true`) — no handler, no `:8082`
+   allowlist entry. **Both submit blockers are gone for the Extra path.**
+   [History](docs/HISTORY.md#outstanding-2-3).
+3. ~~Do something about `kPLoanSaveApiAuth`.~~ **Resolved 2026-08-04.** The
+   Basic service credential was **deleted** with the move to bearer auth on
+   `/ploan`. `kNdidApiKey` is the only baked-in secret left — a web build
+   can't hide it regardless.
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
    to match the deployed `WEB_VERSION` (**74** as of 2026-08-31), or the host's
    stale-cache auto-reload never fires. Note the number now moves on most
@@ -2220,18 +2178,14 @@ reason recorded.
    contract's `branch_code` for an Extra. Left blank and reported rather than
    guessed; a `?branchId=` launch param or a branch picker would fill it.
 8. ~~An Extra's payout deducts the old principal and goes negative.~~
-   **Resolved 2026-07-30.** `PLoanFlow.payoutAmount` is now `requested − duty`
-   for **both** kinds, per *"ยอดโอนเงินเข้าบัญชี คือ ยอดจัดวงเงินอเนกประสงค์ ลบ
-   ค่าอากรแสตมป์"* on the full amount. It had been the *top-up* formula
-   (`− closing_balance` as well), which drove `2,000 − 7,740 − 1 = −5,741` into
-   the screen **and** into `transfer_amount` / `transferAmt`. The
-   `หักยอดเงินต้นสัญญาเก่า` rows on steps 2 and 6 went with it, and
-   `LoanAmountDetail.payoutFor` was **deleted** rather than deprecated so the old
-   formula can't be picked up by name.
+   **Resolved 2026-07-30.** `PLoanFlow.payoutAmount` is `requested − duty` for
+   **both** kinds; `LoanAmountDetail.payoutFor` was **deleted** rather than
+   deprecated so the old top-up formula can't be picked up by name.
+   [History](docs/HISTORY.md#outstanding-8-9).
 9. ~~LandAndHouseWeb's button is not built yet.~~ **Built** — `openPLoanExtra`
-   exists and is wired to `productCode == 'PLD001'` (see **What LandAndHouseWeb
-   has to do**). What remains is the user pasting the **browser-capable variant**
-   into FlutterFlow if they want the button to work when testing on the web.
+   is wired to `productCode == 'PLD001'` (see **What LandAndHouseWeb has to
+   do**). What remains is the user pasting the **browser-capable variant** into
+   FlutterFlow if they want it to work when testing on the web.
 10. **The host-app edits need an app release.** `routegenerator.dart` and
     `video_record_web_widget.dart` are committed on `main` in the srisawad repo;
     `loan_card.dart`'s PLD001 chip was added 2026-07-30. Only a new
@@ -2241,35 +2195,19 @@ reason recorded.
 **Open in this repo, deliberately not done:**
 
 11. ~~**🐞 `POST /topup` hardcodes both PDPA consents to `'Y'`.**~~ **No longer
-    reaches a customer**, as of the 2026-07-31 retarget: `toSubmissionJson()` is
-    off every submit path, and `PLoanContractSubmission` — which both kinds now
-    use — maps `marketingConsent`/`sensitiveConsent` through `_yesNo`, so a
-    declined ยินยอมการตลาด goes out as `N` (verified: a dumped Extra payload shows
-    `marketingConsent: "N"`, `sensitiveConsent: "Y"`).
-    The literal `'Y'`s **are still in the code** at
-    `p_loan_flow.dart:791-792`. Left as-is deliberately: that method is the record
-    of the `/topup` wire format, and "fixing" a body nothing sends would only
-    disguise the fact that it is dead. If `/topup` is ever revived, fix it *then* —
-    or delete the method and this note together.
+    reaches a customer** since the 2026-07-31 retarget — `toSubmissionJson()`
+    is off every submit path. The literal `'Y'`s are still in the code at
+    `p_loan_flow.dart:791-792`, left as-is deliberately: that method is the
+    record of the dead `/topup` wire format. If `/topup` is ever revived, fix
+    it *then* — or delete the method and this note together.
 12. ~~**No live P-Loan save submit has ever run.**~~ **Resolved 2026-08-17** — a
-    live `POST /ploan` succeeded against a real contract (`SLOAN`). One submit
-    settled every question the 2026-08-07 multipart change opened, none of which
-    was specified anywhere (the sample curl is JSON-only and predates the file
-    fields, so it proved nothing about any of it):
-    - `/ploan` **accepts `multipart/form-data`** and takes the five file parts —
-      then under `cardIdImage` / `customerImage` / `documentImage[]`, so
-      `_repeatedSuffix`'s `[]` naming assumption holds. ⚠ The two photos were
-      merged into `cardIdImage[]` on **2026-09-02**, *after* that submit, so
-      that half of the shape is once again unproven on the wire;
-    - the **CORS preflight passes**. A multipart POST with `authorization` +
-      `x-srisawad` is not a simple request, so the browser sends `OPTIONS` first;
-      the mobile API answers it. `bypassHostBridge: true` is therefore right, and
-      the `httpMultipart` handler stays unnecessary (#2);
-    - the **body size passes** — five files, easily megabytes.
-
-    ⚠ It was **one** submit, from one entry point. A timeout or a request-size
-    limit is still the first thing to suspect if a submit that used to work
-    starts failing.
+    live `POST /ploan` succeeded against a real contract (`SLOAN`), settling
+    multipart, the CORS preflight and body size in one shot
+    ([details](docs/HISTORY.md#outstanding-11-12)). ⚠ Two caveats survive: it
+    was **one** submit from one entry point, so a timeout or request-size limit
+    is still the first suspect if a working submit starts failing; and the two
+    photos were merged into `cardIdImage[]` on **2026-09-02**, *after* it, so
+    that half of the part shape is once again **unproven on the wire**.
 13. **The top-up-card chain has been walked, but never submitted *from there*.**
     On 2026-07-30 the user ran the real chain — srisawad app → LandAndHouseWeb
     top-up card → this build — as far as **step 4**, where the PDF viewer turned
@@ -2283,15 +2221,15 @@ reason recorded.
     path before closing this, since that path is the one that skips steps 2 and 4
     (#15).
 14. ~~**`latitude` / `longitude` have no source.**~~ **Resolved 2026-08-07** —
-    they now come from the device GPS via `services/device_location.dart`
-    (`navigator.geolocation`, captured on step 6). No host change was required;
-    see **P-Loan save API**. They still fall back to empty when the customer
-    denies location or no fix arrives, which is deliberate.
+    device GPS via `services/device_location.dart`, captured on step 6; no host
+    change was required (see **P-Loan save API**). They still fall back to
+    empty on a denial or no fix, deliberately.
+    [History](docs/HISTORY.md#outstanding-14).
 
-    **`gpsProvinceId`/`gpsAumphurId` are still open** and having coordinates did
-    not resolve them: they are srisawad's own province/district **ids**, so they
-    need a reverse lookup from lat/lng to that id set — an endpoint or table this
-    app doesn't have. Left blank and reported.
+    **`gpsProvinceId`/`gpsAumphurId` are still open** — coordinates did not
+    resolve them: they are srisawad's own province/district **ids**, needing a
+    reverse lookup from lat/lng into an id set this app has no endpoint for.
+    Left blank and reported.
 15. **A top-up-card Extra submits no collateral photos.** Step 4 is skipped by
     design, so `carImage`/`documentImage` are empty and
     `property_image`/`act_image` go out as `''`. A test pins that this cannot
@@ -2305,11 +2243,10 @@ reason recorded.
     is used. Register one and paste the key to enable the config read on prod.
 18. ~~Android WebView cannot render the inline PDF.~~ **Fixed 2026-07-30** by
     moving to `pdfx` + pdf.js (see **Step 6 documents**). The `openPdf` bridge
-    handler this entry used to call for is **no longer wanted** — it would cost a
-    host change and an app release to reach a worse UX than a web-only fix that
-    is already proven in the top-up flow. What remains is smaller:
-    **self-host pdf.js** (`web/index.html` currently pulls 4.6.82 from jsDelivr,
-    so a CDN outage blanks the contract viewer again).
+    handler is **no longer wanted** — it would cost an app release to reach a
+    worse UX. What remains is smaller: **self-host pdf.js**
+    (`web/index.html` pulls 4.6.82 from jsDelivr, so a CDN outage blanks the
+    contract viewer again). [History](docs/HISTORY.md#outstanding-18).
 19. **App Check** is not enabled, and the `?token=` JWT still travels in the
     launch URL — now on `/pLoan/resume` too.
 20. **New-P-Loan installment calculator API.** Step 2/3 pricing for a new P-Loan
@@ -2395,69 +2332,38 @@ reason recorded.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
-**The retest passed; all findings are signed off** (2026-08-25). The list below
-is kept rather than deleted, because "passed" is not the same as "nothing left to
-hold": some of these were closed by the API and infrastructure teams rather than
-here, and the client's half of finding #11 is a **prerequisite** for the server's,
-not a substitute for it. This is what stops a later change quietly reopening one.
+**The retest passed; all findings are signed off** (2026-08-25). "Passed" is
+not "nothing left to hold": several were closed by the API and infrastructure
+teams rather than here. The full list, and what each sign-off does and does not
+cover, is in [docs/HISTORY.md](docs/HISTORY.md#pentest-2026-08-11).
 
 ⚠ `pentest_doc/` and the `Digital Lending with Srisawad_V2.0` PDF are
 **git-ignored** — 43 MB of binaries, and a findings report is a map of this
-system's weak points. Same rule as `api_data/`, `ndid_doc/` and `etc/*.txt`: they
-live in the working copy, never in the remote.
+system's weak points. Same rule as `api_data/`, `ndid_doc/` and `etc/*.txt`:
+they live in the working copy, never in the remote.
 
-23. **🐞 Finding #11 — NDID verification is validated client-side.** The tester
-    intercepted `GET /rp/verify/{uuid}`, changed `status` to `"ACCEPTED"`, and the
-    application filed. Client side, `ndid_reference_id` now goes to `POST /ploan`
-    (2026-08-14) — **that is the prerequisite, not the fix.** What closes it is
-    server side, and is the API team's: `/ploan` must confirm that reference with
-    NDID **server-to-server**, require an `accept` from the IdP at the agreed
-    IAL/AAL, bind the NDID request's `identifier` to the bearer token's own
-    citizen id (else a genuinely accepted reference can be replayed for someone
-    else), refuse a reference already consumed, and refuse a stale one.
-    Structural end state: proxy NDID through the mobile API so the client never
-    sees or influences the status — that would also close `kNdidApiKey` shipping
-    in the bundle, the host-allowlist coupling (#22), and the rate-limit
-    gymnastics in `ndid_verify_page.dart`.
+Three of them still constrain what you may change here:
 
-    **Status: signed off at the 2026-08-25 retest.** This repo shipped the
-    prerequisite; the server-side confirmation is the API team's and nothing here
-    can verify it holds. So if the NDID hop is ever touched, re-check that
-    `PLoanFlow.ndidReferenceId` still reaches `/ploan` — dropping it would
-    silently return the system to the state the tester exploited, and the client
-    would look no different.
-24. **🐞 The plain-browser NDID hop is a bypass in its own right.**
-    `ndid_verify_page.dart`'s "จำลองยืนยันตัวตนสำเร็จ" button sets verified with
-    **no NDID traffic at all**, and it renders whenever
-    `NativeCameraBridge.isSupported` is false — i.e. in any browser that opens the
-    deployed URL. Photos fall back to `image_picker` (a desktop file chooser), so
-    the whole Extra completes without NDID and needs no interception. Not reported
-    by the pentest; found while tracing #11. Fix is a `NDID_SIMULATE` define
-    defaulting to false (same shape as `kPLoanUseMockData`), with a test pinning
-    it off.
-
-    ⚠ **Still not done — verified present 2026-08-25** at
-    `ndid_verify_page.dart:442`. The retest passing says nothing about this one:
-    it was never in the report, so nobody tested for it. Do not read "pentest
-    passed" as covering it.
-25. **Finding #2 — the server must enforce the auth, not just receive it.** Every
-    `api_url_base` call now sends `Authorization: Bearer` (2026-08-14 —
-    `GET /user/detail` was the one that didn't; see **API groups**). Sending it
-    does not stop anyone calling those endpoints *without* it, which is what the
-    finding is about. Server side. **Status: signed off at the 2026-08-25
-    retest.** The client's half is pinned by `test/srisawad_api_headers_test.dart`
-    plus a `required` `token` argument on every client method, so the omission
-    that caused it cannot recur silently.
-26. **`REQUESTED_ERROR` / `IDP_OR_AS_ERROR` are treated as pending.**
-    `spec.txt:1918-1920` lists them as terminal; `NdidVerifyStatus.isPending` is
-    "not accepted/rejected/timeout/cancelled", so either polls for the full hour
-    and then reports a timeout. Not a pentest finding — noticed alongside them.
-27. **Findings this repo cannot act on** are listed in
-    `pentest_doc/SAWAD_Srisawad_Pentest_Findings_20260811.xlsx` and belong to the
-    mobile app / API / infrastructure: #1 IDOR, #3 cleartext local storage,
-    #4 client-side auth, #5/#8 OTP, #6 brute force, #24 public Firebase Storage
-    listing, and the TLS items (#21/#22 in the sheet's numbering — not this
-    list's).
+- **🐞 Finding #11 (NDID validated client-side) — the client shipped only the
+  *prerequisite*.** `PLoanFlow.ndidReferenceId` reaching `POST /ploan` is what
+  makes a server-side check *possible*; the check itself is the API team's. So
+  if the NDID hop is ever touched, **re-check that the reference still reaches
+  `/ploan`** — dropping it would silently return the system to the state the
+  tester exploited, and the client would look no different.
+- **🐞 The plain-browser NDID hop is a bypass in its own right — still open.**
+  `ndid_verify_page.dart`'s “จำลองยืนยันตัวตนสำเร็จ” button sets verified with **no
+  NDID traffic at all**, and renders whenever `NativeCameraBridge.isSupported`
+  is false — i.e. in any browser that opens the deployed URL. Photos fall back
+  to `image_picker`, so the whole Extra completes without NDID and needs no
+  interception. Fix is an `NDID_SIMULATE` define defaulting to false (same
+  shape as `kPLoanUseMockData`), with a test pinning it off.
+  ⚠ **Verified present 2026-08-25** at `ndid_verify_page.dart:442`. It was
+  never in the report, so nobody tested for it — do not read “pentest passed”
+  as covering it.
+- **`REQUESTED_ERROR` / `IDP_OR_AS_ERROR` were treated as pending** by
+  `NdidVerifyStatus.isPending`, polling a dead request for the full hour. Now
+  handled — see **NDID Common Message standard**. Not a pentest finding;
+  noticed alongside them.
 
 ## Conventions
 
