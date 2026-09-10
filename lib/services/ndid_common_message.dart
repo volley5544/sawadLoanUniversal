@@ -88,13 +88,23 @@ abstract final class NdidCommonMessage {
   /// > "ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ \[RP\] และประสงค์ให้ส่ง
   /// > ข้อมูลจาก \[AS 1, AS 2, …\] (Transaction Ref:12345678)"
   ///
-  /// ⚠ **The AS clause is deliberately dropped.** This flow calls
-  /// `POST /rp/verify` in mode 2 with no `data_request_list` — there is no
-  /// Authoritative Source in the request, so naming one would tell the customer
-  /// their data is being fetched from a bank when it is not. §6.2.1 bullet 2
-  /// permits adjusting the wording as long as the customer understands what is
-  /// happening, and omitting a party we do not call is the honest reading.
-  /// If a data request is ever added, put the AS names back.
+  /// **The AS clause is rendered only when data really is requested**
+  /// ([asNames] non-empty), which since 2026-09-10 is the normal case:
+  /// `createVerifyRequest` calls `/rp/verify-with-data` and names the one bank
+  /// it asks for `001.cust_info_001` from — the same bank the customer picked
+  /// as their IdP.
+  ///
+  /// It stays conditional because the fallback path is still real: when no AS
+  /// can be matched to the chosen IdP the request degrades to plain
+  /// `/rp/verify` with no `data_request_list`, and naming a bank there would
+  /// tell the customer their data is being fetched when it is not. §6.2.1
+  /// bullet 2 permits adjusting the wording so long as the customer understands
+  /// what is happening; describing exactly the parties actually in the request
+  /// is the honest reading in both directions.
+  ///
+  /// ⚠ NDID's reviewer's reference image shows this clause populated, so the
+  /// **with-data** path is the one the submitted user journey describes — see
+  /// Outstanding #25.
   ///
   /// ⚠ **[transactionRef] is normally omitted now** (2026-08-31). The srisawad
   /// NDID gateway generates the Transaction Ref itself and appends the
@@ -104,12 +114,26 @@ abstract final class NdidCommonMessage {
   /// reference in front of the customer — which is the state NDID rejected the
   /// review over, wearing the opposite mistake. Pass one only for a gateway that
   /// does not compose the clause itself (the DAP/SIT node).
-  static String requestMessage({String? transactionRef}) {
+  static String requestMessage({
+    String? transactionRef,
+    List<String> asNames = const [],
+  }) {
     const base =
         'ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ$rpMarketingName';
-    return transactionRef == null || transactionRef.isEmpty
-        ? base
-        : '$base (Transaction Ref: $transactionRef)';
+    // Marketing names only, never a node id (§6.2.1 bullet 4). Blanks are
+    // dropped rather than rendered as an empty slot in the list.
+    final sources = asNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    final buffer = StringBuffer(base);
+    if (sources.isNotEmpty) {
+      buffer.write(' และประสงค์ให้ส่งข้อมูลจาก ${sources.join(', ')}');
+    }
+    if (transactionRef != null && transactionRef.isNotEmpty) {
+      buffer.write(' (Transaction Ref: $transactionRef)');
+    }
+    return buffer.toString();
   }
 
   /// The standard message for an IdP or AS error code (§6.2.1 [10]–[27]).

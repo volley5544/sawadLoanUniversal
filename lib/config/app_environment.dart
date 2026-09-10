@@ -68,6 +68,7 @@ const String kNdidApiBase = String.fromEnvironment(
 /// | --- | --- |
 /// | `dev.swpfin.com/dap` (SIT) | `Authen Only`, `TestRequestType`, `dContract` |
 /// | `uat.ndid.srisawadpower.com` | `dsign.accountopening`, `dsign.dcontract`, `dsign.dcontract.public`, `easyconnext.lineoa`, `idpconnext.thaid` |
+/// | `ndid.srisawadpower.com` (prod) | `dsign.accountopening`, `dsign.dcontract`, `easyconnext.lineoa`, `idpconnext.thaid` — read 2026-09-10; **no `dsign.dcontract.public`**, the one value uat has that prod does not |
 ///
 /// That mismatch is exactly what broke the hop earlier the same day: the body
 /// carried a hardcoded `'Authen Only'`, which SIT accepts and uat rejects.
@@ -87,13 +88,48 @@ const String kNdidRequestType = String.fromEnvironment(
   defaultValue: '',
 );
 
-/// API key for the NDID local-node API, sent as an `X-API-Key` header on
-/// every request (the node's collection-level auth). Overridable per build
-/// with `--dart-define=NDID_API_KEY=...`; empty disables the header.
-const String kNdidApiKey = String.fromEnvironment(
-  'NDID_API_KEY',
-  defaultValue: 'ndid_Gl_dI1z8JCeHebNbnyzICvpCep3KHLYY1oeDHjfNTXI',
-);
+/// Build-time override for the NDID `X-API-Key`. **Empty by default**, which
+/// means "pick the key that goes with whichever gateway is resolved" — see
+/// [ndidApiKeyFor]. Set it to pin one key regardless of gateway:
+///
+/// ```sh
+/// flutter build web ... --dart-define=NDID_API_KEY=...
+/// ```
+const String kNdidApiKey = String.fromEnvironment('NDID_API_KEY');
+
+/// `X-API-Key` for the **production** NDID gateway, `ndid.srisawadpower.com`.
+const String _kNdidApiKeyProd = 'DV4zX7Ti0lkE0CcQcu0sGVmlSeqWUsAatYg2Uh6t';
+
+/// `X-API-Key` for the two non-production nodes — `uat.ndid.srisawadpower.com`
+/// and the `dev.swpfin.com/dap` SIT node, which share one key.
+const String _kNdidApiKeyNonProd = 'ndid_Gl_dI1z8JCeHebNbnyzICvpCep3KHLYY1oeDHjfNTXI';
+
+/// The `X-API-Key` for [base], the gateway `NdidApi.baseUrl()` resolved.
+///
+/// **Each gateway accepts only its own key** — verified 2026-09-10 against
+/// `GET /request-types`: the prod key is 401 on uat, and the non-prod key is
+/// 401 on prod. The two therefore have to move together.
+///
+/// They could not, until this existed. The gateway comes from
+/// `api_url['ndid_url_base']` in the Firestore config, which changes with no
+/// rebuild; the key is compiled in. So editing that one field — the whole
+/// point of putting it in config — silently left the key behind, and every
+/// NDID call 401'd until someone shipped a matching build. Keying off the
+/// resolved host makes `ndid_url_base` sufficient on its own again, in both
+/// directions, which is what makes a rollback a config edit rather than a
+/// release.
+///
+/// Matched on host so a path-carrying base (`dev.swpfin.com/dap`) and any
+/// trailing slash both land correctly; an unrecognised gateway gets the
+/// non-prod key, since prod is the one whose key should never be guessed at.
+///
+/// Neither key is secret from anyone who opens the app — a web build ships
+/// whatever it is built with. See the Security posture section of `CLAUDE.md`.
+String ndidApiKeyFor(String base) {
+  if (kNdidApiKey.isNotEmpty) return kNdidApiKey;
+  final host = Uri.tryParse(base)?.host ?? '';
+  return host == 'ndid.srisawadpower.com' ? _kNdidApiKeyProd : _kNdidApiKeyNonProd;
+}
 
 // Removed 2026-07-31: `kNdidTestThaiId` / `NDID_TEST_THAI_ID`.
 //

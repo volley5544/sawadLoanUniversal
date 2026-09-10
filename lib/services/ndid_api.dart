@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../config/app_environment.dart';
 import 'api_transport.dart';
 import 'app_config_api.dart';
+import 'diagnostics.dart';
 import 'ndid_common_message.dart';
 
 /// Client for the **NDID local-node API** (the `localhost:7088` wrapper in
@@ -12,9 +13,19 @@ import 'ndid_common_message.dart';
 /// Only the RP (relying party) endpoints needed by the loan flow are wired:
 ///
 ///   1. `POST /idp/list`                — list identity providers (banks)
-///   2. `POST /rp/verify`               — create a verification request
-///   3. `GET  /rp/verify/{referenceId}` — poll the request status
-///   4. `POST /rp/verify/{referenceId}/close` — cancel (best effort)
+///   2. `GET  /services/{serviceId}/as` — list a service's Authoritative Sources
+///   3. `POST /rp/verify-with-data`     — create a verification request that
+///      also asks one AS for the customer's data. **The normal path since
+///      2026-09-10.** The gateway proxies it to NDID's
+///      `/identity/verify-and-request-data`.
+///   4. `POST /rp/verify`               — the same request with no data. Still
+///      the fallback when no AS can be matched to the chosen IdP.
+///   5. `GET  /rp/verify/{referenceId}` — poll the request status
+///   6. `POST /rp/verify/{referenceId}/close` — cancel (best effort)
+///
+/// The data an AS returns is **backend-only** for now: it goes to the fixed
+/// [dataCallbackUrl] on the srisawad gateway, and the poll response is read
+/// exactly as before ([NdidVerifyStatus] gained nothing).
 ///
 /// The node manages the NDID token itself (its `/token` endpoint); client
 /// auth is an `X-API-Key` header ([kNdidApiKey]). Base URL is resolved per call
@@ -25,6 +36,23 @@ class NdidApi {
 
   static const Duration _timeout = Duration(seconds: 30);
   static const String citizenIdNamespace = 'citizen_id';
+
+  /// NDID service whose data `/rp/verify-with-data` requests — customer info.
+  ///
+  /// Its Authoritative Sources are listed at `GET /services/$dataServiceId/as`;
+  /// see [findAsForIdp] for which of them a request goes to.
+  static const String dataServiceId = '001.cust_info_001';
+
+  /// `callback_url` for `/rp/verify-with-data`. **Fixed** — it is the srisawad
+  /// gateway's own callback, so the AS response lands on the backend rather
+  /// than anywhere this client can see. The returned data is backend-only for
+  /// now, which is why nothing here reads it back.
+  static const String dataCallbackUrl =
+      'https://ndid.srisawadpower.com/ndid/callback';
+
+  /// How many Authoritative Sources must answer. One — [findAsForIdp] resolves
+  /// exactly one, the bank the customer authenticated with.
+  static const int minAs = 1;
 
   /// Assurance levels every request asks for — **IAL 2.3 / AAL 2.2**, raised
   /// from `1.1` / `1` on 2026-07-30.
@@ -65,9 +93,6 @@ class NdidApi {
     return config.ndidUrlBase ?? kNdidApiBase;
   }
 
-  static Future<Uri> _uri(String path) async =>
-      Uri.parse('${await baseUrl()}$path');
-
   /// Optional `request_type` for [createVerifyRequest]: the Firestore config's
   /// `ndid_request_type`, else [kNdidRequestType]. **Empty means send no
   /// `request_type` at all**, which is the default and what uat wants.
@@ -90,10 +115,15 @@ class NdidApi {
     return json.map((e) => e.toString()).toList(growable: false);
   }
 
-  static Map<String, String> _headers({bool json = false}) => {
-        if (json) 'Content-Type': 'application/json',
-        if (kNdidApiKey.isNotEmpty) 'X-API-Key': kNdidApiKey,
-      };
+  /// [base] is the gateway [baseUrl] resolved, because the `X-API-Key` is
+  /// per gateway — see [ndidApiKeyFor].
+  static Map<String, String> _headers(String base, {bool json = false}) {
+    final key = ndidApiKeyFor(base);
+    return {
+      if (json) 'Content-Type': 'application/json',
+      if (key.isNotEmpty) 'X-API-Key': key,
+    };
+  }
 
   /// List identity providers. With [identifier] set (13-digit Thai ID) the
   /// node returns only the IdPs the citizen has onboarded with; without it,
@@ -128,6 +158,86 @@ class NdidApi {
         .toList(growable: false);
   }
 
+  /// List the Authoritative Sources that serve [serviceId]
+  /// (`GET /services/{serviceId}/as`).
+  ///
+  /// Unlike `/idp/list`, the gateway does **not** flatten these: the only
+  /// identifying field is [NdidAs.nodeName], a JSON *string* holding the
+  /// marketing names and codes. [NdidAs.fromJson] parses it.
+  static Future<List<NdidAs>> listServiceAs([String serviceId = dataServiceId]) async {
+    final json = await _get('/services/$serviceId/as');
+    final list = json is Map<String, dynamic>
+        ? (json['as'] ?? json['as_list'] ?? const [])
+        : json; // the prod gateway answers with a bare array
+    if (list is! List) return const [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(NdidAs.fromJson)
+        .toList(growable: false);
+  }
+
+  /// The AS node that is **the same institution** as [idpId], or null.
+  ///
+  /// A bank's IdP node and its AS node are *different* node ids — verified
+  /// 2026-09-10 on the prod gateway, where the 13 IdPs and 14 AS nodes share
+  /// **no** id at all. What they do share is the `(industry_code,
+  /// company_code)` pair inside `node_name`, which matched all 13 exactly. So
+  /// that pair is the join, not the node id and not the display name.
+  ///
+  /// Matching the IdP is deliberate: the customer picked that bank to
+  /// authenticate with and the Request Message names it as the data source, so
+  /// asking a *different* bank for the data would describe one relationship to
+  /// the customer and exercise another. It also needs no hardcoded node id —
+  /// the sample curl's `A18AC373-…` is not on the prod gateway at all, which is
+  /// the `request_type` mistake of 2026-07-31 in a new costume.
+  ///
+  /// Returns null rather than throwing when the pair can't be matched; the
+  /// caller degrades to a verification with no data request.
+  static Future<NdidAs?> findAsForIdp(String idpId,
+      {String serviceId = dataServiceId}) async {
+    if (idpId.isEmpty) return null;
+    final idps = await listIdps();
+    NdidIdp? idp;
+    for (final candidate in idps) {
+      if (candidate.id.toUpperCase() == idpId.toUpperCase()) {
+        idp = candidate;
+        break;
+      }
+    }
+    if (idp == null || !idp.hasInstitutionCode) return null;
+    final sources = await listServiceAs(serviceId);
+    for (final source in sources) {
+      if (source.industryCode == idp.industryCode &&
+          source.companyCode == idp.companyCode) {
+        return source;
+      }
+    }
+    return null;
+  }
+
+  /// [findAsForIdp], with every failure swallowed to null.
+  ///
+  /// The data request is a **bonus** — the customer is here to prove who they
+  /// are, and the AS payload is backend-only today. So a gateway hiccup, a
+  /// service with no matching AS, or an unparseable `node_name` must cost the
+  /// data request, never the identity verification. The reason is logged so
+  /// "why did this go out without data?" is answerable from the WebView
+  /// console.
+  static Future<NdidAs?> _findAsQuietly(String idpId) async {
+    try {
+      final source = await findAsForIdp(idpId);
+      if (source == null) {
+        Diagnostics.log('ndid no AS matches IdP for $dataServiceId — '
+            'verifying without a data request');
+      }
+      return source;
+    } catch (e) {
+      Diagnostics.log('ndid AS lookup failed ($e) — '
+          'verifying without a data request');
+      return null;
+    }
+  }
+
   /// Create a verification request against the chosen IdP. Returns the
   /// reference used to poll [getVerifyStatus].
   ///
@@ -153,14 +263,23 @@ class NdidApi {
     String? requestMessage,
     int requestTimeoutSeconds = 3600,
     String? requestType,
+    NdidAs? dataSource,
   }) async {
     assert(
         transactionRef == null || NdidTransactionRef.isValid(transactionRef),
         'Transaction Ref must be 5-9 digits: $transactionRef');
+    // Resolve the AS first: it decides both the endpoint and whether the
+    // Request Message may name a data source. A failure here must not fail the
+    // verification, so it degrades to the plain request.
+    final source = dataSource ?? await _findAsQuietly(idpId);
     final message = requestMessage ??
-        NdidCommonMessage.requestMessage(transactionRef: transactionRef);
+        NdidCommonMessage.requestMessage(
+          transactionRef: transactionRef,
+          asNames: source == null ? const [] : [source.displayName],
+        );
     final type = requestType ?? await NdidApi.requestType();
-    final json = await _post('/rp/verify', {
+    final path = source == null ? '/rp/verify' : '/rp/verify-with-data';
+    final json = await _post(path, {
       'namespace': citizenIdNamespace,
       'identifier': identifier,
       'request_message': message,
@@ -169,6 +288,17 @@ class NdidApi {
       'min_aal': minAal,
       'min_ial': minIal,
       'mode': 2,
+      if (source != null) ...{
+        'data_request_list': [
+          {
+            'service_id': dataServiceId,
+            'as_id_list': [source.nodeId],
+            'min_as': minAs,
+            'request_params': '{}',
+          },
+        ],
+        'callback_url': dataCallbackUrl,
+      },
       'bypass_identity_check': false,
       'request_timeout': requestTimeoutSeconds,
       // Omitted unless configured — neither gateway requires it, and uat does
@@ -176,7 +306,7 @@ class NdidApi {
       if (type.isNotEmpty) 'request_type': type,
     });
     if (json is! Map<String, dynamic> || json['reference_id'] == null) {
-      throw NdidApiException('Unexpected /rp/verify response: $json');
+      throw NdidApiException('Unexpected $path response: $json');
     }
     return NdidVerifyRequest(
       referenceId: json['reference_id'].toString(),
@@ -214,12 +344,15 @@ class NdidApi {
 
   static Future<dynamic> _request(String method, String path,
       {String? body}) async {
+    // One resolve, so the key cannot come from a different gateway than the
+    // URL it is sent to.
+    final base = await baseUrl();
     final ApiHttpResult res;
     try {
       res = await sendApiRequest(
         method,
-        await _uri(path),
-        headers: _headers(json: body != null),
+        Uri.parse('$base$path'),
+        headers: _headers(base, json: body != null),
         body: body,
         timeout: _timeout,
       );
@@ -264,6 +397,8 @@ class NdidIdp {
     required this.displayNameEn,
     this.logoUrl = '',
     this.hasLogo = false,
+    this.industryCode = '',
+    this.companyCode = '',
   });
 
   final String id;
@@ -283,15 +418,99 @@ class NdidIdp {
   /// this IdP's own artwork. Still worth displaying — it is a clean neutral mark.
   final bool hasLogo;
 
+  /// NDID industry code, e.g. `001` for a bank. Empty when absent.
+  final String industryCode;
+
+  /// NDID company code, e.g. `004` for KBANK. Empty when absent.
+  final String companyCode;
+
+  /// Whether this IdP can be joined to an AS node — see
+  /// [NdidApi.findAsForIdp], which matches on the code pair.
+  bool get hasInstitutionCode =>
+      industryCode.isNotEmpty && companyCode.isNotEmpty;
+
   factory NdidIdp.fromJson(Map<String, dynamic> json) {
     final en = (json['display_name'] ?? '').toString();
     final th = (json['display_name_th'] ?? '').toString();
+    // The gateway flattens the codes onto the entry, but they also live inside
+    // the `node_name` JSON string; read the flat ones and fall back, so this
+    // survives a gateway that only sends the raw node_name (as `/services/…/as`
+    // does).
+    final nested = decodeNodeName(json['node_name']);
+    String code(String key) {
+      final flat = (json[key] ?? '').toString();
+      return flat.isNotEmpty ? flat : (nested[key] ?? '').toString();
+    }
+
     return NdidIdp(
       id: (json['id'] ?? json['node_id'] ?? '').toString(),
       displayNameTh: th.isNotEmpty ? th : en,
       displayNameEn: en,
       logoUrl: (json['logo_url'] ?? '').toString(),
       hasLogo: json['has_logo'] == true,
+      industryCode: code('industry_code'),
+      companyCode: code('company_code'),
+    );
+  }
+}
+
+/// `node_name` as sent by the gateway: a JSON **string** holding
+/// `industry_code`, `company_code`, `marketing_name_th/en`, `role`, `running`.
+///
+/// `/idp/list` also flattens those onto the entry; `/services/{id}/as` does
+/// not, so parsing this is the only way to identify an AS node. Never throws —
+/// a malformed or absent value gives an empty map, and the caller degrades to
+/// no data request rather than failing a verification over a name.
+Map<String, dynamic> decodeNodeName(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  final text = (raw ?? '').toString();
+  if (text.isEmpty) return const {};
+  try {
+    final decoded = jsonDecode(text);
+    return decoded is Map<String, dynamic> ? decoded : const {};
+  } catch (_) {
+    return const {};
+  }
+}
+
+/// One Authoritative Source of an NDID service, from
+/// `GET /services/{serviceId}/as`.
+class NdidAs {
+  const NdidAs({
+    required this.nodeId,
+    required this.industryCode,
+    required this.companyCode,
+    required this.marketingNameTh,
+    required this.marketingNameEn,
+    this.minIal = 0,
+    this.minAal = 0,
+  });
+
+  final String nodeId;
+  final String industryCode;
+  final String companyCode;
+  final String marketingNameTh;
+  final String marketingNameEn;
+  final double minIal;
+  final num minAal;
+
+  /// The name to show a customer — Thai, falling back to English. This is what
+  /// goes in the Request Message's AS clause, so it must be a **marketing
+  /// name**, never a node id (§6.2.1 bullet 4).
+  String get displayName =>
+      marketingNameTh.isNotEmpty ? marketingNameTh : marketingNameEn;
+
+  factory NdidAs.fromJson(Map<String, dynamic> json) {
+    final name = decodeNodeName(json['node_name']);
+    String field(String key) => (json[key] ?? name[key] ?? '').toString();
+    return NdidAs(
+      nodeId: (json['node_id'] ?? json['id'] ?? '').toString(),
+      industryCode: field('industry_code'),
+      companyCode: field('company_code'),
+      marketingNameTh: field('marketing_name_th'),
+      marketingNameEn: field('marketing_name_en'),
+      minIal: double.tryParse('${json['min_ial']}') ?? 0,
+      minAal: num.tryParse('${json['min_aal']}') ?? 0,
     );
   }
 }

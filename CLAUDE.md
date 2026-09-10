@@ -1651,13 +1651,68 @@ failures throw `ApiTransportException`.
 `NdidApi` — static `http` client for the **NDID local-node API** (the
 `localhost:7088` wrapper; Postman collection + proxy spec live in the
 untracked `ndid_doc/` folder). Only the RP-role endpoints the flow needs:
-`listIdps()` (`POST /idp/list`), `createVerifyRequest()` (`POST /rp/verify`,
-mode 2, `request_type` per **gateway** — see below; returns the gateway's
+`listIdps()` (`POST /idp/list`), `listServiceAs()`
+(`GET /services/{serviceId}/as`), `findAsForIdp()`,
+`createVerifyRequest()` (**`POST /rp/verify-with-data`** since 2026-09-10, mode
+2, `request_type` per **gateway** — see below; returns the gateway's
 `transaction_ref`, see **Issue 2** under **NDID Common Message standard**),
 `getVerifyStatus()`
 (`GET /rp/verify/{referenceId}`, status `CREATED|PENDING|ACCEPTED|REJECTED|
 TIMEOUT|CANCELLED`), `closeVerifyRequest()` (best-effort cancel). Errors throw
 `NdidApiException` (parses the node's `{status, message}` error body).
+
+**`/rp/verify-with-data` — the data request** (2026-09-10). The verification
+now also asks one Authoritative Source for the customer's info. Body is the old
+`/rp/verify` one plus two fields:
+
+```jsonc
+"data_request_list": [{ "service_id": "001.cust_info_001",
+                        "as_id_list": ["<AS node id>"],
+                        "min_as": 1, "request_params": "{}" }],
+"callback_url": "https://ndid.srisawadpower.com/ndid/callback"
+```
+
+`callback_url` is **fixed** — the srisawad gateway's own callback — so the AS
+payload lands on the backend. **Nothing client-side reads it back**:
+`NdidVerifyStatus` is unchanged and the poll is parsed exactly as before.
+
+**Which AS: the same institution as the chosen IdP.** `findAsForIdp` resolves it
+rather than hardcoding one, and the reason is worth keeping:
+
+- **A bank's IdP node id and its AS node id are different values.** Verified
+  2026-09-10 on the prod gateway — the 13 IdPs and 14 AS nodes share **no** id.
+  What they share is `(industry_code, company_code)` inside `node_name`, which
+  matched all 13 exactly. That pair is the join; the node id is not, and neither
+  is the display name.
+- **The sample curl's `as_id_list` value is not on the prod gateway at all.**
+  Baking `A18AC373-…` in would have been the hardcoded `'Authen Only'`
+  `request_type` mistake of 2026-07-31 in a new costume — a gateway-specific id
+  compiled into the client, failing only on the environment that matters.
+- **It is what the customer consented to.** They picked that bank to
+  authenticate with, and the Request Message names it as the data source, so
+  asking a *different* bank would describe one relationship and exercise another.
+
+⚠ `GET /services/{id}/as` does **not** flatten its entries the way `/idp/list`
+does: the only identifying field is `node_name`, a JSON **string**. `NdidAs`
+parses it; `decodeNodeName` never throws, so a malformed value costs the data
+request, not the verification.
+
+**A failed AS lookup degrades to `POST /rp/verify`**, with no
+`data_request_list` and no AS clause in the message. The customer is there to
+prove who they are and the AS payload is backend-only, so a gateway hiccup or an
+unmatched IdP must not fail the identity step. Every such fall-back leaves a
+`Diagnostics.log` breadcrumb (readable from the `(UAT ver…)` tag), because
+otherwise "why did this go out without data?" is unanswerable from a device.
+
+⚠ It costs **two extra gateway calls** per verification creation (`/idp/list` +
+`/services/{id}/as`), which the 100-per-900 s rate limit absorbs easily — they
+happen once, not per poll. See the rate-limit note below before adding more.
+
+**Verified against the live gateway 2026-09-10**, body-shape only: posting the
+generated body with citizen `0000000000000` reached `20005 - No IdP found`, i.e.
+past structural validation, creating no real request. The response names the
+proxied endpoint, `/identity/verify-and-request-data`. ⚠ **No real customer has
+run this path yet** — see Outstanding #27.
 
 **Assurance levels are two shared constants** — `NdidApi.minIal` **2.3** /
 `NdidApi.minAal` **2.2**, raised from `1.1` / `1` on 2026-07-30. Both `/idp/list`
@@ -1673,9 +1728,27 @@ host's `httpRequest` JS bridge handler (native HTTP, allowlisted to the NDID
 gateway; contract in `native_bridge.dart`'s doc comment, implementation in the
 srisawad app's `loan_universal_web_widget.dart`); plain `http` is only the
 plain-browser/dev fallback. The
-node manages its own NDID token; client auth is an `X-API-Key` header
-(`kNdidApiKey`, `--dart-define=NDID_API_KEY`, has a baked-in default — note a
-web build can't keep it secret from clients anyway).
+node manages its own NDID token; client auth is an `X-API-Key` header — note a
+web build can't keep it secret from clients anyway.
+
+**⚠ The key is per gateway, and travels with `ndid_url_base`** (2026-09-10).
+Each node accepts only its own, verified against `GET /request-types`: the prod
+key is **401** on uat and the non-prod key is **401** on prod. That is a trap,
+because the gateway comes from the Firestore config — editable with no rebuild —
+while the key is compiled in, so editing that one field used to leave the key
+behind and 401 every NDID call until someone shipped a matching build.
+
+`ndidApiKeyFor(base)` (`config/app_environment.dart`) closes it by picking the
+key off the **resolved host**, so `ndid_url_base` is sufficient on its own in
+both directions and a rollback is a config edit rather than a release.
+`NdidApi._request` resolves the base **once** and passes it to `_headers`, so a
+key can't be paired with a different gateway than the URL it is sent to.
+Matching is on `Uri.host`, so the SIT node's path (`dev.swpfin.com/dap`) and any
+trailing slash both land correctly, and an unrecognised gateway gets the
+**non-prod** key — prod's is the one that should never be guessed at.
+`--dart-define=NDID_API_KEY=…` still pins one key for every gateway;
+`kNdidApiKey` is now **empty by default**, which is what enables the pairing.
+`test/ndid_api_key_test.dart` pins all of it, including that no override ships.
 
 **⚠ The gateway rate-limits to 100 requests per 900 s, and the 3 s poll blows
 it.** Found 2026-07-31 in the response headers (`ratelimit-policy: 100;w=900`,
@@ -1740,7 +1813,8 @@ right one.
 `https://dev.swpfin.com/dap`). Config first because the key is **per-project**,
 so the uat document points at the uat node and prod's at prod without a rebuild;
 the define stays as the degrade-to value when the document can't be read. It's
-awaited per request, so `_uri` is `Future<Uri>` now. Point the define at
+awaited per request — `_request` resolves it once and builds both the URL and
+the `X-API-Key` from that one value. Point the define at
 `http://localhost:7088` to hit a locally-run node — an `http:` URL additionally
 needs the WebView to allow mixed content when the app is served over `https:`.
 
@@ -1751,8 +1825,10 @@ through `httpRequest` and refuses any URL outside its compiled-in
 gateway the app then rejects with `URL not allowed` — which is exactly the state
 uat is in right now, see **Outstanding** #22.
 
-The uat document currently holds **`https://uat.ndid.srisawadpower.com`**, which
-is a *different node* from the DAP dev gateway the define defaults to: it returns
+The uat document holds **`https://ndid.srisawadpower.com`** — the **production**
+NDID gateway — changed 2026-09-10 on request; it held
+`https://uat.ndid.srisawadpower.com` from 2026-07-31 until then. Both are a
+*different node* from the DAP dev gateway the define defaults to: they return
 **real banks** (ธนาคารเกียรตินาคินภัทร, เจ เวนเจอร์ส, …) with `logo_url`s, not the
 DAP node's `idp1/idp2/idp4`. Because it has **real identities**, the
 `kNdidTestThaiId` substitution was deleted on 2026-07-31 (see **NDID signing**) —
@@ -1839,14 +1915,23 @@ shows. One generator is what guarantees that, and it is now the backend's.
 account was available the day it shipped. What to check, and what each failure
 looks like, is Outstanding #26.
 
-⚠ **The Request Message drops the standard's AS clause.** The template is
-*"…ของ [RP] และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …] (Transaction Ref:…)"*, but
-this flow calls `POST /rp/verify` in mode 2 with **no `data_request_list`** —
-there is no Authoritative Source in the request, and naming a bank would tell the
-customer their data is being fetched when it is not. §6.2.1 bullet 2 permits
-adjusting wording for clarity. If a data request is ever added, put the AS names
-back. **The reviewer's reference image shows an AS**, so confirm this against the
-submitted user-journey document.
+**The Request Message carries the standard's AS clause again** (2026-09-10).
+The template is
+*"…ของ [RP] และประสงค์ให้ส่งข้อมูลจาก [AS 1, AS 2, …] (Transaction Ref:…)"*, and
+now that `createVerifyRequest` posts `/rp/verify-with-data` with a
+`data_request_list`, there **is** an Authoritative Source to name — the one bank
+the customer picked as their IdP. `NdidCommonMessage.requestMessage` takes
+`asNames` and renders the clause before the Transaction Ref.
+
+It is still **conditional**, because the no-data path is real: when no AS matches
+the chosen IdP the request degrades to plain `POST /rp/verify`, and naming a bank
+there would tell the customer their data is being fetched when it is not. §6.2.1
+bullet 2 permits adjusting wording for clarity, and describing exactly the
+parties in the request is the honest reading either way.
+
+⚠ Between 2026-08-28 and 2026-09-10 the clause was dropped unconditionally, and
+**the reviewer's reference image shows an AS** — so the with-data path is what
+the submitted user journey describes. Confirm against that document (#25).
 
 **Issue 3 — the error messages are the standard's, not ours.** The verify page
 used four sentences of its own (`'การยืนยันตัวตนถูกปฏิเสธจากธนาคาร'`, …). Now
@@ -1887,11 +1972,16 @@ wording at [6] — left out because the PDF marks it
 for it, that is where it went. Adding it is two lines in `forStatus` plus a test.
 
 **Five of the 13 IdP codes cannot be produced from a handset** (`30000`, `30200`,
-`30400`, `30700`, `30900`) — they need NDID or the bank to inject them — and the
-**five AS codes can never occur at all**, since `POST /rp/verify` goes out mode 2
-with no `data_request_list`, so no Authoritative Source is in the request. So
-finding 3 cannot be fully evidenced by device testing alone; the AS half is
-evidenced by the unit tests. Ask for injection support when booking the retest.
+`30400`, `30700`, `30900`) — they need NDID or the bank to inject them. So
+finding 3 cannot be fully evidenced by device testing alone; ask for injection
+support when booking the retest.
+
+⚠ **The five AS codes are reachable now** (changed 2026-09-10). They were
+impossible while every request went out with no `data_request_list`;
+`/rp/verify-with-data` puts an Authoritative Source in the request, so
+`40000`–`40500` can actually arrive and `forErrorCode` will render them. They
+are no longer evidenced by unit test alone — but they have **not** been seen on
+a live request either, so treat the mapping as untested against the wire.
 
 Two supporting details:
 
@@ -2153,11 +2243,16 @@ exists to stop that recurring; it is checked in, so deploy it with
 
 Credentials that ship in the web bundle, and therefore are **not** secret from
 anyone who opens the app: the Firebase web API key (fine — it grants nothing) and
-`kNdidApiKey`. The shared Basic service account `kPLoanSaveApiAuth` **used to be
+the **two** NDID gateway keys — `_kNdidApiKeyProd` and `_kNdidApiKeyNonProd`,
+picked per gateway by `ndidApiKeyFor` (2026-09-10; it was a single
+`kNdidApiKey` default before). Two rather than one because each gateway rejects
+the other's key, so the bundle has to carry whichever one the Firestore config
+may point at — the alternative was an app-release-coupled key, not a smaller
+attack surface. The shared Basic service account `kPLoanSaveApiAuth` **used to be
 here too** — it was **deleted 2026-08-04** when the P-Loan save endpoint moved to
 `POST /ploan`, which authenticates with the customer's own Firebase bearer token
-(see **P-Loan save API**). So the only baked-in secret still worth rotating is
-`kNdidApiKey` (a web build can't keep it from clients anyway).
+(see **P-Loan save API**). So the only baked-in secrets still worth rotating are
+the two NDID keys (a web build can't keep either from clients anyway).
 
 ~~**One identity check is deliberately weakened off prod.**~~ **Closed
 2026-07-31.** `kNdidTestThaiId` made non-prod builds run NDID against
@@ -2190,8 +2285,8 @@ reason recorded.
    [History](docs/HISTORY.md#outstanding-2-3).
 3. ~~Do something about `kPLoanSaveApiAuth`.~~ **Resolved 2026-08-04.** The
    Basic service credential was **deleted** with the move to bearer auth on
-   `/ploan`. `kNdidApiKey` is the only baked-in secret left — a web build
-   can't hide it regardless.
+   `/ploan`. The two NDID gateway keys are the only baked-in secrets left — a
+   web build can't hide them regardless.
 4. **Bump `sawad_loan_universal_version_uat` in the *srisawad host's* appConfig**
    to match the deployed `WEB_VERSION` (**74** as of 2026-08-31), or the host's
    stale-cache auto-reload never fires. Note the number now moves on most
@@ -2292,25 +2387,34 @@ reason recorded.
     server clock it should use rides on the contract. See `_isExpired`.
 22. **🚧 An app release is what stands between uat and a real NDID test — and
     in-app NDID is unusable until then.** The uat config points NDID at
-    `https://uat.ndid.srisawadpower.com`, which the host **must** allowlist
-    because that gateway sends no `access-control-allow-*` headers (verified), so
-    the bridge is mandatory and a plain browser cannot substitute — outside the
-    host the bank-select page loads its **mock** grid, not the real API.
-    `_kHttpRequestAllowedPrefixes` in the srisawad host's
-    `loan_universal_web_widget.dart` has been updated with that host plus the two
-    Google API hosts, but it is an **uncommitted working-tree edit on `main`** in
-    that repo — commit/branch it before it is lost, and note only a new
-    Android/iOS build carries it (same constraint as #10).
+    **`https://ndid.srisawadpower.com`** (the production gateway, set
+    2026-09-10 — it was `https://uat.ndid.srisawadpower.com` before), which the
+    host **must** allowlist because that gateway sends no
+    `access-control-allow-*` headers (re-verified 2026-09-10 on the prod host),
+    so the bridge is mandatory and a plain browser cannot substitute — outside
+    the host the bank-select page loads its **mock** grid, not the real API.
 
-    Meanwhile the current state, confirmed on a real device 2026-07-31 with
-    `1160200006026`: the app falls back to the DAP gateway, whose full list at
-    2.3/2.2 is `idp1/idp2/idp4`, and the registered grid is **empty** because the
-    real customer id is now sent and DAP only ever knew `1234567890123`. So
-    **no** customer can complete NDID in the app right now. That is the cost of
-    retiring the test identity before the new gateway became reachable; it was
-    accepted knowingly. A stopgap, if testing can't wait for the build: point
-    `ndid_url_base` back at `https://dev.swpfin.com/dap` **and** reinstate a
-    test-identity path — both, since either alone still fails.
+    `_kHttpRequestAllowedPrefixes` in the srisawad host's
+    `loan_universal_web_widget.dart` now carries
+    `https://ndid.srisawadpower.com/` **and** the uat host **and** the two
+    Google API hosts. The uat + Google entries are committed; the prod NDID one
+    was added 2026-09-10 and is an **uncommitted working-tree edit on `main`**
+    in that repo — commit/branch it before it is lost. Only a new Android/iOS
+    build carries any of them (same constraint as #10).
+
+    ⚠ Prefix matching is `url.startsWith`, and
+    `https://ndid.srisawadpower.com/` is **not** a prefix of
+    `https://uat.ndid.srisawadpower.com/` — the uat entry never covered prod.
+    A shipped app without the new entry fails every NDID call with
+    `{"status":0,"error":"URL not allowed: …"}`, which is the state today.
+
+    The gateway is reachable and the key is right — `GET /request-types` on the
+    prod host returns `200` with the four `dsign.*`/`easyconnext`/`idpconnext`
+    types (2026-09-10). What is missing is only the host build. A stopgap, if
+    testing can't wait: point `ndid_url_base` back at
+    `https://uat.ndid.srisawadpower.com`, which **is** allowlisted in the
+    shipped app — the key follows automatically now (see **NDID API client**),
+    so that rollback is a one-field Firestore edit with no rebuild.
 
 23. **A declined NDID agreement is logged only in the session.** ปฏิเสธ on
     `ndid_terms_page` calls `Diagnostics.log`, which is an in-memory breadcrumb
@@ -2335,8 +2439,9 @@ reason recorded.
 24c. **Ask NDID for error-code injection on the uat node.** Five IdP codes
     (`30000`, `30200`, `30400`, `30700`, `30900`) cannot be produced from a
     handset, so finding 3 cannot be fully evidenced by device testing without
-    NDID's help. The five AS codes cannot occur at all (mode 2, no
-    `data_request_list`) and are evidenced by unit test instead. Device runbook:
+    NDID's help. ⚠ The five AS codes **became reachable on 2026-09-10** with
+    `/rp/verify-with-data` — they are no longer unit-test-only, but no live
+    request has produced one, so ask for those to be injectable too. Device runbook:
     the **NDID Common Message Runbook** artifact (2026-09-01) —
     https://claude.ai/code/artifact/bbafc7f1-640b-4853-9604-0596fd4a51f0
 25. **Re-record the NDID review video, and re-check the Request Message against
@@ -2348,6 +2453,14 @@ reason recorded.
     the journey or the request has to change — see **NDID Common Message
     standard**. ⚠ Do the run in #26 first — the Transaction Ref the video must
     show is the gateway's now, and nobody has yet seen one arrive.
+
+    **Update 2026-09-10:** the AS half of this is resolved in code — the switch
+    to `/rp/verify-with-data` puts an Authoritative Source in the request and
+    the Request Message names it, so the build now matches the reviewer's
+    reference image instead of contradicting it. What remains is confirming the
+    **specific** bank: the reference shows ธนาคารกสิกรไทย, while this build names
+    whichever bank the customer picked as their IdP. If the submitted journey
+    promises one fixed AS, say so and it becomes a config value.
 26. **⏳ `transaction_ref` has never been seen on a live request.** Shipped
     2026-08-31 (uat `WEB_VERSION` 74) and **untested** — there was no NDID
     test-case account to hand, one is coming from another team. Shipped on that
@@ -2373,6 +2486,27 @@ reason recorded.
     named: pass `transactionRef` to `NdidApi.createVerifyRequest` again
     (`NdidTransactionRef.generate()` is still there for exactly this) and prefer
     the local value over the response's on screen.
+
+27. **⏳ `/rp/verify-with-data` has never run against a real customer.** Shipped
+    2026-09-10. The **body shape is confirmed** — posting the generated body
+    reached `20005 - No IdP found`, past structural validation — and the AS
+    resolution is pinned by tests against live-read fixtures. Untested is
+    everything after that point:
+
+    - **that an AS actually returns data**, and that the backend receives it on
+      `callback_url`. Nothing client-side can observe this; ask the API team to
+      confirm the callback fired.
+    - **that the IdP app shows the AS clause** in the Request Message. Same
+      single glance that settles #26 — check for both while you have the handset.
+    - **that a real IdP → AS pair resolves.** All 13 matched on the prod gateway,
+      but if a customer picks a bank whose AS is absent the flow silently
+      degrades to `/rp/verify`. The breadcrumb `ndid no AS matches IdP …` under
+      the `(UAT ver…)` tag is what tells you that happened.
+    - ⚠ **the AS error codes** `40000`–`40500`, newly reachable and never seen
+      (#24c).
+
+    ⚠ Blocked behind the same app release as #22 — in-app NDID cannot reach the
+    prod gateway until the host allowlist ships.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
