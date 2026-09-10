@@ -1911,9 +1911,11 @@ The same number must appear in two places, which is the other half of the
 finding: on our waiting screen **and** inside the `request_message` the IdP app
 shows. One generator is what guarantees that, and it is now the backend's.
 
-⚠ **None of this has been seen working on a live request** — no NDID test-case
-account was available the day it shipped. What to check, and what each failure
-looks like, is Outstanding #26.
+✅ **The gateway does send `transaction_ref`** — confirmed on a live run
+2026-09-10, showing a real value on the countdown screen rather than `-`. So
+the display half of issue 2 is done. ⏳ What the **IdP app** shows is still
+unconfirmed, and that is the half that could fail the review again; see
+Outstanding #26 for why it keeps not getting checked and what to ask for.
 
 **The Request Message carries the standard's AS clause again** (2026-09-10).
 The template is
@@ -2461,52 +2463,69 @@ reason recorded.
     **specific** bank: the reference shows ธนาคารกสิกรไทย, while this build names
     whichever bank the customer picked as their IdP. If the submitted journey
     promises one fixed AS, say so and it becomes a config value.
-26. **⏳ `transaction_ref` has never been seen on a live request.** Shipped
-    2026-08-31 (uat `WEB_VERSION` 74) and **untested** — there was no NDID
-    test-case account to hand, one is coming from another team. Shipped on that
-    basis deliberately; two things need a real run, and the second is the one
-    that could fail the review again:
+26. **🟡 `transaction_ref` arrives — but what the IdP app displays is still
+    unseen.** Shipped 2026-08-31 (uat `WEB_VERSION` 74); first live run
+    2026-09-10.
 
-    - **that the field arrives.** Probing `POST /rp/verify` with an empty body
-      shows `transaction_ref` is not *required* on the request, which says
-      nothing about the response. If the deployed gateway predates the change the
-      screen shows `-`, and the breadcrumb trail (tap the `(UAT ver…)` tag) reads
-      `ndid transaction_ref absent from gateway response`. A value that arrives
-      but breaks p.38's format logs `… is not 5-9 digits` — it is still
-      displayed, because it is what the IdP is quoting.
-    - **that the IdP app really shows the `(Transaction Ref: …)` clause.**
-      `request_message` is still required by the gateway, so this build keeps
-      sending it — now *without* a reference, because the backend appends its
-      own. If the backend does not in fact append it, the bank's app shows **no
-      reference at all**: NDID's issue 2 failed from the other side, and our own
-      screen would look perfectly correct. One glance at the IdP screen settles
-      it.
+    - ✅ **The field arrives.** A real run showed a genuine `transaction_ref` on
+      the countdown screen, not `-`. So the gateway does generate and return it,
+      and the half of NDID's issue 2 that is ours to display is **done**. (Had
+      it been absent the breadcrumb trail — tap the `(UAT ver…)` tag — would read
+      `ndid transaction_ref absent from gateway response`; a value breaking
+      p.38's format logs `… is not 5-9 digits` and is still displayed, being
+      what the IdP quotes.)
+    - ⏳ **Whether the IdP app shows the `(Transaction Ref: …)` clause is still
+      not confirmed**, and this is the half that could fail the review again.
+      This build sends `request_message` *without* a reference, on the
+      understanding that the backend appends its own. If it does not, the bank's
+      app shows **no reference at all** while our screen looks perfectly
+      correct — the failure is invisible from this side by construction.
+
+      Reported 2026-09-10 as *"น่าจะได้แล้ว"* — **treat that as unverified**,
+      not as a pass.
+
+    ⚠ **Why this one keeps not getting checked** (worth knowing before planning
+    the next attempt): verifying means someone opening *their own* mobile
+    banking app, and on 2026-09-10 that person was in a different location from
+    the tester. Nobody on the call could see the IdP screen. So this is not
+    laziness or an oversight — the check needs either co-location or the account
+    holder sending **one screenshot of the bank's consent screen**. Ask for the
+    screenshot; it settles this bullet and the AS-name question in #27 together.
 
     If the clause turns out to be ours to add after all, the revert is small and
     named: pass `transactionRef` to `NdidApi.createVerifyRequest` again
     (`NdidTransactionRef.generate()` is still there for exactly this) and prefer
     the local value over the response's on screen.
 
-27. **⏳ `/rp/verify-with-data` has never run against a real customer.** Shipped
-    2026-09-10. The **body shape is confirmed** — posting the generated body
-    reached `20005 - No IdP found`, past structural validation — and the AS
-    resolution is pinned by tests against live-read fixtures. Untested is
-    everything after that point:
+27. **🟡 `/rp/verify-with-data` works end to end — one thing left unseen.**
+    Shipped 2026-09-10 and exercised the same day.
 
-    - **that an AS actually returns data**, and that the backend receives it on
-      `callback_url`. Nothing client-side can observe this; ask the API team to
-      confirm the callback fired.
-    - **that the IdP app shows the AS clause** in the Request Message. Same
-      single glance that settles #26 — check for both while you have the handset.
-    - **that a real IdP → AS pair resolves.** All 13 matched on the prod gateway,
-      but if a customer picks a bank whose AS is absent the flow silently
-      degrades to `/rp/verify`. The breadcrumb `ndid no AS matches IdP …` under
-      the `(UAT ver…)` tag is what tells you that happened.
-    - ⚠ **the AS error codes** `40000`–`40500`, newly reachable and never seen
-      (#24c).
+    - ✅ **The data reaches the backend.** A live run delivered the AS payload to
+      `callback_url`, confirmed by the user. So the AS responds, the gateway
+      forwards, and the callback fires — the whole point of the endpoint. Note
+      **nothing client-side can observe this**: `NdidVerifyStatus` is unchanged
+      and reads no data, by design, so this can only ever be confirmed from the
+      backend side.
+    - ✅ **A real IdP → AS pair resolves.** Matching on
+      `(industry_code, company_code)` held on a real run, as the live reads
+      predicted: **13 of 13** on prod, **16 of 16** on uat. If a customer ever
+      picks a bank whose AS is absent, the flow silently degrades to
+      `/rp/verify` and the breadcrumb `ndid no AS matches IdP …` under the
+      `(UAT ver…)` tag is what says so.
+    - ✅ **The body shape** — the generated body reached `20005 - No IdP found`
+      on prod, past structural validation; both endpoints also verified present
+      on uat (`/services/{id}/as` 200, `/rp/verify-with-data` 400-on-empty).
+    - ⏳ **That the IdP app shows the AS clause** in the Request Message is
+      **still unconfirmed** — reported as *"น่าจะได้แล้ว"*, which is not a pass.
+      It needs the account holder's own screen; see the co-location note in #26,
+      and get it from the same screenshot.
+    - ⏳ ⚠ **The AS error codes** `40000`–`40500`, newly reachable and still
+      never seen (#24c).
 
-    ⚠ Blocked behind the same app release as #22 — in-app NDID cannot reach the
-    prod gateway until the host allowlist ships.
+    ⚠ Confirmed against the **uat** gateway. Prod is still blocked behind the
+    same app release as #22 — the shipped app does not allowlist
+    `ndid.srisawadpower.com`, so in-app NDID cannot reach it. The uat gateway is
+    allowlisted, which is why testing could proceed at all.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
