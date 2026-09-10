@@ -108,7 +108,9 @@ void main() {
         msg.indexOf('ส่งข้อมูลจาก'),
         lessThan(msg.indexOf('Transaction Ref')),
       );
-      expect(msg, endsWith('(Transaction Ref: 12345678)'));
+      // No space after the colon — p.38's template and the gateway's own
+      // rendering both omit it (observed 2026-09-10).
+      expect(msg, endsWith('(Transaction Ref:12345678)'));
     });
 
     test('several AS names are comma-joined', () {

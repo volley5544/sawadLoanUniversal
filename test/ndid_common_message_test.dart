@@ -56,7 +56,9 @@ void main() {
     test('names the RP and quotes the Transaction Ref', () {
       final msg = NdidCommonMessage.requestMessage(transactionRef: '000000001');
       expect(msg, contains(NdidCommonMessage.rpMarketingName));
-      expect(msg, contains('Transaction Ref: 000000001'));
+      // No space after the colon: p.38's template and the gateway's own
+      // rendering both omit it (observed 2026-09-10 on a KBank consent screen).
+      expect(msg, contains('Transaction Ref:000000001'));
       expect(msg, startsWith('ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของ'));
     });
 
@@ -73,12 +75,23 @@ void main() {
       expect(NdidCommonMessage.requestMessage(transactionRef: ''), msg);
     });
 
-    test('claims no Authoritative Source, because the request asks for none',
-        () {
-      // Mode 2 with no data_request_list: naming a bank here would tell the
-      // customer their data is being fetched when it is not.
+    test('claims no Authoritative Source when none is asked for', () {
+      // The degraded path: /rp/verify with no data_request_list, which is what
+      // runs when no AS matches the chosen IdP. Naming a bank here would tell
+      // the customer their data is being fetched when it is not.
       final msg = NdidCommonMessage.requestMessage(transactionRef: '123456789');
       expect(msg, isNot(contains('ประสงค์ให้ส่งข้อมูลจาก')));
+    });
+
+    test('names the Authoritative Source when one is asked for', () {
+      // The normal path since 2026-09-10: /rp/verify-with-data. Confirmed
+      // against a live KBank consent screen, which showed exactly this clause.
+      final msg = NdidCommonMessage.requestMessage(
+        asNames: const ['ธนาคารกสิกรไทย'],
+        transactionRef: '312461174',
+      );
+      expect(msg, contains('และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย'));
+      expect(msg, endsWith('(Transaction Ref:312461174)'));
     });
   });
 

@@ -1911,11 +1911,14 @@ The same number must appear in two places, which is the other half of the
 finding: on our waiting screen **and** inside the `request_message` the IdP app
 shows. One generator is what guarantees that, and it is now the backend's.
 
-✅ **The gateway does send `transaction_ref`** — confirmed on a live run
-2026-09-10, showing a real value on the countdown screen rather than `-`. So
-the display half of issue 2 is done. ⏳ What the **IdP app** shows is still
-unconfirmed, and that is the half that could fail the review again; see
-Outstanding #26 for why it keeps not getting checked and what to ask for.
+✅ **Verified end to end 2026-09-10 — issue 2 is closed.** A live run showed
+`312461174` on our countdown screen, and the KBank consent screen quoted the
+**same** reference inside the forwarded message, complete with the AS clause.
+So the gateway generates it, appends the clause, and returns the value; one
+generator, one number, both places. Evidence and the exact rendered text are in
+Outstanding #26. ⚠ Note the gateway writes `(Transaction Ref:N)` with **no
+space** after the colon, matching p.38; `requestMessage` was corrected to
+match.
 
 **The Request Message carries the standard's AS clause again** (2026-09-10).
 The template is
@@ -2463,9 +2466,10 @@ reason recorded.
     **specific** bank: the reference shows ธนาคารกสิกรไทย, while this build names
     whichever bank the customer picked as their IdP. If the submitted journey
     promises one fixed AS, say so and it becomes a config value.
-26. **🟡 `transaction_ref` arrives — but what the IdP app displays is still
-    unseen.** Shipped 2026-08-31 (uat `WEB_VERSION` 74); first live run
-    2026-09-10.
+26. ~~**`transaction_ref` has never been seen on a live request.**~~
+    **✅ Closed 2026-09-10.** Shipped 2026-08-31 (uat `WEB_VERSION` 74);
+    verified end to end on uat `WEB_VERSION` 82, our screen and the bank's
+    quoting the same reference.
 
     - ✅ **The field arrives.** A real run showed a genuine `transaction_ref` on
       the countdown screen, not `-`. So the gateway does generate and return it,
@@ -2474,31 +2478,38 @@ reason recorded.
       `ndid transaction_ref absent from gateway response`; a value breaking
       p.38's format logs `… is not 5-9 digits` and is still displayed, being
       what the IdP quotes.)
-    - ⏳ **Whether the IdP app shows the `(Transaction Ref: …)` clause is still
-      not confirmed**, and this is the half that could fail the review again.
-      This build sends `request_message` *without* a reference, on the
-      understanding that the backend appends its own. If it does not, the bank's
-      app shows **no reference at all** while our screen looks perfectly
-      correct — the failure is invisible from this side by construction.
+    - ✅ **The IdP app shows the clause, with the same number.** Confirmed
+      2026-09-10 from a KBank consent screen photographed beside our own
+      waiting screen: both quoted **`312461174`**. So the backend really does
+      append the clause to the message it forwards, and NDID's issue 2 is
+      **closed on both sides** — which was the one thing that could have failed
+      the review again while our screen looked perfectly correct.
 
-      Reported 2026-09-10 as *"น่าจะได้แล้ว"* — **treat that as unverified**,
-      not as a pass.
+      What the bank rendered, in full:
 
-    ⚠ **Why this one keeps not getting checked** (worth knowing before planning
-    the next attempt): verifying means someone opening *their own* mobile
-    banking app, and on 2026-09-10 that person was in a different location from
-    the tester. Nobody on the call could see the IdP screen. So this is not
-    laziness or an oversight — the check needs either co-location or the account
-    holder sending **one screenshot of the bank's consent screen**. Ask for the
-    screenshot; it settles this bullet and the AS-name question in #27 together.
+      > ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของบริษัท ศรีสวัสดิ์ พาวเวอร์
+      > 2014 จำกัด และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย
+      > (Transaction Ref:312461174)
 
-    If the clause turns out to be ours to add after all, the revert is small and
-    named: pass `transactionRef` to `NdidApi.createVerifyRequest` again
-    (`NdidTransactionRef.generate()` is still there for exactly this) and prefer
-    the local value over the response's on screen.
+      Four things fall out of that one screenshot: the RP name is ours, the AS
+      clause is present and names the chosen bank (so #27's open bullet closes
+      too), the reference is 9 digits of digits only — legal under p.38, at the
+      maximum length — and the timings line up (KBank stamped 13:30 and asked
+      for confirmation by 14:30, i.e. the `request_timeout` of 3600 s).
 
-27. **🟡 `/rp/verify-with-data` works end to end — one thing left unseen.**
-    Shipped 2026-09-10 and exercised the same day.
+    ⚠ **The gateway writes `(Transaction Ref:N)` with no space after the
+    colon**, which is how p.38's own template writes it. `requestMessage` had a
+    space; corrected 2026-09-10. That branch only runs for a gateway composing
+    no clause of its own (SIT/DAP), but the two paths should be
+    indistinguishable to a customer.
+
+    If the clause ever turns out to be ours to add after all, the revert is
+    small and named: pass `transactionRef` to `NdidApi.createVerifyRequest`
+    again (`NdidTransactionRef.generate()` is still there for exactly this) and
+    prefer the local value over the response's on screen.
+
+27. **🟢 `/rp/verify-with-data` is verified end to end.** Shipped and exercised
+    2026-09-10 on the uat gateway. Only the AS **error codes** remain unseen.
 
     - ✅ **The data reaches the backend.** A live run delivered the AS payload to
       `callback_url`, confirmed by the user. So the AS responds, the gateway
@@ -2515,10 +2526,11 @@ reason recorded.
     - ✅ **The body shape** — the generated body reached `20005 - No IdP found`
       on prod, past structural validation; both endpoints also verified present
       on uat (`/services/{id}/as` 200, `/rp/verify-with-data` 400-on-empty).
-    - ⏳ **That the IdP app shows the AS clause** in the Request Message is
-      **still unconfirmed** — reported as *"น่าจะได้แล้ว"*, which is not a pass.
-      It needs the account holder's own screen; see the co-location note in #26,
-      and get it from the same screenshot.
+    - ✅ **The IdP app shows the AS clause.** The KBank consent screen in #26
+      read *"และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย"* — the AS named is the
+      bank the customer picked as their IdP, which is exactly what
+      `findAsForIdp` resolves. So the clause, the resolution and the consent the
+      customer actually sees all agree.
     - ⏳ ⚠ **The AS error codes** `40000`–`40500`, newly reachable and still
       never seen (#24c).
 

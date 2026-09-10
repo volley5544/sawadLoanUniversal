@@ -131,7 +131,13 @@ abstract final class NdidCommonMessage {
       buffer.write(' และประสงค์ให้ส่งข้อมูลจาก ${sources.join(', ')}');
     }
     if (transactionRef != null && transactionRef.isNotEmpty) {
-      buffer.write(' (Transaction Ref: $transactionRef)');
+      // No space after the colon: that is how p.38's template writes it, and
+      // how the srisawad gateway actually renders the clause it appends —
+      // verified 2026-09-10 against a KBank consent screen showing
+      // `(Transaction Ref:312461174)`. This branch only runs for a gateway
+      // that composes no clause of its own, so matching the observed format is
+      // what keeps the two paths indistinguishable to a customer.
+      buffer.write(' (Transaction Ref:$transactionRef)');
     }
     return buffer.toString();
   }
