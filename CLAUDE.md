@@ -2397,10 +2397,10 @@ reason recorded.
     `_kHttpRequestAllowedPrefixes` in the srisawad host's
     `loan_universal_web_widget.dart` now carries
     `https://ndid.srisawadpower.com/` **and** the uat host **and** the two
-    Google API hosts. The uat + Google entries are committed; the prod NDID one
-    was added 2026-09-10 and is an **uncommitted working-tree edit on `main`**
-    in that repo — commit/branch it before it is lost. Only a new Android/iOS
-    build carries any of them (same constraint as #10).
+    Google API hosts, all **committed** — the prod one as `78076c5` on
+    2026-09-10. ⚠ That commit is on branch **`pentest_resolved`**, not `main`
+    (this note said `main` until 2026-09-10; the branch had moved). Only a new
+    Android/iOS build carries any of them (same constraint as #10).
 
     ⚠ Prefix matching is `url.startsWith`, and
     `https://ndid.srisawadpower.com/` is **not** a prefix of
