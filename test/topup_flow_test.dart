@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/config/app_environment.dart';
+import 'package:sawad_loan_universal/models/app_config.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_documents.dart';
@@ -671,6 +672,44 @@ void main() {
       // Picking a product would start a request the contract cannot take.
       expect(showsSpecialOffers(contract), isFalse);
       expect(TopupCardVariant.of(contract), TopupCardVariant.specialOffer);
+    });
+  });
+
+  group('product icons come from the runtime config', () {
+    test('a mapped code resolves to its own icon', () {
+      const config = AppConfig(
+        topupProductIcons: {'PLD001': 'https://x/bag.svg'},
+        topupProductIconDefault: 'https://x/default.svg',
+      );
+      expect(config.topupProductIcon('PLD001'), 'https://x/bag.svg');
+    });
+
+    test('an unmapped code falls back to the default', () {
+      const config = AppConfig(
+        topupProductIcons: {'PLD001': 'https://x/bag.svg'},
+        topupProductIconDefault: 'https://x/default.svg',
+      );
+      expect(config.topupProductIcon('ZZZ999'), 'https://x/default.svg');
+    });
+
+    test('no config at all resolves to null, not an empty URL', () {
+      // The tile renders its built-in icon rather than a broken image.
+      expect(const AppConfig().topupProductIcon('PLD001'), isNull);
+    });
+
+    test('decodes the map and the default from the document', () {
+      final config = AppConfig.fromDecoded(const {
+        'topup_product_icons': {'PLD001': 'a', 'GLD001': 'b'},
+        'topup_product_icon_default': 'd',
+      });
+      expect(config.topupProductIcons, {'PLD001': 'a', 'GLD001': 'b'});
+      expect(config.topupProductIconDefault, 'd');
+    });
+
+    test('a document without the fields decodes to empty, not a throw', () {
+      final config = AppConfig.fromDecoded(const {'api_url': {}});
+      expect(config.topupProductIcons, isEmpty);
+      expect(config.topupProductIconDefault, isNull);
     });
   });
 

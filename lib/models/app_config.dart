@@ -13,8 +13,11 @@ class AppConfig {
     this.apiUrl = const {},
     this.webVersionProd,
     this.webVersionUat,
+    this.topupProductIcons = const {},
     String? ndidRequestType,
-  }) : _ndidRequestType = ndidRequestType;
+    String? topupProductIconDefault,
+  })  : _ndidRequestType = ndidRequestType,
+        _topupProductIconDefault = topupProductIconDefault;
 
   /// The whole `api_url` map, decoded. Kept raw so a newly-added key is usable
   /// without a code change (via [urlFor]).
@@ -23,6 +26,20 @@ class AppConfig {
   /// `sawad_loan_universal_version` — the newest web build the host expects in
   /// prod.
   final int? webVersionProd;
+
+  /// `topup_product_icons` — SVG icon URL per add-on product code, for the
+  /// **สิทธิพิเศษเฉพาะคุณ** tiles on the top-up contract card.
+  ///
+  /// A map keyed by product code, not the source project's two parallel
+  /// arrays (`product_code` / `product_img`). Parallel arrays can desync, and
+  /// in the source they effectively have: its generated record reads
+  /// `produce_code` while the document stores `product_code`, so the lookup
+  /// never matches and every tile falls back to the placeholder.
+  ///
+  /// The URLs are public Firebase Storage download links that answer
+  /// `access-control-allow-origin: *`, so `flutter_svg` can fetch them from
+  /// the browser.
+  final Map<String, String> topupProductIcons;
 
   /// `sawad_loan_universal_version_uat` — same, for uat.
   final int? webVersionUat;
@@ -61,12 +78,28 @@ class AppConfig {
   ///
   /// Read from the **top level** of the document, not the `api_url` map — it
   /// isn't a URL, and [urlFor] would strip a trailing character it shouldn't.
+  /// `topup_product_icon_default` — shown for a product code the map has no
+  /// entry for. Null leaves the tile with its built-in Material icon, which is
+  /// still better than a broken image.
+  String? get topupProductIconDefault {
+    final raw = _topupProductIconDefault?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  /// The icon for [productCode], falling back to the default and then to null.
+  String? topupProductIcon(String productCode) {
+    final url = topupProductIcons[productCode.trim()]?.trim();
+    if (url != null && url.isNotEmpty) return url;
+    return topupProductIconDefault;
+  }
+
   String? get ndidRequestType {
     final raw = _ndidRequestType?.trim();
     return (raw == null || raw.isEmpty) ? null : raw;
   }
 
   final String? _ndidRequestType;
+  final String? _topupProductIconDefault;
 
   /// Any `api_url` entry, trimmed and with a trailing slash removed so callers
   /// can append `/loan/list` without producing a double slash. Returns null
@@ -93,6 +126,15 @@ class AppConfig {
       webVersionProd: _asInt(decoded['sawad_loan_universal_version']),
       webVersionUat: _asInt(decoded['sawad_loan_universal_version_uat']),
       ndidRequestType: decoded['ndid_request_type']?.toString(),
+      topupProductIcons: switch (decoded['topup_product_icons']) {
+        final Map<String, dynamic> icons => {
+            for (final entry in icons.entries)
+              if (entry.value != null) entry.key: '${entry.value}',
+          },
+        _ => const {},
+      },
+      topupProductIconDefault:
+          decoded['topup_product_icon_default']?.toString(),
     );
   }
 

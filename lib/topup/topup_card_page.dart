@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -153,6 +154,36 @@ class _TopupCardPageState extends State<TopupCardPage> {
     );
   }
 
+  /// Product code the **P-Loan Extra** offer is published under.
+  ///
+  /// Matched literally on `product_code`, the same way the srisawad app's
+  /// `LoanCard` and the LandAndHouseWeb top-up card both match it.
+  static const String pLoanExtraProductCode = 'PLD001';
+
+  /// Opens the **P-Loan Extra** flow for [contract].
+  ///
+  /// ⚠ P-Loan Extra is **not** a top-up, so this leaves the top-up flow
+  /// entirely rather than carrying PLD001 through it as a purpose. A top-up
+  /// closes the contract out and reissues it larger; a P-Loan Extra draws a
+  /// separate loan that only *references* it, and files with `POST /ploan`
+  /// instead of `POST /topup`.
+  ///
+  /// `/pLoan/resume` rebuilds its own flow from `dbName` + `contractNo`, which
+  /// is the same entry the LandAndHouseWeb card reaches via
+  /// `srisawad://ploan-extra` and the host's PLD001 chip reaches natively. No
+  /// amount is passed — that route reads the contract's own `topup_extra`.
+  void _openPLoanExtra(LoanContract contract) {
+    context.push(
+      Uri(
+        path: AppRoutes.pLoanTopupCardResume,
+        queryParameters: {
+          'dbName': contract.dbName,
+          'contractNo': contract.contractNo,
+        },
+      ).toString(),
+    );
+  }
+
   /// Starts a request against [contract] and opens step 2.
   ///
   /// [product] is set when the customer tapped a สิทธิพิเศษเฉพาะคุณ tile
@@ -288,7 +319,15 @@ class _TopupCardPageState extends State<TopupCardPage> {
               contract: contract,
               onSelect: () => _start(contract),
               onViewStatus: () => _openStatus(contract),
-              onSelectProduct: (product) => _start(contract, product: product),
+              onSelectProduct: (product) {
+                // PLD001 is a different product on a different endpoint —
+                // it leaves for the P-Loan flow instead of continuing here.
+                if (product.productCode == pLoanExtraProductCode) {
+                  _openPLoanExtra(contract);
+                  return;
+                }
+                _start(contract, product: product);
+              },
             ),
           ),
         ),
@@ -811,12 +850,17 @@ class _SpecialOfferHeader extends StatelessWidget {
 /// the section is withheld when a request is already in flight: there would be
 /// nothing to start.
 ///
-/// ⚠ **The tiles show a generic icon, not the product's own.** The source
-/// resolves an SVG URL from a Firestore `topup_product_config` document in the
-/// *LandAndHouseWeb* Firebase project, which this build has no access to — and
-/// even the source falls back to a placeholder square when a product code is
-/// missing from it. A neutral icon beats a broken image; wiring the real ones
-/// means publishing that mapping somewhere this project can read.
+/// Tile icons come from `topup_product_icons` in the runtime config
+/// (`application/public_config`), keyed by product code — see
+/// [AppConfig.topupProductIcon]. They are public Firebase Storage SVGs that
+/// answer `access-control-allow-origin: *`, so `flutter_svg` can fetch them in
+/// the browser.
+///
+/// ⚠ The source stores the same thing as **two parallel arrays** in its own
+/// project, and its lookup is broken: the generated record reads
+/// `produce_code` while the document stores `product_code`, so
+/// `findIndexInList` always returns -1 and every tile there falls back to the
+/// placeholder square. A code-keyed map cannot desync that way.
 class _SpecialOffersGrid extends StatelessWidget {
   const _SpecialOffersGrid({required this.products, required this.onSelect});
 
@@ -895,6 +939,11 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Null until the runtime config lands (it loads un-awaited at boot), and
+    // null forever if the read failed — either way the tile falls back to its
+    // built-in icon rather than waiting on the network.
+    final iconUrl =
+        AppState().appConfig?.topupProductIcon(product.productCode);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -908,8 +957,7 @@ class _ProductTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.card_giftcard_outlined,
-                size: 21, color: LoanRegisterStyles.primary),
+            _ProductIcon(url: iconUrl),
             const SizedBox(height: 4),
             Flexible(
               child: Text(
@@ -934,6 +982,42 @@ class _ProductTile extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// The product's configured SVG, tinted like an icon.
+///
+/// Falls back to a built-in Material icon whenever the config has no URL or
+/// the fetch fails — a tile with a plausible glyph is better than a broken
+/// image or an empty box, and the grid must not depend on a network round
+/// trip to be usable.
+class _ProductIcon extends StatelessWidget {
+  const _ProductIcon({required this.url});
+
+  final String? url;
+
+  static const Widget _fallback =
+      Icon(Icons.card_giftcard_outlined, size: 21, color: Color(0xFFE8842A));
+
+  @override
+  Widget build(BuildContext context) {
+    final url = this.url;
+    if (url == null || url.isEmpty) return _fallback;
+    return SizedBox(
+      width: 21,
+      height: 21,
+      child: SvgPicture.network(
+        url,
+        width: 21,
+        height: 21,
+        colorFilter:
+            ColorFilter.mode(LoanRegisterStyles.primary, BlendMode.srcIn),
+        placeholderBuilder: (_) => _fallback,
+        // flutter_svg has no onError hook, so a failed fetch renders the
+        // placeholder indefinitely — which is the fallback icon, by design.
       ),
     );
   }

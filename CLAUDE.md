@@ -1777,11 +1777,39 @@ layout the carousel replaced, and reading it instead of the carousel's builder
 is an easy way to conclude the variants do not exist. The live one is the
 `loanListCarouselItemItem` builder.
 
-⚠ **Product tiles show a generic icon, not the product's own.** The source
-resolves an SVG URL from a Firestore `topup_product_config` document in the
-*LandAndHouseWeb* Firebase project, which this build cannot read — and even the
-source falls back to a placeholder square for a code missing from it. Wiring the
-real icons means publishing that mapping somewhere this project can reach.
+**Tapping `PLD001` leaves the top-up flow.** That code is the **P-Loan Extra**
+offer, a different product on a different endpoint, so the tile pushes
+`/pLoan/resume?dbName=&contractNo=` — the same entry the LandAndHouseWeb card
+reaches via `srisawad://ploan-extra` and the host's own chip reaches natively.
+It is deliberately *not* carried through as a top-up purpose: a top-up closes
+the contract out and reissues it larger and files with `POST /topup`, a P-Loan
+Extra only references it and files with `POST /ploan`.
+`TopupCardPage.pLoanExtraProductCode` is the constant.
+
+**Tile icons come from the runtime config**, `topup_product_icons` in
+`application/public_config` — a map of product code → SVG URL, plus
+`topup_product_icon_default`. Read through `AppConfig.topupProductIcon`, which
+falls back default → null, and the tile falls back again to a built-in Material
+icon, so a missing config or a failed fetch never leaves a broken image.
+
+The URLs are the LandAndHouseWeb project's own, copied verbatim: public
+Firebase Storage links in the **prd** bucket that answer
+`access-control-allow-origin: *` (verified), so `flutter_svg` can fetch them
+from the browser. Seeded into the uat document on 2026-09-11 with a
+field-masked PATCH; ⚠ **prod's document has not been seeded** — do that before
+the flow ships there, or every prod tile shows the fallback icon.
+
+| code | icon |
+| --- | --- |
+| `PLD001` | shopping bag |
+| `GLD001` | coins |
+
+⚠ **The source's own lookup is broken, and this is worth knowing before
+"fixing" ours to match it.** It stores two parallel arrays and its generated
+record reads **`produce_code`** while the document stores **`product_code`** —
+so `findIndexInList` returns -1 every time and *every* tile in the live app
+falls back to the placeholder square. The real icons have never rendered there.
+A code-keyed map cannot desync that way, which is why ours is one.
 
 **The entry page scrolls as a whole**, not just the card. The card grew tall
 (credit summary plus a product grid can exceed a phone screen) and a `PageView`
