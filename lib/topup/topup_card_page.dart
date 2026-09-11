@@ -917,9 +917,15 @@ class _SpecialOffersGrid extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
-              childAspectRatio: 1.2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              // Square. The name needs two lines under the icon — a Thai
+              // product name like "วงเงินเอนกประสงค์" does not fit on one —
+              // and at the source's 1.2, with a price row below, there was
+              // only room for one, which is what clipped it to "วงเงิน".
+              // Dropping the price would already fit on a 390pt screen; this
+              // keeps the margin on a narrower one.
+              childAspectRatio: 1.0,
             ),
             itemCount: products.length,
             itemBuilder: (context, i) =>
@@ -953,33 +959,33 @@ class _ProductTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: LoanRegisterStyles.cardBorder, width: 1.5),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _ProductIcon(url: iconUrl),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
+            // Icon and name only. The price is deliberately not shown: this
+            // is an offer tile, and the figure it would carry is the
+            // product's own price rather than what the customer receives —
+            // two different numbers on one card invites reading it as the
+            // payout. The amount they are choosing is settled on step 3.
             Flexible(
               child: Text(
                 product.productName,
                 textAlign: TextAlign.center,
                 maxLines: 2,
+                // Ellipsis is the last resort, not the expected outcome —
+                // the tile is sized for two lines.
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansThai(
                   fontSize: 11,
+                  height: 1.25,
                   fontWeight: FontWeight.w600,
                   color: LoanRegisterStyles.value,
                 ),
               ),
             ),
-            if (product.productPrice > 0)
-              Text(
-                formatWholeMoney(product.productPrice),
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 10,
-                  color: LoanRegisterStyles.label,
-                ),
-              ),
           ],
         ),
       ),
