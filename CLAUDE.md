@@ -1849,6 +1849,14 @@ the contract out and reissues it larger and files with `POST /topup`, a P-Loan
 Extra only references it and files with `POST /ploan`.
 `TopupCardPage.pLoanExtraProductCode` is the constant.
 
+**Tiles show the icon and the product name, nothing else.** The price is
+deliberately omitted: it is the *product's* price, not what the customer
+receives, and a second figure on a card whose other numbers are all payouts
+invites reading it as one — the amount is settled on step 3. Its row was also
+taking the space the name needed, which clipped `วงเงินเอนกประสงค์` to
+`วงเงิน` on a real device (fixed 2026-09-11; `childAspectRatio` 1.2 → 1.0 as
+well, so the two lines still fit on a narrow phone).
+
 **Tile icons come from the runtime config**, `topup_product_icons` in
 `application/public_config` — a map of product code → SVG URL, plus
 `topup_product_icon_default`. Read through `AppConfig.topupProductIcon`, which
