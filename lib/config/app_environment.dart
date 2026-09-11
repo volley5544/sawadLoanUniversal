@@ -206,6 +206,31 @@ const String kTopupLeadApiAuth = String.fromEnvironment('TOPUP_LEAD_API_AUTH');
 bool get kTopupLeadApiConfigured =>
     kTopupLeadApiKey.isNotEmpty && kTopupLeadApiAuth.isNotEmpty;
 
+/// Pins `as_id_list` on `POST /rp/verify-with-data` to one Authoritative
+/// Source node id, instead of resolving it from the chosen IdP.
+///
+/// ⚠ **A last resort, and environment-scoped.** The normal path is
+/// `NdidApi.findAsForIdp`, which matches the IdP's `(industry_code,
+/// company_code)` against the AS list — that asks the same institution the
+/// customer consented to, and needs no gateway-specific id. A node id
+/// compiled into the client is the `'Authen Only'` `request_type` mistake of
+/// 2026-07-31 in a new costume: it works on the gateway it came from and fails
+/// on every other one.
+///
+/// So this exists only for a gateway whose AS list cannot be resolved — uat as
+/// of 2026-09-11 — and the **config document is the place to set it**
+/// (`ndid_as_id` / `ndid_as_id_uat`), so it stays per-environment and can be
+/// removed without a rebuild. This define is only the degrade-to, and ships
+/// empty.
+const String kNdidAsId = String.fromEnvironment('NDID_AS_ID');
+
+/// Marketing name for [kNdidAsId], for the Request Message's AS clause.
+///
+/// Optional: when it is unset the client tries to resolve the name from the
+/// gateway's own AS list, and if that fails it **omits the clause** rather
+/// than naming a source it cannot confirm.
+const String kNdidAsName = String.fromEnvironment('NDID_AS_NAME');
+
 /// Firestore path of the runtime-config document read at startup
 /// (`services/app_config_api.dart`). Overridable so the config can be moved to
 /// a document with narrower security rules without a code change:

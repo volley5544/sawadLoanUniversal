@@ -19,10 +19,18 @@ class AppConfig {
     this.topupProductIconsUat = const {},
     String? ndidRequestType,
     String? ndidRequestTypeUat,
+    String? ndidAsId,
+    String? ndidAsIdUat,
+    String? ndidAsName,
+    String? ndidAsNameUat,
     String? topupProductIconDefault,
     String? topupProductIconDefaultUat,
   })  : _ndidRequestType = ndidRequestType,
         _ndidRequestTypeUat = ndidRequestTypeUat,
+        _ndidAsId = ndidAsId,
+        _ndidAsIdUat = ndidAsIdUat,
+        _ndidAsName = ndidAsName,
+        _ndidAsNameUat = ndidAsNameUat,
         _topupProductIconDefault = topupProductIconDefault,
         _topupProductIconDefaultUat = topupProductIconDefaultUat;
 
@@ -94,6 +102,29 @@ class AppConfig {
   ///
   /// Read from the **top level** of the document, not the `api_url` map — it
   /// isn't a URL, and [urlFor] would strip a trailing character it shouldn't.
+  /// `ndid_as_id` — pins `as_id_list` to one Authoritative Source node id,
+  /// bypassing the IdP-based resolution. See [kNdidAsId] for why this is a
+  /// last resort; it lives here rather than in a define so it stays
+  /// per-environment and removable without a rebuild.
+  String? get ndidAsId {
+    if (!AppEnvironment.current.isProd) {
+      final uat = _ndidAsIdUat?.trim();
+      if (uat != null && uat.isNotEmpty) return uat;
+    }
+    final raw = _ndidAsId?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  /// `ndid_as_name` — marketing name for [ndidAsId], for the Request Message.
+  String? get ndidAsName {
+    if (!AppEnvironment.current.isProd) {
+      final uat = _ndidAsNameUat?.trim();
+      if (uat != null && uat.isNotEmpty) return uat;
+    }
+    final raw = _ndidAsName?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
   /// `topup_product_icon_default` — shown for a product code the map has no
   /// entry for. Null leaves the tile with its built-in Material icon, which is
   /// still better than a broken image.
@@ -135,6 +166,10 @@ class AppConfig {
 
   final String? _ndidRequestType;
   final String? _ndidRequestTypeUat;
+  final String? _ndidAsId;
+  final String? _ndidAsIdUat;
+  final String? _ndidAsName;
+  final String? _ndidAsNameUat;
   final String? _topupProductIconDefault;
   final String? _topupProductIconDefaultUat;
 
@@ -186,6 +221,10 @@ class AppConfig {
       webVersionUat: _asInt(decoded['sawad_loan_universal_version_uat']),
       ndidRequestType: decoded['ndid_request_type']?.toString(),
       ndidRequestTypeUat: decoded['ndid_request_type_uat']?.toString(),
+      ndidAsId: decoded['ndid_as_id']?.toString(),
+      ndidAsIdUat: decoded['ndid_as_id_uat']?.toString(),
+      ndidAsName: decoded['ndid_as_name']?.toString(),
+      ndidAsNameUat: decoded['ndid_as_name_uat']?.toString(),
       topupProductIcons: _asStringMap(decoded['topup_product_icons']),
       topupProductIconsUat: _asStringMap(decoded['topup_product_icons_uat']),
       topupProductIconDefault:

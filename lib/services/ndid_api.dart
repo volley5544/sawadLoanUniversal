@@ -215,6 +215,53 @@ class NdidApi {
     return null;
   }
 
+  /// The pinned Authoritative Source, when one is configured.
+  ///
+  /// `ndid_as_id` in the runtime config (per-environment — see
+  /// [AppConfig.ndidAsId]), else [kNdidAsId]. Null when neither is set, which
+  /// is the normal case: [findAsForIdp] resolves the AS from the IdP the
+  /// customer chose, which is both more correct and gateway-independent.
+  ///
+  /// The name is resolved from the gateway's own AS list when the config
+  /// doesn't carry one. If **neither** yields a name the AS is still used —
+  /// the data request is the point — but the Request Message **omits the AS
+  /// clause**, because naming a source we cannot confirm is worse than not
+  /// naming one.
+  static Future<NdidAs?> _pinnedAs() async {
+    final config = await AppConfigApi.ensureLoaded();
+    final id = config.ndidAsId ?? (kNdidAsId.isEmpty ? null : kNdidAsId);
+    if (id == null || id.isEmpty) return null;
+
+    final configuredName =
+        config.ndidAsName ?? (kNdidAsName.isEmpty ? null : kNdidAsName);
+    var nameTh = configuredName ?? '';
+    if (nameTh.isEmpty) {
+      // Best effort — this is exactly the call that fails on a gateway whose
+      // AS list is unusable, which is why the id was pinned in the first
+      // place. Its failure must not cost the data request.
+      try {
+        for (final source in await listServiceAs()) {
+          if (source.nodeId.toUpperCase() == id.toUpperCase()) {
+            nameTh = source.displayName;
+            break;
+          }
+        }
+      } catch (e) {
+        Diagnostics.log('ndid pinned AS $id — name lookup failed ($e), '
+            'Request Message will omit the AS clause');
+      }
+    }
+    Diagnostics.log('ndid using pinned AS $id'
+        '${nameTh.isEmpty ? ' (no name)' : ' ($nameTh)'}');
+    return NdidAs(
+      nodeId: id,
+      industryCode: '',
+      companyCode: '',
+      marketingNameTh: nameTh,
+      marketingNameEn: '',
+    );
+  }
+
   /// [findAsForIdp], with every failure swallowed to null.
   ///
   /// The data request is a **bonus** — the customer is here to prove who they
@@ -271,11 +318,17 @@ class NdidApi {
     // Resolve the AS first: it decides both the endpoint and whether the
     // Request Message may name a data source. A failure here must not fail the
     // verification, so it degrades to the plain request.
-    final source = dataSource ?? await _findAsQuietly(idpId);
+    // A pinned id wins over resolution — it exists precisely for a gateway
+    // where resolution does not work.
+    final source = dataSource ?? await _pinnedAs() ?? await _findAsQuietly(idpId);
     final message = requestMessage ??
         NdidCommonMessage.requestMessage(
           transactionRef: transactionRef,
-          asNames: source == null ? const [] : [source.displayName],
+          // A pinned AS with no resolvable name contributes no clause rather
+          // than an empty or invented one.
+          asNames: (source == null || source.displayName.isEmpty)
+              ? const []
+              : [source.displayName],
         );
     final type = requestType ?? await NdidApi.requestType();
     final path = source == null ? '/rp/verify' : '/rp/verify-with-data';

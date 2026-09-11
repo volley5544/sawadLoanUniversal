@@ -1475,9 +1475,13 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles | both (`…_uat` overrides) |
 | `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
 
+| `ndid_as_id_uat` | `A18AC373-9CCB-47B3-A285-9ADBA29AFEFC` | uat builds — pins the AS, see **NDID API client** |
+
 Every key above takes a `_uat` variant; `topup_product_icons_uat`,
-`topup_product_icon_default_uat` and `ndid_request_type_uat` are supported and
-currently unset, since both environments want the same values.
+`topup_product_icon_default_uat`, `ndid_request_type_uat`, `ndid_as_id` (prod)
+and `ndid_as_name`/`_uat` are supported and currently unset — for the icons
+because both environments want the same values, and for `ndid_as_id` because
+prod should resolve its AS rather than pin one.
 
 ⚠ **`https://dev.swpfin.com:7076` no longer serves** (confirmed 2026-09-11).
 `AppEnvironment.uat.mobileApiBase` was still pointing at it, which meant any
@@ -2142,8 +2146,27 @@ now also asks one Authoritative Source for the customer's info. Body is the old
 payload lands on the backend. **Nothing client-side reads it back**:
 `NdidVerifyStatus` is unchanged and the poll is parsed exactly as before.
 
-**Which AS: the same institution as the chosen IdP.** `findAsForIdp` resolves it
-rather than hardcoding one, and the reason is worth keeping:
+**⚠ uat pins the AS; prod resolves it.** As of 2026-09-11 uat's gateway cannot
+resolve an AS from the chosen IdP, so `ndid_as_id_uat` in the config document
+holds `A18AC373-9CCB-47B3-A285-9ADBA29AFEFC` — the sample curl's value — and
+`NdidApi._pinnedAs` uses it in place of `findAsForIdp`. The bare `ndid_as_id`
+is **deliberately unset**, so prod keeps resolving.
+
+It lives in the **config, not a define**, for the reason the next paragraph
+gives: a node id compiled into the client works on the gateway it came from and
+fails on every other one. In the config it is per-environment and removable
+without a rebuild — delete the key and uat goes back to resolving. `kNdidAsId`
+exists as the degrade-to and **ships empty**, pinned by a test.
+
+A pinned AS with no resolvable marketing name still makes the data request, but
+the Request Message **omits the AS clause** — `_pinnedAs` tries the gateway's
+own list for a name and falls back to `ndid_as_name`/`_uat`; naming a source we
+cannot confirm is worse than naming none. ⚠ That means a uat run may not show
+the `ประสงค์ให้ส่งข้อมูลจาก …` clause the NDID reviewer's reference image has;
+prod, which resolves, does.
+
+**Which AS otherwise: the same institution as the chosen IdP.** `findAsForIdp`
+resolves it rather than hardcoding one, and the reason is worth keeping:
 
 - **A bank's IdP node id and its AS node id are different values.** Verified
   2026-09-10 on the prod gateway — the 13 IdPs and 14 AS nodes share **no** id.

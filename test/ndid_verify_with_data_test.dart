@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sawad_loan_universal/config/app_environment.dart';
+import 'package:sawad_loan_universal/models/app_config.dart';
 import 'package:sawad_loan_universal/services/ndid_api.dart';
 import 'package:sawad_loan_universal/services/ndid_common_message.dart';
 
@@ -154,6 +156,48 @@ void main() {
       // appear in lib/.
       expect(NdidApi.dataServiceId, isNot(contains('A18AC373')));
       expect(NdidApi.dataCallbackUrl, isNot(contains('A18AC373')));
+    });
+  });
+
+  group('pinned Authoritative Source (ndid_as_id)', () {
+    // uat's gateway cannot resolve an AS from the chosen IdP, so the node id
+    // is pinned in the config rather than compiled in — see kNdidAsId for why
+    // a baked-in id is the `request_type` mistake of 2026-07-31 in a new
+    // costume.
+    test('reads the _uat key on a uat build', () {
+      final config = AppConfig.fromDecoded(const {
+        'ndid_as_id': 'PROD-AS',
+        'ndid_as_id_uat': 'A18AC373-9CCB-47B3-A285-9ADBA29AFEFC',
+      });
+      expect(config.ndidAsId, 'A18AC373-9CCB-47B3-A285-9ADBA29AFEFC');
+    });
+
+    test('an unset pin leaves resolution to findAsForIdp', () {
+      // The normal case, and the one prod must stay in: no pin configured.
+      expect(const AppConfig().ndidAsId, isNull);
+      expect(AppConfig.fromDecoded(const {'api_url': {}}).ndidAsId, isNull);
+    });
+
+    test('nothing ships in the bundle', () {
+      // The define is the degrade-to only; the config is where a pin belongs,
+      // so it stays per-environment and removable without a rebuild.
+      expect(kNdidAsId, isEmpty);
+      expect(kNdidAsName, isEmpty);
+    });
+
+    test('an optional name rides alongside the id', () {
+      final config = AppConfig.fromDecoded(const {
+        'ndid_as_id_uat': 'AS-1',
+        'ndid_as_name_uat': 'ธนาคารกสิกรไทย',
+      });
+      expect(config.ndidAsName, 'ธนาคารกสิกรไทย');
+    });
+
+    test('a nameless AS contributes no clause to the Request Message', () {
+      // Naming a source we cannot confirm is worse than naming none — §6.2.1
+      // lets the wording be adjusted for clarity, not for invention.
+      final message = NdidCommonMessage.requestMessage(asNames: const []);
+      expect(message, isNot(contains('ประสงค์ให้ส่งข้อมูลจาก')));
     });
   });
 }
