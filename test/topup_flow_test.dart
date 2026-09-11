@@ -713,6 +713,78 @@ void main() {
     });
   });
 
+  group('config keys separate uat from prod by field name', () {
+    // The tests run with no ENV define, which resolves to uat — see
+    // AppEnvironment.current. So `_uat` keys win here and bare keys are the
+    // fallback, which is exactly the uat behaviour worth pinning.
+    test('a _uat key beats the bare one', () {
+      final config = AppConfig.fromDecoded(const {
+        'api_url': {
+          'ndid_url_base': 'https://prod.gateway',
+          'ndid_url_base_uat': 'https://uat.gateway',
+        },
+      });
+      expect(config.ndidUrlBase, 'https://uat.gateway');
+    });
+
+    test('the bare key is the fallback when no _uat variant exists', () {
+      final config = AppConfig.fromDecoded(const {
+        'api_url': {'ndid_url_base': 'https://only.one'},
+      });
+      expect(config.ndidUrlBase, 'https://only.one');
+    });
+
+    test('an empty _uat value does not shadow a real bare one', () {
+      final config = AppConfig.fromDecoded(const {
+        'api_url': {
+          'ndid_url_base': 'https://real',
+          'ndid_url_base_uat': '   ',
+        },
+      });
+      expect(config.ndidUrlBase, 'https://real');
+    });
+
+    test('the mobile API prefers the per-environment pair over api_url_base',
+        () {
+      // api_url_base names no environment, so a document carrying both must
+      // resolve to the one that does.
+      final config = AppConfig.fromDecoded(const {
+        'api_url': {
+          'api_url_base': 'https://neutral',
+          'api_url_prod': 'https://prod',
+          'api_url_dev': 'https://dev',
+        },
+      });
+      expect(config.apiUrlForEnvironment, 'https://dev');
+      expect(config.apiUrlBase, 'https://neutral');
+    });
+
+    test('api_url_base still resolves when the pair is absent', () {
+      final config = AppConfig.fromDecoded(const {
+        'api_url': {'api_url_base': 'https://only-base'},
+      });
+      expect(config.apiUrlForEnvironment, isNull);
+      expect(config.apiUrlBase, 'https://only-base');
+    });
+
+    test('a _uat icon map overrides the bare one', () {
+      final config = AppConfig.fromDecoded(const {
+        'topup_product_icons': {'PLD001': 'prod.svg'},
+        'topup_product_icons_uat': {'PLD001': 'uat.svg'},
+      });
+      expect(config.topupProductIcon('PLD001'), 'uat.svg');
+    });
+
+    test('an empty _uat icon map falls back rather than blanking the tiles',
+        () {
+      final config = AppConfig.fromDecoded(const {
+        'topup_product_icons': {'PLD001': 'prod.svg'},
+        'topup_product_icons_uat': <String, dynamic>{},
+      });
+      expect(config.topupProductIcon('PLD001'), 'prod.svg');
+    });
+  });
+
   group('security posture', () {
     test('no lead-service credential ships in the bundle', () {
       // The source hardcoded an x-api-key and a bearer for the lead endpoint.

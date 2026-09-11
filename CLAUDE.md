@@ -1465,12 +1465,19 @@ the Firestore document **`application/public_config`** (path overridable with
 endpoints are editable in Firestore with no rebuild, and both have moved. As of
 2026-09-11 the uat document holds:
 
-| key | value |
-| --- | --- |
-| `api_url.api_url_base` | `https://srisawad-qa.ecorpgroup.com` |
-| `api_url.ndid_url_base` | `https://uat.ndid.srisawadpower.com` |
-| `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles |
-| `topup_product_icon_default` | fallback icon URL |
+| key | value | read by |
+| --- | --- | --- |
+| `api_url.api_url_prod` | `https://mobile-api.swpfin.com` | prod builds |
+| `api_url.api_url_dev` | `https://srisawad-qa.ecorpgroup.com` | uat builds |
+| `api_url.api_url_base` | `https://srisawad-qa.ecorpgroup.com` | fallback only |
+| `api_url.ndid_url_base` | `https://ndid.srisawadpower.com` | prod builds |
+| `api_url.ndid_url_base_uat` | `https://uat.ndid.srisawadpower.com` | uat builds |
+| `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles | both (`…_uat` overrides) |
+| `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
+
+Every key above takes a `_uat` variant; `topup_product_icons_uat`,
+`topup_product_icon_default_uat` and `ndid_request_type_uat` are supported and
+currently unset, since both environments want the same values.
 
 ⚠ **`https://dev.swpfin.com:7076` no longer serves** (confirmed 2026-09-11).
 `AppEnvironment.uat.mobileApiBase` was still pointing at it, which meant any
@@ -1487,6 +1494,25 @@ the resolved endpoint `main.dart` logs at boot, labelled `(config)` or
 `(default)`, before concluding a payload is at fault. That is exactly how a
 `POST /payment/interest` "500" turned out to be a retired host rather than a
 bad body.
+
+**Environments are separated by field name.** `AppConfig.envValue` reads
+`<key>_uat` on a uat build and the bare `<key>` on prod, matching the
+`sawad_loan_universal_version` / `…_version_uat` pair the host app already
+uses — so the same convention spans both projects. It applies to everything
+resolved through `urlFor`, which is every endpoint below.
+
+⚠ uat **falls back to the bare key** when no `_uat` variant exists. That keeps
+a document predating the convention working and lets `_uat` keys be added one
+at a time; the cost is that a *shared* document carrying only bare keys gives
+uat the prod value. Safe today because the environments are also separate
+projects — but it is the first thing to check if a uat build ever reads a prod
+endpoint.
+
+The one exception is the mobile API, which keeps its original
+`api_url_prod` / `api_url_dev` spelling rather than moving to the `_uat`
+suffix: both keys already exist under those names in both documents, and
+renaming a live key to tidy a convention is how an environment ends up on the
+wrong gateway.
 
 **Two endpoints now come from this document**, both by the same rule — config
 value first, compile-time define as the degrade-to:
@@ -1560,13 +1586,17 @@ data (an existing contract, its limit, its installment calculation).
 | `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /ploan`, the **P-Loan save API** (mobile API base, **bearer** auth, JSON). Reached via `PLoanApi.savePLoanContract` |
 | `user_api.dart` | Customer profile + address book |
 
-**Base URL resolution order** (`SrisawadApi.baseUrl()`):
-`api_url['api_url_base']` from the config → `api_url_prod`/`api_url_dev` for the
-active env → `AppEnvironment.current.mobileApiBase`. `api_url_base` is preferred
-because it is **per-project**: the uat Firebase project's copy holds the uat
-host (`https://srisawad-qa.ecorpgroup.com` as of 2026-09-11) and prod's holds
-prod, so it can't cross environments the way the absolute `api_url_prod` key
-would. Trailing slashes are
+**Base URL resolution order** (`SrisawadApi.baseUrl()`), changed 2026-09-11:
+`api_url_prod` (prod build) / `api_url_dev` (uat build) → `api_url_base` →
+`AppEnvironment.current.mobileApiBase`.
+
+⚠ **`api_url_base` used to be preferred and no longer is.** The old reasoning
+was that it is per-project, so each project's copy holds its own host. That
+holds only as long as nothing else reads the document: it **names no
+environment**, so it cannot express the difference, and a document serving both
+would hand uat the prod host. Environments are now separated by **field name**,
+not only by living in separate Firebase projects. `api_url_base` stays as the
+fallback for a document carrying neither of the pair. Trailing slashes are
 stripped, so a value like `https://mobile-api.swpfin.com/` won't produce `//`.
 
 `NdidApi.baseUrl()` follows the same pattern against `ndid_url_base` — see

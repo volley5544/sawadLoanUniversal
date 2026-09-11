@@ -7,6 +7,8 @@
 /// degrades rather than breaks. See `services/app_config_api.dart`.
 library;
 
+import '../config/app_environment.dart';
+
 /// The `api_url` map plus the top-level keys this app cares about.
 class AppConfig {
   const AppConfig({
@@ -14,10 +16,15 @@ class AppConfig {
     this.webVersionProd,
     this.webVersionUat,
     this.topupProductIcons = const {},
+    this.topupProductIconsUat = const {},
     String? ndidRequestType,
+    String? ndidRequestTypeUat,
     String? topupProductIconDefault,
+    String? topupProductIconDefaultUat,
   })  : _ndidRequestType = ndidRequestType,
-        _topupProductIconDefault = topupProductIconDefault;
+        _ndidRequestTypeUat = ndidRequestTypeUat,
+        _topupProductIconDefault = topupProductIconDefault,
+        _topupProductIconDefaultUat = topupProductIconDefaultUat;
 
   /// The whole `api_url` map, decoded. Kept raw so a newly-added key is usable
   /// without a code change (via [urlFor]).
@@ -46,15 +53,24 @@ class AppConfig {
 
   /// Mobile-API base for the P-Loan / top-up calls.
   ///
-  /// `api_url_base` is the per-project base: in the uat Firebase project it
-  /// holds the uat host, in prod it holds the prod host. That is why it is
-  /// preferred over the explicit `api_url_prod` / `api_url_dev` pair — those
-  /// are absolute and would cross environments.
+  /// ⚠ **No longer the preferred key** (changed 2026-09-11). It names no
+  /// environment, so a document serving both would hand uat the prod host.
+  /// `SrisawadApi.baseUrl` reads [apiUrlForEnvironment] first and treats this
+  /// as the fallback for a document carrying neither of the pair.
   String? get apiUrlBase => urlFor('api_url_base');
 
-  /// Explicit per-environment endpoints, used only as fallbacks.
+  /// The per-environment mobile-API endpoints — **the authoritative pair**.
+  ///
+  /// These keep their original `_prod`/`_dev` spelling rather than moving to
+  /// the `_uat` suffix: they already exist under these names in both
+  /// documents, and renaming a live key to tidy a convention is how an
+  /// environment ends up on the wrong gateway.
   String? get apiUrlProd => urlFor('api_url_prod');
   String? get apiUrlDev => urlFor('api_url_dev');
+
+  /// [apiUrlProd] on a prod build, [apiUrlDev] on a uat one.
+  String? get apiUrlForEnvironment =>
+      AppEnvironment.current.isProd ? apiUrlProd : apiUrlDev;
 
   /// Base URL of the **NDID gateway** (`services/ndid_api.dart`).
   ///
@@ -82,30 +98,73 @@ class AppConfig {
   /// entry for. Null leaves the tile with its built-in Material icon, which is
   /// still better than a broken image.
   String? get topupProductIconDefault {
+    if (!AppEnvironment.current.isProd) {
+      final uat = _topupProductIconDefaultUat?.trim();
+      if (uat != null && uat.isNotEmpty) return uat;
+    }
     final raw = _topupProductIconDefault?.trim();
     return (raw == null || raw.isEmpty) ? null : raw;
   }
 
+  /// Per-environment override of [topupProductIcons], from
+  /// `topup_product_icons_uat`.
+  final Map<String, String> topupProductIconsUat;
+
+  /// The icon map for the active environment — the `_uat` one on a uat build
+  /// when it has entries, else the bare one.
+  Map<String, String> get topupProductIconsForEnvironment =>
+      (!AppEnvironment.current.isProd && topupProductIconsUat.isNotEmpty)
+          ? topupProductIconsUat
+          : topupProductIcons;
+
   /// The icon for [productCode], falling back to the default and then to null.
   String? topupProductIcon(String productCode) {
-    final url = topupProductIcons[productCode.trim()]?.trim();
+    final url = topupProductIconsForEnvironment[productCode.trim()]?.trim();
     if (url != null && url.isNotEmpty) return url;
     return topupProductIconDefault;
   }
 
   String? get ndidRequestType {
+    if (!AppEnvironment.current.isProd) {
+      final uat = _ndidRequestTypeUat?.trim();
+      if (uat != null && uat.isNotEmpty) return uat;
+    }
     final raw = _ndidRequestType?.trim();
     return (raw == null || raw.isEmpty) ? null : raw;
   }
 
   final String? _ndidRequestType;
+  final String? _ndidRequestTypeUat;
   final String? _topupProductIconDefault;
+  final String? _topupProductIconDefaultUat;
+
+  /// The value of [key] **for the active environment**.
+  ///
+  /// uat reads `<key>_uat` and prod reads the bare `<key>`, matching the
+  /// `sawad_loan_universal_version` / `…_version_uat` pair the host app
+  /// already uses. Environments are separated by **field name**, not only by
+  /// living in different Firebase projects — so one document can serve both,
+  /// and a key set for one environment cannot leak into the other.
+  ///
+  /// ⚠ uat falls back to the bare key when no `_uat` variant exists. That
+  /// keeps a document predating this convention working and lets the `_uat`
+  /// keys be added one at a time. It does mean a *shared* document carrying
+  /// only bare keys would give uat the prod value — safe here because the two
+  /// environments are also separate projects, but it is the thing to check if
+  /// a uat build ever reads a prod endpoint.
+  String? envValue(Map<String, String> source, String key) {
+    if (!AppEnvironment.current.isProd) {
+      final uat = source['${key}_uat']?.trim();
+      if (uat != null && uat.isNotEmpty) return uat;
+    }
+    return source[key]?.trim();
+  }
 
   /// Any `api_url` entry, trimmed and with a trailing slash removed so callers
   /// can append `/loan/list` without producing a double slash. Returns null
   /// when absent or blank.
   String? urlFor(String key) {
-    final raw = apiUrl[key]?.trim();
+    final raw = envValue(apiUrl, key);
     if (raw == null || raw.isEmpty) return null;
     return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
   }
@@ -126,17 +185,23 @@ class AppConfig {
       webVersionProd: _asInt(decoded['sawad_loan_universal_version']),
       webVersionUat: _asInt(decoded['sawad_loan_universal_version_uat']),
       ndidRequestType: decoded['ndid_request_type']?.toString(),
-      topupProductIcons: switch (decoded['topup_product_icons']) {
-        final Map<String, dynamic> icons => {
-            for (final entry in icons.entries)
+      ndidRequestTypeUat: decoded['ndid_request_type_uat']?.toString(),
+      topupProductIcons: _asStringMap(decoded['topup_product_icons']),
+      topupProductIconsUat: _asStringMap(decoded['topup_product_icons_uat']),
+      topupProductIconDefault:
+          decoded['topup_product_icon_default']?.toString(),
+      topupProductIconDefaultUat:
+          decoded['topup_product_icon_default_uat']?.toString(),
+    );
+  }
+
+  static Map<String, String> _asStringMap(dynamic value) => switch (value) {
+        final Map<String, dynamic> map => {
+            for (final entry in map.entries)
               if (entry.value != null) entry.key: '${entry.value}',
           },
         _ => const {},
-      },
-      topupProductIconDefault:
-          decoded['topup_product_icon_default']?.toString(),
-    );
-  }
+      };
 
   static int? _asInt(dynamic value) {
     if (value is int) return value;

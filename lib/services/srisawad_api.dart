@@ -13,11 +13,12 @@ import 'auth_token.dart';
 ///
 /// Resolved at call time, in this order:
 ///
-///   1. `api_url['api_url_base']` from the Firestore config document — the
-///      per-project base, so the uat project holds the uat host and prod holds
-///      prod. This is the authoritative value.
-///   2. `api_url['api_url_prod']` / `api_url['api_url_dev']` for the active
-///      environment, if `api_url_base` is missing.
+///   1. `api_url['api_url_prod']` on a prod build, `api_url['api_url_dev']` on
+///      a uat one — **the authoritative pair**. Environments are separated by
+///      field name, so one document cannot hand uat the prod host.
+///   2. `api_url['api_url_base']`, for a document carrying neither of those.
+///      ⚠ It names no environment, which is why it is no longer preferred
+///      (changed 2026-09-11).
 ///   3. [AppEnvironment.current.mobileApiBase], the compile-time default.
 ///
 /// Step 3 means a config outage degrades to the built-in endpoint rather than
@@ -29,8 +30,7 @@ class SrisawadApi {
   /// Endpoint every group below hangs off. No trailing slash.
   static Future<String> baseUrl() async {
     final config = await AppConfigApi.ensureLoaded();
-    final fromConfig = config.apiUrlBase ??
-        (AppEnvironment.current.isProd ? config.apiUrlProd : config.apiUrlDev);
+    final fromConfig = config.apiUrlForEnvironment ?? config.apiUrlBase;
     return fromConfig ?? AppEnvironment.current.mobileApiBase;
   }
 
