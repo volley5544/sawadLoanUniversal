@@ -7,6 +7,7 @@ import '../../router/app_router.dart';
 import '../../services/native_bridge.dart';
 import '../../services/p_loan_api.dart';
 import '../../services/srisawad_api.dart';
+import '../../models/customer_detail.dart';
 import '../../services/user_api.dart';
 import 'components/p_loan_components.dart';
 import 'models/loan_amount_detail.dart';
@@ -28,14 +29,52 @@ import 'models/p_loan_flow.dart';
 /// key (`db_name` + `contract_no`), which also means a refresh reproduces the
 /// state instead of resuming a stale copy of it.
 ///
+/// **This build's own top-up card seeds it instead** ([PLoanResumeSeed]),
+/// because that screen already holds the contract and the customer — the two
+/// fetches below would re-read what is in memory. The fetching path stays for
+/// the deep link and for a reload, so the refresh property is unaffected.
+///
 /// Deliberately not a redirect on the step-3 route: rebuilding needs four
 /// awaited API calls, which wants a loading and an error state of its own.
+/// Data this route can be handed instead of re-fetching it.
+///
+/// Only the **in-app** caller has it: this build's own top-up card has already
+/// loaded `/loan/list` and `/user/detail` to draw its carousel, so making the
+/// resume screen ask for both again is a second round trip the customer waits
+/// through for data already in memory.
+///
+/// ⚠ It is deliberately **optional**, and the fetching path stays. The route's
+/// other two callers have nothing to hand over — the LandAndHouseWeb card
+/// reaches it through the host in a *fresh WebView*, and a reload drops
+/// `extra` — so seeding is an optimisation on one path, never a requirement.
+/// That also preserves the property the query-string design was chosen for: a
+/// refresh reproduces the state rather than resuming a stale copy.
+class PLoanResumeSeed {
+  const PLoanResumeSeed({required this.contract, this.customer});
+
+  /// The contract row as `/loan/list` returned it. Must match the route's
+  /// `dbName` + `contractNo`, or it is ignored and re-fetched.
+  final LoanContract contract;
+
+  /// The customer profile, when the caller has it. Null still saves the
+  /// `/loan/list` call.
+  final CustomerDetail? customer;
+
+  /// Whether this seed is for [dbName] / [contractNo].
+  ///
+  /// Guards against a seed and a URL that disagree — the URL wins, because it
+  /// is what a reload would use and the two must not resolve differently.
+  bool matches(String dbName, String contractNo) =>
+      contract.dbName == dbName && contract.contractNo == contractNo;
+}
+
 class PLoanTopupCardResumePage extends StatefulWidget {
   const PLoanTopupCardResumePage({
     super.key,
     required this.dbName,
     required this.contractNo,
     this.amount,
+    this.seed,
   });
 
   /// `db_name` + `contract_no` of the contract the top-up is raised against —
@@ -49,6 +88,11 @@ class PLoanTopupCardResumePage extends StatefulWidget {
   /// the card displays, which is the fixed offer this product lends. See
   /// [LoanAmountDetail.topupCardRequestAmount].
   final int? amount;
+
+  /// Contract and customer already in memory, when the caller has them — see
+  /// [PLoanResumeSeed]. Null on the deep link and on a reload, which is when
+  /// this screen fetches.
+  final PLoanResumeSeed? seed;
 
   @override
   State<PLoanTopupCardResumePage> createState() =>
@@ -87,25 +131,46 @@ class _PLoanTopupCardResumePageState extends State<PLoanTopupCardResumePage> {
 
     try {
       final token = appState.authToken;
-      // Same overlap as step 1: both are needed, neither depends on the other.
-      final profileRequest =
-          PLoanApi.fetchCustomer(hashThaiId: hash, token: token);
-      final contractsRequest =
-          PLoanApi.listContracts(hashThaiId: hash, token: token);
-      final customer = await profileRequest;
-      final contracts = await contractsRequest;
 
-      // /loan/list is the only source for the payout account, comcode and
-      // branch code, so the contract is looked up rather than reconstructed
-      // from the two query params.
+      // A seed from this build's own top-up card skips /loan/list and
+      // /user/detail — it fetched both to draw the carousel the customer just
+      // tapped, so asking again is a round trip spent on data already in
+      // memory. Ignored unless it is for this contract: the URL is what a
+      // reload uses, so the two must never resolve differently.
+      final seed = widget.seed;
+      final seeded =
+          seed != null && seed.matches(widget.dbName, widget.contractNo);
+
       final LoanContract contract;
-      try {
-        contract = contracts.firstWhere((c) =>
-            c.contractNo == widget.contractNo && c.dbName == widget.dbName);
-      } on StateError {
-        setState(() => _error =
-            'ไม่พบสัญญาเลขที่ ${widget.contractNo} ในรายการสัญญาของท่าน');
-        return;
+      final CustomerDetail? customer;
+
+      if (seeded) {
+        contract = seed.contract;
+        // The profile is only *usually* on the seed; fetch it alone if not,
+        // rather than giving up the /loan/list saving too.
+        customer = seed.customer ??
+            await PLoanApi.fetchCustomer(hashThaiId: hash, token: token);
+      } else {
+        // Same overlap as step 1: both are needed, neither depends on the
+        // other.
+        final profileRequest =
+            PLoanApi.fetchCustomer(hashThaiId: hash, token: token);
+        final contractsRequest =
+            PLoanApi.listContracts(hashThaiId: hash, token: token);
+        customer = await profileRequest;
+        final contracts = await contractsRequest;
+
+        // /loan/list is the only source for the payout account, comcode and
+        // branch code, so the contract is looked up rather than reconstructed
+        // from the two query params.
+        try {
+          contract = contracts.firstWhere((c) =>
+              c.contractNo == widget.contractNo && c.dbName == widget.dbName);
+        } on StateError {
+          setState(() => _error =
+              'ไม่พบสัญญาเลขที่ ${widget.contractNo} ในรายการสัญญาของท่าน');
+          return;
+        }
       }
 
       // The same three preconditions step 1 checks before starting an Extra.

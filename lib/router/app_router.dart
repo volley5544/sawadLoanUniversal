@@ -176,6 +176,12 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return PLoanTopupCardResumePage(
+          // `extra` is a seed from this build's own top-up card, which already
+          // has the contract and the customer. Absent on the deep link and on
+          // a reload, which is when the page fetches instead.
+          seed: state.extra is PLoanResumeSeed
+              ? state.extra as PLoanResumeSeed
+              : null,
           dbName: q['dbName'] ?? '',
           contractNo: q['contractNo'] ?? '',
           amount: int.tryParse(q['amount'] ?? ''),

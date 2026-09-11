@@ -561,6 +561,25 @@ already ask the flow for their number.
 (which gates on the *identity* photos only). If the backend rejects a top-up
 with no vehicle shots, this is the reason.
 
+⚠ **This build's own top-up card seeds the route instead of making it
+re-fetch** (added 2026-09-11). The topup contract card has already loaded
+`/loan/list` and `/user/detail` to draw the carousel the customer just tapped,
+so it passes both as `extra` (`PLoanResumeSeed`) and the resume screen skips
+those two calls — two round trips the customer was otherwise waiting through
+for data already in memory.
+
+The seed is **an optimisation on one path, never a requirement**. The
+LandAndHouseWeb card reaches this route through the host in a *fresh WebView*
+and has nothing to hand over, and a reload drops `extra` — both still fetch. So
+the property the query-string design was chosen for holds: a refresh reproduces
+the state rather than resuming a stale copy.
+
+⚠ **The query string stays the authority.** A seed is used only when
+`PLoanResumeSeed.matches` confirms it is for the route's own `dbName` **and**
+`contractNo` — both halves, since contract numbers are unique only within a db.
+Otherwise it is ignored and the contract is fetched, because the URL is what a
+reload would use and the two must never resolve differently.
+
 **`p_loan_topup_card_resume_page.dart`** (`/pLoan/resume?dbName=&contractNo=`,
 optional `&amount=`) is the entry screen. Steps 2–6 carry the mutable
 `PLoanFlow` in go_router `extra`, so a URL cannot enter mid-flow — instead of

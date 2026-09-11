@@ -9,6 +9,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dar
 import 'package:sawad_loan_universal/p_loan/application/models/loan_documents.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_flow.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart';
+import 'package:sawad_loan_universal/p_loan/application/p_loan_topup_card_resume_page.dart';
 import 'package:sawad_loan_universal/topup/models/topup_card_variant.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 import 'package:sawad_loan_universal/topup/models/topup_photo.dart';
@@ -777,6 +778,49 @@ void main() {
         'topup_product_icons_uat': <String, dynamic>{},
       });
       expect(config.topupProductIcon('PLD001'), 'prod.svg');
+    });
+  });
+
+  group('P-Loan Extra resume seed', () {
+    // The topup card hands the resume route what it already loaded, so that
+    // route skips /loan/list and /user/detail. The seed is an optimisation on
+    // one path — the deep link and a reload still fetch — so the guard that
+    // matters is that a seed can never resolve to a different contract than
+    // the URL would.
+    LoanContract contractFor(String dbName, String contractNo) =>
+        LoanContract.fromJson({
+          ...mockContracts().first.rawJson,
+          'db_name': dbName,
+          'contract_no': contractNo,
+        });
+
+    test('matches its own contract', () {
+      final seed =
+          PLoanResumeSeed(contract: contractFor('DB', 'C-1'));
+      expect(seed.matches('DB', 'C-1'), isTrue);
+    });
+
+    test('a different contract number is rejected', () {
+      final seed =
+          PLoanResumeSeed(contract: contractFor('DB', 'C-1'));
+      expect(seed.matches('DB', 'C-2'), isFalse);
+    });
+
+    test('a different db is rejected', () {
+      // Contract numbers are only unique within a db, so both halves of the
+      // key have to match or the seed could point at another database's
+      // contract with the same number.
+      final seed =
+          PLoanResumeSeed(contract: contractFor('DB-A', 'C-1'));
+      expect(seed.matches('DB-B', 'C-1'), isFalse);
+    });
+
+    test('the customer is optional — a seed without one still saves a call',
+        () {
+      final seed =
+          PLoanResumeSeed(contract: contractFor('DB', 'C-1'));
+      expect(seed.customer, isNull);
+      expect(seed.matches('DB', 'C-1'), isTrue);
     });
   });
 

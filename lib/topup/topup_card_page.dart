@@ -8,6 +8,7 @@ import '../loan_register/components/loan_register_styles.dart';
 import '../models/customer_detail.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
+import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../router/app_router.dart';
 import '../services/native_bridge.dart';
 import '../services/srisawad_api.dart';
@@ -181,6 +182,14 @@ class _TopupCardPageState extends State<TopupCardPage> {
           'contractNo': contract.contractNo,
         },
       ).toString(),
+      // Hand over what this screen already loaded. Without it the resume page
+      // re-reads /loan/list and /user/detail — two round trips the customer
+      // waits through for data that is already in memory, having just been
+      // used to draw the card they tapped.
+      //
+      // The query string is still the authority: the seed is ignored unless it
+      // is for the same contract, and a reload drops it and fetches.
+      extra: PLoanResumeSeed(contract: contract, customer: _customer),
     );
   }
 
