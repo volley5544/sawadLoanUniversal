@@ -1656,8 +1656,27 @@ NDID gateway.
 
 ### Top-up flow (`lib/topup/`)
 
-**A 7-step wizard**, ported from LandAndHouseWeb's `lib/customer_topup/`
+**A 6-step wizard**, ported from LandAndHouseWeb's `lib/customer_topup/`
 (entry `TopupCardPage`). Added 2026-09-11.
+
+⚠ **There is no วัตถุประสงค์ step** (removed 2026-09-11, was step 2). The
+contract card already settles which product a request is for, so a screen that
+asked again could only repeat the answer:
+
+| Tapped on the card | Result |
+| --- | --- |
+| **เติมวงเงิน** | a plain top-up — `purpose` stays null and the amount is editable |
+| a **สิทธิพิเศษเฉพาะคุณ** tile | that product's code and price ride onto the flow, fixing the amount |
+| the **`PLD001`** tile | leaves for the P-Loan Extra flow entirely — different product, different endpoint |
+
+`TopupPurpose` survives as the value the card constructs; nothing renders a
+list of them any more.
+
+⚠ **The card shows no step indicator**, so the bar first appears on the amount
+screen at **2 of 6**. The card is still *counted* as step 1 rather than the
+wizard renumbering from the amount screen: it is where the product is chosen,
+so dropping it from the count would disown the screen the customer just used —
+the same reasoning as `PLoanEntry.precedingSteps`.
 
 **Two entry points:**
 
@@ -1704,12 +1723,11 @@ Screens (`TopupStepIndicator` counts 1–7):
 | # | Page | Title | Calls |
 | --- | --- | --- | --- |
 | 1 | `topup_card_page` | สินเชื่อเพิ่ม | `/user/detail`, `/loan/list` |
-| 2 | `topup_purpose_page` | วัตถุประสงค์ | — |
-| 3 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
-| 4 | `topup_installment_page` | เลือกจำนวนงวด | — |
-| 5 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
-| 6 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
-| 7 | `topup_conclusion_page` | สรุปรายละเอียดสินเชื่อ | `/pdf/loan`, `/vision/thai-id-validate`, `POST /topup` |
+| 2 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
+| 3 | `topup_installment_page` | เลือกจำนวนงวด | — |
+| 4 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
+| 5 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
+| 6 | `topup_conclusion_page` | สรุปรายละเอียดสินเชื่อ | `/pdf/loan`, `/vision/thai-id-validate`, `POST /topup` |
 | — | `topup_success_page` | (terminal, both endings) | — |
 | — | `topup_status_page` | สถานะคำขอ | `/topup/status-detail` |
 | — | `topup_qr_payment_page` | ชำระด้วย QR | `POST /payment/interest` (made on step 3) |
