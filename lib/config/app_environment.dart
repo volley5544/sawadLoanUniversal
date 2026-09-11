@@ -238,7 +238,14 @@ enum AppEnvironment {
     firebaseProjectAlias: 'uat',
     firebaseProjectId: 'sawad-loan-universal-uat',
     firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
-    mobileApiBase: 'https://dev.swpfin.com:7076',
+    // Matches `api_url.api_url_base` in the uat config document. Changed
+    // 2026-09-11 from `https://dev.swpfin.com:7076`, which **no longer
+    // serves** — that host had been the fallback for most of this project's
+    // life, and leaving it here meant any failure to read the config (denied
+    // rule, failed anonymous sign-in, Firestore unreachable) degraded the app
+    // onto a dead gateway instead of a working one. A fallback is only worth
+    // having if it works.
+    mobileApiBase: 'https://srisawad-qa.ecorpgroup.com',
     // The new UAT gateway requires it on every api_url_base call, same as prod
     // (was empty for the old uat host — changed 2026-08-04).
     srisawadHeader: 'x1',

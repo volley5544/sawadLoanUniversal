@@ -1472,13 +1472,21 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles |
 | `topup_product_icon_default` | fallback icon URL |
 
-⚠ **`api_url_base` no longer matches `AppEnvironment.uat.mobileApiBase`**
-(`https://dev.swpfin.com:7076`), which it did for most of this project's life.
-That divergence is a trap worth naming: the compile-time default is only the
-degrade-to value, so **what the app actually calls is the config's host**. A
-request reproduced by hand against `dev.swpfin.com:7076` is therefore not
-necessarily hitting the same gateway the app is — check the resolved endpoint
-`main.dart` logs at boot before concluding a payload is at fault.
+⚠ **`https://dev.swpfin.com:7076` no longer serves** (confirmed 2026-09-11).
+`AppEnvironment.uat.mobileApiBase` was still pointing at it, which meant any
+failure to read the config — denied rule, failed anonymous sign-in, Firestore
+unreachable — degraded the app onto a **dead gateway**. Now
+`https://srisawad-qa.ecorpgroup.com`, matching the document. A fallback is only
+worth having if it works.
+
+That divergence is still worth understanding, because it will recur whenever
+the config moves: the compile-time default is only the degrade-to value, so
+**what the app actually calls is the config's host**. A request reproduced by
+hand against the wrong host is not hitting the same gateway the app is — check
+the resolved endpoint `main.dart` logs at boot, labelled `(config)` or
+`(default)`, before concluding a payload is at fault. That is exactly how a
+`POST /payment/interest` "500" turned out to be a retired host rather than a
+bad body.
 
 **Two endpoints now come from this document**, both by the same rule — config
 value first, compile-time define as the degrade-to:
@@ -1948,11 +1956,18 @@ model does not know about. `rawJson` exists for that and nothing else.
 `pdpa_flg` goes out **empty**: a lead never reaches step 7, so claiming a
 consent there would record one that was never given.
 
-#### `POST /payment/interest` — three things that 500 rather than 400
+#### `POST /payment/interest` — the 500 was the host, not the body
 
-Found 2026-09-11 chasing a live HTTP 500 that Postman did not reproduce. All
-three are silent mismatches: the request is well-formed, so the server gets as
-far as using the values before failing.
+⚠ **Resolved 2026-09-11: `https://dev.swpfin.com:7076` had been retired.** The
+call succeeds against `https://srisawad-qa.ecorpgroup.com`, which is what the
+config already pointed at — so the failure was a *reproduction* against the old
+host, not the app's payload. `AppEnvironment.uat.mobileApiBase` has been moved
+to the working host so a config-read failure cannot land there either.
+
+The three payload corrections below were made while chasing it. They are
+**still right** — each matches the source exactly, and the decimal one was a
+genuine defect with effects well beyond this endpoint — but none of them was
+the 500. Keep them; don't credit them.
 
 | Field | Wrong | Right |
 | --- | --- | --- |
