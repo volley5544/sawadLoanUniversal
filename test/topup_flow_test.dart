@@ -402,44 +402,6 @@ void main() {
     });
   });
 
-  group('purpose options', () {
-    test('the contract\'s products are offered plus a synthesised อื่นๆ', () {
-      final base = mockContracts().first.rawJson;
-      final contract = LoanContract.fromJson({
-        ...base,
-        'topup_detail': {
-          ...(base['topup_detail'] as Map<String, dynamic>),
-          'products': [
-            {
-              'product_code': 'INS001',
-              'product_name': 'ประกันภัย',
-              'product_description': '',
-              'product_price': 3000,
-            },
-          ],
-        },
-      });
-      final options = TopupPurpose.forContract(contract);
-      expect(options, hasLength(2));
-      expect(options.first.productCode, 'INS001');
-      expect(options.last.productCode, kTopupOtherProductCode);
-      expect(options.last.isOther, isTrue);
-      // อื่นๆ is priced at the contract's default limit.
-      expect(options.last.productPrice,
-          contract.topupDetail.defaultTopupAmount);
-    });
-
-    test('building the list twice does not grow the contract\'s own list', () {
-      // The source appended อื่นๆ straight onto `topup_detail.products`, so the
-      // option list grew by one every time the screen was opened.
-      final contract = mockContracts().first;
-      final before = contract.topupDetail.products.length;
-      TopupPurpose.forContract(contract);
-      TopupPurpose.forContract(contract);
-      expect(contract.topupDetail.products.length, before);
-    });
-  });
-
   group('status model', () {
     test('parses the wire keys, misspelling included', () {
       final status = TopupStatus.fromJson(const {
@@ -602,6 +564,39 @@ void main() {
         'yield': '2987.84',
       });
       expect(detail.interestYield, 2987.84);
+    });
+  });
+
+  group('the product a tile picks rides on the flow', () {
+    // There is no วัตถุประสงค์ screen — the card settles this, so the value
+    // is constructed there rather than chosen on a page of its own.
+    test('no product means a plain top-up, and an editable amount', () {
+      final flow = _flowFor('MOCK-C-6701002');
+      expect(flow.purpose, isNull);
+      expect(flow.isAmountEditable, isTrue);
+    });
+
+    test('a picked product fixes the amount', () {
+      final flow = _flowFor('MOCK-C-6701002')
+        ..purpose = const TopupPurpose(
+          productCode: 'INS001',
+          productName: 'ประกันภัย',
+          productDescription: '',
+          productPrice: 3000,
+        );
+      // A named product is priced by the product, so the field locks.
+      expect(flow.isAmountEditable, isFalse);
+    });
+
+    test('the catch-all code stays editable', () {
+      final flow = _flowFor('MOCK-C-6701002')
+        ..purpose = const TopupPurpose(
+          productCode: kTopupOtherProductCode,
+          productName: 'อื่นๆ',
+          productDescription: '',
+          productPrice: 20000,
+        );
+      expect(flow.isAmountEditable, isTrue);
     });
   });
 

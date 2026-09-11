@@ -338,7 +338,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(3),
+          const TopupStepIndicator(2),
           Expanded(child: _body()),
         ],
       ),

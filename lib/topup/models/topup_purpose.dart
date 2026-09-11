@@ -1,16 +1,17 @@
-/// The "what is this top-up for?" options shown on step 2.
+/// The add-on product a top-up is being raised for, when the customer picked
+/// one.
 ///
-/// They are **not** fetched: they are the add-on products the contract itself
-/// offers (`topup_detail.products` on `GET /loan/list`), plus a synthesised
-/// "อื่นๆ" entry standing for the plain top-up at the contract's default limit.
+/// ⚠ There is no วัตถุประสงค์ screen (removed 2026-09-11) — the contract card
+/// already settles this. Tapping **เติมวงเงิน** leaves it null, which is a
+/// plain top-up at [kTopupOtherProductCode]; tapping a
+/// **สิทธิพิเศษเฉพาะคุณ** tile carries that product's code and price onto the
+/// flow. So this is a value the card constructs, not a list anything renders.
 library;
 
-import '../../p_loan/application/models/loan_contract.dart';
-
-/// Product code of the synthesised catch-all option.
+/// Product code for a plain top-up — no add-on product chosen.
 const String kTopupOtherProductCode = 'OTR001';
 
-/// One option on the purpose screen.
+/// The product a top-up is raised for.
 class TopupPurpose {
   const TopupPurpose({
     required this.productCode,
@@ -28,33 +29,9 @@ class TopupPurpose {
   /// The amount this purpose asks for, in baht.
   final int productPrice;
 
-  /// Whether this is the synthesised "อื่นๆ" option rather than a real add-on
-  /// product. The amount screen lets the customer edit the figure only for
-  /// this one — a named product is priced by the product.
-  bool get isOther => productCode == kTopupOtherProductCode;
-
-  /// The options for [contract], in the order the screen lists them.
+  /// Whether this is the plain top-up rather than a real add-on product.
   ///
-  /// The source built this by **appending to the contract's own list**, which
-  /// grew that list by one "อื่นๆ" every time the screen was opened. Building a
-  /// fresh list avoids that.
-  static List<TopupPurpose> forContract(LoanContract contract) {
-    final detail = contract.topupDetail;
-    return [
-      for (final p in detail.products)
-        if (!p.isEmpty)
-          TopupPurpose(
-            productCode: p.productCode,
-            productName: p.productName,
-            productDescription: p.productDescription,
-            productPrice: p.productPrice,
-          ),
-      TopupPurpose(
-        productCode: kTopupOtherProductCode,
-        productName: 'อื่นๆ',
-        productDescription: '',
-        productPrice: detail.defaultTopupAmount,
-      ),
-    ];
-  }
+  /// The amount screen lets the customer edit the figure only in that case —
+  /// a named product is priced by the product, so its tile fixes the amount.
+  bool get isOther => productCode == kTopupOtherProductCode;
 }

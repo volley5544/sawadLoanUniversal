@@ -213,6 +213,8 @@ class _TopupCardPageState extends State<TopupCardPage> {
     )
       ..contract = contract
       ..customer = _customer;
+    // A tile carries its product straight onto the flow — the screen that used
+    // to ask for it is gone, because the card already asked.
     if (product != null) {
       flow
         ..purpose = TopupPurpose(
@@ -223,7 +225,7 @@ class _TopupCardPageState extends State<TopupCardPage> {
         )
         ..requestedAmount = product.productPrice;
     }
-    context.push(AppRoutes.topupPurpose, extra: flow);
+    context.push(AppRoutes.topupAmount, extra: flow);
   }
 
   @override
@@ -234,7 +236,12 @@ class _TopupCardPageState extends State<TopupCardPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(1),
+          // No step indicator here. This screen is where the customer decides
+          // *which product* they are starting — เติมวงเงิน for a top-up, a
+          // สิทธิพิเศษเฉพาะคุณ tile for something else — so it sits ahead of
+          // the wizard rather than inside it. The indicator starts on the next
+          // screen, at 2 of 6, which keeps this one counted without presenting
+          // it as a step to complete.
           Expanded(child: _body()),
         ],
       ),

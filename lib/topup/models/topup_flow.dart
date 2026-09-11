@@ -84,17 +84,12 @@ class TopupFlow {
   CustomerDetail? customer;
   CustomerAddressBook? addressBook;
 
-  // ── Step 2 — purpose ─────────────────────────────────────────────────
+  // ── Set on step 1 — the product the customer picked ──────────────────
+  //
+  // Null when they tapped เติมวงเงิน (a plain top-up); set when they tapped a
+  // สิทธิพิเศษเฉพาะคุณ tile, which fixes both the product code on the payload
+  // and the amount. There is no วัตถุประสงค์ screen — the card already asked.
   TopupPurpose? purpose;
-
-  /// Free text the customer may add under "อื่นๆ" (the source's "ระบุ..."
-  /// field).
-  ///
-  /// ⚠ **No submit field carries it.** `POST /topup` takes `product_code` and
-  /// nothing else about the purpose, which is equally true of the source. It
-  /// is collected because the screen asks for it; if the backend ever gains a
-  /// field, this is the value to send.
-  String purposeNote = '';
 
   // ── Step 3 — amount ──────────────────────────────────────────────────
   /// `GET /topup/detail` for [contract], with the special-limit uplift already

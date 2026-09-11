@@ -272,7 +272,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(7),
+          const TopupStepIndicator(6),
           Expanded(child: _body()),
         ],
       ),

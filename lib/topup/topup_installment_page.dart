@@ -44,7 +44,7 @@ class _TopupInstallmentPageState extends State<TopupInstallmentPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(4),
+          const TopupStepIndicator(3),
           Expanded(
             child: options.isEmpty
                 ? const PLoanErrorView(

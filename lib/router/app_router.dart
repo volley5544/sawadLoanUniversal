@@ -36,7 +36,6 @@ import '../topup/topup_conclusion_page.dart';
 import '../topup/topup_customer_data_page.dart';
 import '../topup/topup_installment_page.dart';
 import '../topup/topup_photos_page.dart';
-import '../topup/topup_purpose_page.dart';
 import '../topup/topup_qr_payment_page.dart';
 import '../topup/topup_status_page.dart';
 import '../topup/topup_success_page.dart';
@@ -106,7 +105,6 @@ abstract final class AppRoutes {
   /// contract, and `fromHost` tells the first screen's back button to close the
   /// WebView rather than pop to a route that isn't there.
   static const String topupCard = '/topup';
-  static const String topupPurpose = '/topup/purpose';
   static const String topupAmount = '/topup/amount';
   static const String topupInstallment = '/topup/installment';
   static const String topupPhotos = '/topup/photos';
@@ -248,13 +246,6 @@ final GoRouter appRouter = GoRouter(
           fromHost: q['fromHost'] == 'true',
         );
       },
-    ),
-    GoRoute(
-      path: AppRoutes.topupPurpose,
-      redirect: (context, state) =>
-          state.extra is TopupFlow ? null : AppRoutes.topupCard,
-      builder: (context, state) =>
-          TopupPurposePage(flow: state.extra as TopupFlow),
     ),
     GoRoute(
       path: AppRoutes.topupAmount,

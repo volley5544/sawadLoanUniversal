@@ -18,9 +18,21 @@ import '../../p_loan/application/components/p_loan_components.dart';
 import '../models/topup_flow.dart';
 import '../models/topup_photo.dart';
 
-/// Number of screens in the top-up wizard, as the step indicator counts them:
-/// สัญญา → วัตถุประสงค์ → ยอดเงิน → งวด → รูปหลักประกัน → ข้อมูลลูกค้า → สรุป.
-const int kTopupTotalSteps = 7;
+/// Number of screens the step indicator counts:
+/// สัญญา → ยอดเงิน → งวด → รูปหลักประกัน → ข้อมูลลูกค้า → สรุป.
+///
+/// The contract screen is **step 1 and shows no indicator** — it is where the
+/// product is chosen, so it sits ahead of the wizard rather than inside it.
+/// The bar therefore first appears on the amount screen at 2 of 6. Counting it
+/// rather than renumbering from the amount screen keeps the flow from
+/// disowning the screen the customer just used, the same reasoning as
+/// `PLoanEntry.precedingSteps`.
+///
+/// ⚠ There is no วัตถุประสงค์ step any more (removed 2026-09-11). The card
+/// already settles which product this is: **เติมวงเงิน** starts a top-up, and
+/// a **สิทธิพิเศษเฉพาะคุณ** tile either carries its product onto the flow or,
+/// for `PLD001`, leaves for the P-Loan Extra flow entirely.
+const int kTopupTotalSteps = 6;
 
 /// The flow's app bar. Carries [EnvVersionTag] like every other screen in the
 /// app, so a tester can read the env + build off any page.

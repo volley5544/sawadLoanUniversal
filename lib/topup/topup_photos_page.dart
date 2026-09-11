@@ -157,7 +157,7 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(5),
+          const TopupStepIndicator(4),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(

@@ -98,7 +98,7 @@ class _TopupCustomerDataPageState extends State<TopupCustomerDataPage> {
       body: Column(
         children: [
           const PLoanMockBanner(),
-          const TopupStepIndicator(6),
+          const TopupStepIndicator(5),
           Expanded(child: _body()),
         ],
       ),
