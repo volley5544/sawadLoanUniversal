@@ -2197,6 +2197,21 @@ otherwise "why did this go out without data?" is unanswerable from a device.
 `/services/{id}/as`), which the 100-per-900 s rate limit absorbs easily — they
 happen once, not per poll. See the rate-limit note below before adding more.
 
+**The exact body is inspectable on the device** (added 2026-09-11).
+`NdidVerifyRequest` carries `endpoint` and `sentBody` — the map as posted, not
+a reconstruction, so the dialog cannot disagree with the wire — and
+`ndid_verify_page` offers **ดู Request Body (debug)** which shows it with a
+**คัดลอก** button. It appears after the create call whether it succeeded or
+failed, because "what did we actually send?" is the first question either way.
+
+The endpoint line is the more useful half: `/rp/verify` vs
+`/rp/verify-with-data` says immediately whether an Authoritative Source was
+resolved, which is the thing that degrades silently.
+
+⚠ **Non-prod only**, like `EnvVersionTag`, the diagnostics sheet and the
+`/ploan` failure report: `identifier` is the customer's citizen id. The dialog
+says so on screen.
+
 **Verified against the live gateway 2026-09-10**, body-shape only: posting the
 generated body with citizen `0000000000000` reached `20005 - No IdP found`, i.e.
 past structural validation, creating no real request. The response names the

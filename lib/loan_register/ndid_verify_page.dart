@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../config/app_environment.dart';
 import '../services/native_bridge.dart';
 import '../services/diagnostics.dart';
 import '../services/ndid_api.dart';
@@ -83,6 +85,13 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
   bool _creating = false;
   String? _error;
   String? _referenceId;
+
+  /// The last `/rp/verify*` request, kept **only** to show the debug dialog.
+  ///
+  /// ⚠ Its body carries the customer's citizen id, so every use of it is gated
+  /// on a non-prod build — the same rule as `Diagnostics.report` and the
+  /// `/ploan` failure report.
+  NdidVerifyRequest? _lastRequest;
 
   /// The customer-facing Transaction Ref for this request (NDID guideline
   /// p.38: digits only, 5-9 long).
@@ -195,6 +204,7 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
       setState(() {
         _creating = false;
         _referenceId = req.referenceId;
+        _lastRequest = req;
         _transactionRefValue = _acceptTransactionRef(req.transactionRef);
       });
       // The three ids that identify this request, in one line: the one the
@@ -338,6 +348,85 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
     return '${two(_remaining.inHours)}:${two(_remaining.inMinutes % 60)}:${two(_remaining.inSeconds % 60)}';
   }
 
+  /// Shows the exact `/rp/verify*` body that was posted, with a copy button.
+  ///
+  /// The endpoint is on the dialog too, and it is the more useful half: which
+  /// of `/rp/verify` and `/rp/verify-with-data` was called says immediately
+  /// whether an Authoritative Source was resolved, which is the thing that
+  /// silently degrades.
+  Future<void> _showRequestBody(NdidVerifyRequest request) async {
+    final text = 'POST ${request.endpoint}\n\n${request.prettyBody}';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        title: Text('NDID request body',
+            style: LoanRegisterStyles.appBarTitleStyle().copyWith(fontSize: 17)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SelectableText(
+                  'POST ${request.endpoint}',
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 11.5,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F6F8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    request.prettyBody,
+                    style: GoogleFonts.robotoMono(fontSize: 11, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '⚠ มีเลขบัตรประชาชนของลูกค้าอยู่ในข้อมูลนี้ '
+                  'ใช้สำหรับตรวจสอบปัญหาเท่านั้น',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: LoanRegisterStyles.required,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('คัดลอกแล้ว')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('ปิด', style: GoogleFonts.notoSansThai()),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -460,6 +549,20 @@ class _NdidVerifyPageState extends State<NdidVerifyPage> {
                           : 'ตรวจสอบสถานะ',
                       filled: false,
                       onTap: _checkingNow ? null : _checkNow,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  // Non-prod only: the body contains the customer's citizen
+                  // id. Offered whether the request succeeded or failed —
+                  // "what exactly did we send?" is the first question either
+                  // way, and on uat it answers whether the AS pin took effect
+                  // (i.e. whether this went to /rp/verify-with-data at all).
+                  if (!AppEnvironment.current.isProd &&
+                      _lastRequest != null) ...[
+                    _Button(
+                      label: 'ดู Request Body (debug)',
+                      filled: false,
+                      onTap: () => _showRequestBody(_lastRequest!),
                     ),
                     const SizedBox(height: 10),
                   ],

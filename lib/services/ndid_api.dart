@@ -332,7 +332,11 @@ class NdidApi {
         );
     final type = requestType ?? await NdidApi.requestType();
     final path = source == null ? '/rp/verify' : '/rp/verify-with-data';
-    final json = await _post(path, {
+    // Built once and kept, so the caller can show exactly what went on the
+    // wire. Reconstructing it afterwards would be a second implementation
+    // that could disagree with the first, which is the opposite of useful
+    // when you are debugging what was sent.
+    final body = <String, dynamic>{
       'namespace': citizenIdNamespace,
       'identifier': identifier,
       'request_message': message,
@@ -357,7 +361,8 @@ class NdidApi {
       // Omitted unless configured — neither gateway requires it, and uat does
       // not use it. See [kNdidRequestType].
       if (type.isNotEmpty) 'request_type': type,
-    });
+    };
+    final json = await _post(path, body);
     if (json is! Map<String, dynamic> || json['reference_id'] == null) {
       throw NdidApiException('Unexpected $path response: $json');
     }
@@ -365,6 +370,8 @@ class NdidApi {
       referenceId: json['reference_id'].toString(),
       ndidRequestId: json['ndid_request_id']?.toString(),
       transactionRef: readTransactionRef(json),
+      endpoint: '${await baseUrl()}$path',
+      sentBody: body,
     );
   }
 
@@ -574,10 +581,35 @@ class NdidVerifyRequest {
     required this.referenceId,
     this.ndidRequestId,
     this.transactionRef,
+    this.endpoint = '',
+    this.sentBody = const {},
   });
 
   final String referenceId;
   final String? ndidRequestId;
+
+  /// The full URL the request went to — the resolved gateway plus
+  /// `/rp/verify` or `/rp/verify-with-data`. Which of the two is itself the
+  /// answer to "did the data request go out?", so it is worth showing.
+  final String endpoint;
+
+  /// **The body exactly as posted**, kept for the debug dialog on the verify
+  /// screen.
+  ///
+  /// ⚠ It contains the customer's citizen id in `identifier`, so anything that
+  /// displays or copies it must be non-prod only — same rule as
+  /// `Diagnostics.report` and the `/ploan` failure report.
+  final Map<String, dynamic> sentBody;
+
+  /// [sentBody] as indented JSON, ready to show or copy.
+  String get prettyBody {
+    try {
+      return const JsonEncoder.withIndent('  ').convert(sentBody);
+    } catch (_) {
+      // A value that won't encode is still worth showing as something.
+      return sentBody.toString();
+    }
+  }
 
   /// The gateway's customer-facing **Transaction Ref** for this request — the
   /// number `ndid_verify_page` displays and the IdP app quotes.

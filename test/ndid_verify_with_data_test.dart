@@ -200,4 +200,41 @@ void main() {
       expect(message, isNot(contains('ประสงค์ให้ส่งข้อมูลจาก')));
     });
   });
+
+  group('the sent body is kept for the debug dialog', () {
+    test('prettyBody is indented JSON of exactly what was posted', () {
+      const request = NdidVerifyRequest(
+        referenceId: 'ref-1',
+        endpoint: 'https://gw/rp/verify-with-data',
+        sentBody: {
+          'identifier': '1234567890123',
+          'mode': 2,
+          'data_request_list': [
+            {'as_id_list': ['AS-1']},
+          ],
+        },
+      );
+      final pretty = request.prettyBody;
+      expect(pretty, contains('"identifier": "1234567890123"'));
+      expect(pretty, contains('"as_id_list"'));
+      // Indented, so it is readable on a phone screen rather than one line.
+      expect(pretty, contains('\n  '));
+    });
+
+    test('an unencodable value degrades instead of throwing', () {
+      // The dialog must never be the thing that crashes a live verification.
+      final request = NdidVerifyRequest(
+        referenceId: 'ref-1',
+        sentBody: {'bad': Object()},
+      );
+      expect(request.prettyBody, isNotEmpty);
+    });
+
+    test('defaults are empty, so a plain response carries no body', () {
+      const request = NdidVerifyRequest(referenceId: 'ref-1');
+      expect(request.sentBody, isEmpty);
+      expect(request.endpoint, isEmpty);
+      expect(request.prettyBody, '{}');
+    });
+  });
 }
