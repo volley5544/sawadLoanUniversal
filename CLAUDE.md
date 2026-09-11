@@ -2142,9 +2142,18 @@ now also asks one Authoritative Source for the customer's info. Body is the old
 "callback_url": "https://ndid.srisawadpower.com/ndid/callback"
 ```
 
-`callback_url` is **fixed** — the srisawad gateway's own callback — so the AS
-payload lands on the backend. **Nothing client-side reads it back**:
-`NdidVerifyStatus` is unchanged and the poll is parsed exactly as before.
+`callback_url` is the srisawad gateway's **own** callback, so the AS payload
+lands on the backend. **Nothing client-side reads it back**: `NdidVerifyStatus`
+is unchanged and the poll is parsed exactly as before.
+
+⚠ **It follows the gateway** (fixed 2026-09-11). It was hardcoded to
+`https://ndid.srisawadpower.com/ndid/callback` — the **prod** host — so a
+**uat** request asked the prod gateway to receive its callback. Both gateways'
+sample curls use their own host (uat's reads
+`https://uat.ndid.srisawadpower.com/ndid/callback`), so the value is now the
+resolved base plus `NdidApi.dataCallbackPath` and there is nothing left to keep
+in step by hand. `api_url.ndid_callback_url` overrides it per environment for a
+gateway that receives callbacks elsewhere.
 
 **⚠ uat pins the AS; prod resolves it.** As of 2026-09-11 uat's gateway cannot
 resolve an AS from the chosen IdP, so `ndid_as_id_uat` in the config document

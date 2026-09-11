@@ -23,7 +23,7 @@ import 'ndid_common_message.dart';
 ///   5. `GET  /rp/verify/{referenceId}` — poll the request status
 ///   6. `POST /rp/verify/{referenceId}/close` — cancel (best effort)
 ///
-/// The data an AS returns is **backend-only** for now: it goes to the fixed
+/// The data an AS returns is **backend-only** for now: it goes to
 /// [dataCallbackUrl] on the srisawad gateway, and the poll response is read
 /// exactly as before ([NdidVerifyStatus] gained nothing).
 ///
@@ -43,12 +43,32 @@ class NdidApi {
   /// see [findAsForIdp] for which of them a request goes to.
   static const String dataServiceId = '001.cust_info_001';
 
-  /// `callback_url` for `/rp/verify-with-data`. **Fixed** — it is the srisawad
-  /// gateway's own callback, so the AS response lands on the backend rather
-  /// than anywhere this client can see. The returned data is backend-only for
-  /// now, which is why nothing here reads it back.
-  static const String dataCallbackUrl =
-      'https://ndid.srisawadpower.com/ndid/callback';
+  /// Path of the srisawad gateway's own AS callback, appended to whichever
+  /// gateway the request is going to — see [dataCallbackUrl].
+  static const String dataCallbackPath = '/ndid/callback';
+
+  /// `callback_url` for `/rp/verify-with-data` — the srisawad gateway's own
+  /// callback, so the AS response lands on the backend rather than anywhere
+  /// this client can see. The returned data is backend-only for now, which is
+  /// why nothing here reads it back.
+  ///
+  /// ⚠ **It follows the gateway; it is not a fixed host.** It was hardcoded to
+  /// `https://ndid.srisawadpower.com/ndid/callback` until 2026-09-11, which
+  /// meant a **uat** request asked the prod gateway to receive its callback.
+  /// Both gateways' own sample curls use their own host — uat's reads
+  /// `https://uat.ndid.srisawadpower.com/ndid/callback` — so the right answer
+  /// is the resolved base plus [dataCallbackPath], and there is then nothing
+  /// left to keep in step by hand.
+  ///
+  /// `ndid_callback_url` in the runtime config overrides it (per-environment,
+  /// like every other key there) for a gateway that receives its callbacks
+  /// somewhere other than itself.
+  static Future<String> dataCallbackUrl() async {
+    final config = await AppConfigApi.ensureLoaded();
+    final override = config.ndidCallbackUrl;
+    if (override != null && override.isNotEmpty) return override;
+    return '${await baseUrl()}$dataCallbackPath';
+  }
 
   /// How many Authoritative Sources must answer. One — [findAsForIdp] resolves
   /// exactly one, the bank the customer authenticated with.
@@ -354,7 +374,7 @@ class NdidApi {
             'request_params': '{}',
           },
         ],
-        'callback_url': dataCallbackUrl,
+        'callback_url': await dataCallbackUrl(),
       },
       'bypass_identity_check': false,
       'request_timeout': requestTimeoutSeconds,

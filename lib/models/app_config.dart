@@ -102,6 +102,14 @@ class AppConfig {
   ///
   /// Read from the **top level** of the document, not the `api_url` map — it
   /// isn't a URL, and [urlFor] would strip a trailing character it shouldn't.
+  /// `ndid_callback_url` — overrides the `callback_url` sent with
+  /// `/rp/verify-with-data`.
+  ///
+  /// Normally unset: the callback is the gateway's own, so it is derived from
+  /// the resolved gateway URL and needs no separate key. This exists for a
+  /// gateway that receives its callbacks somewhere else.
+  String? get ndidCallbackUrl => urlFor('ndid_callback_url');
+
   /// `ndid_as_id` — pins `as_id_list` to one Authoritative Source node id,
   /// bypassing the IdP-based resolution. See [kNdidAsId] for why this is a
   /// last resort; it lives here rather than in a define so it stays

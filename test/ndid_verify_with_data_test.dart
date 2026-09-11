@@ -142,20 +142,38 @@ void main() {
     });
   });
 
-  group('the data request is built from constants the gateway fixed', () {
-    test('service id and callback url match the supplied curl', () {
+  group('the data request matches both gateways\' sample curls', () {
+    // Values common to the prod and uat samples (dap/api_curl.txt, and the uat
+    // one supplied 2026-09-11).
+    test('the fixed request fields', () {
       expect(NdidApi.dataServiceId, '001.cust_info_001');
-      expect(NdidApi.dataCallbackUrl,
-          'https://ndid.srisawadpower.com/ndid/callback');
       expect(NdidApi.minAs, 1);
+      expect(NdidApi.minIal, 2.3);
+      expect(NdidApi.minAal, 2.2);
+    });
+
+    test('the callback is a path, appended to whichever gateway is used', () {
+      // ⚠ It was a fixed prod URL until 2026-09-11, which pointed a uat
+      // request's callback at the prod gateway. Both samples use their own
+      // host, so the host must come from the resolved base.
+      expect(NdidApi.dataCallbackPath, '/ndid/callback');
+      expect('https://uat.ndid.srisawadpower.com${NdidApi.dataCallbackPath}',
+          'https://uat.ndid.srisawadpower.com/ndid/callback');
+      expect('https://ndid.srisawadpower.com${NdidApi.dataCallbackPath}',
+          'https://ndid.srisawadpower.com/ndid/callback');
+    });
+
+    test('no gateway host is baked into the callback', () {
+      expect(NdidApi.dataCallbackPath, isNot(contains('ndid.srisawadpower')));
     });
 
     test('the sample curl as_id is not baked in anywhere', () {
       // It is not on the prod gateway (verified 2026-09-10): all 14 AS node
-      // ids differ. Resolution is by company_code, so this literal must never
-      // appear in lib/.
+      // ids differ. uat pins it through the config instead — see the
+      // ndid_as_id group below — so this literal must never appear in lib/.
       expect(NdidApi.dataServiceId, isNot(contains('A18AC373')));
-      expect(NdidApi.dataCallbackUrl, isNot(contains('A18AC373')));
+      expect(NdidApi.dataCallbackPath, isNot(contains('A18AC373')));
+      expect(kNdidAsId, isEmpty);
     });
   });
 
