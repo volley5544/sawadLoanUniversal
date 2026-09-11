@@ -1732,6 +1732,7 @@ Sections present:
 | Manual | Screen | Carries |
 | --- | --- | --- |
 | §1.2 | card | วิธีขอปรับวงเงินเพิ่ม conditions panel, contract pager, swipe hint |
+| §1.3 | card | **สิทธิพิเศษเฉพาะคุณ** product grid, when the contract carries add-on products |
 | §1.3 | card | รับเงินโอนเข้าบัญชีสูงสุด band; credit summary — วงเงินสินเชื่อเดิม, ราคาประเมินหลักทรัพย์ปัจจุบัน, วงเงินสินเชื่อปัจจุบัน, ยอดปิดบัญชี ณ วันที่ (`data_date`), เงินคงเหลือโอนเข้าบัญชี |
 | §2.1/2.2 | amount | amount field + slider + min/max, the numbered deduction list (see above), จำนวนเงินที่จะได้รับ, ชำระเงิน / ปรับปรุงยอดชำระ |
 | §2.3 | QR | amount due, payment-window note, QR, R1/R2, bank exclusions, ปรับปรุงยอดชำระ |
@@ -1747,6 +1748,47 @@ web `<a download>` inside the WebView is not reliably honoured — a button that
 silently does nothing is worse than no button. The payment payload can be
 copied instead, and a screenshot works. Add it back only alongside a host
 handler that actually saves.
+
+#### The contract card has three headers
+
+`TopupCardVariant.of(contract)`, in this order — a contract that is *both*
+ineligible and carries products shows the ineligible header, not the offer:
+
+| Variant | When | Shows |
+| --- | --- | --- |
+| `ineligible` | `topup_detail.can_topup == 'N'` | ยังไม่สามารถเติมวงเงินได้ในขณะนี้ / ติดต่อสาขาเพื่อขอคำแนะนำ. No amount, no action |
+| `specialOffer` | the contract carries add-on products | ข้อเสนอพิเศษสำหรับคุณ (+ the special limit when there is one), then the ordinary card |
+| `plain` | otherwise | the ordinary card |
+
+Separately, the **สิทธิพิเศษเฉพาะคุณ** grid in the card body
+(`showsSpecialOffers`) needs *three* conditions: products, `can_topup != 'N'`,
+**and** no request already in flight — tapping a product starts a request, which
+a contract mid-request cannot take. So the offer header can appear while the
+grid is withheld; they are deliberately not the same predicate.
+
+⚠ **An empty product entry does not count.** The API pads
+`topup_detail.products`, and an entry with no code and no name must not flip the
+card into its offer layout. `LoanProduct.isEmpty` is the filter, and a test pins
+it.
+
+⚠ **The source contains a dead copy of this chain guarded by `if (true)`**,
+which always returns the plain header. It is a FlutterFlow leftover from a list
+layout the carousel replaced, and reading it instead of the carousel's builder
+is an easy way to conclude the variants do not exist. The live one is the
+`loanListCarouselItemItem` builder.
+
+⚠ **Product tiles show a generic icon, not the product's own.** The source
+resolves an SVG URL from a Firestore `topup_product_config` document in the
+*LandAndHouseWeb* Firebase project, which this build cannot read — and even the
+source falls back to a placeholder square for a code missing from it. Wiring the
+real icons means publishing that mapping somewhere this project can reach.
+
+**The entry page scrolls as a whole**, not just the card. The card grew tall
+(credit summary plus a product grid can exceed a phone screen) and a `PageView`
+inside a scroll view needs a fixed height, which would either clip the tallest
+card or leave a gap under the shortest. So the carousel is unrolled: one card
+renders inline in a `ListView` and the pager moves between them, with a
+horizontal drag keeping the swipe the manual describes.
 
 #### Deliberate deviations from the source
 

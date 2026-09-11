@@ -13,7 +13,9 @@ import '../services/srisawad_api.dart';
 import '../services/topup_api.dart';
 import '../services/user_api.dart';
 import 'components/topup_components.dart';
+import 'models/topup_card_variant.dart';
 import 'models/topup_flow.dart';
+import 'models/topup_purpose.dart';
 
 /// **Step 1 — เลือกสัญญาที่ต้องการสินเชื่อเพิ่ม.** The top-up flow's entry
 /// screen, and the port of the source's 8,183-line `TopupCardPage`.
@@ -60,8 +62,6 @@ class TopupCardPage extends StatefulWidget {
 }
 
 class _TopupCardPageState extends State<TopupCardPage> {
-  final PageController _pageController = PageController(viewportFraction: 0.92);
-
   List<LoanContract>? _contracts;
   CustomerDetail? _customer;
   String? _error;
@@ -71,12 +71,6 @@ class _TopupCardPageState extends State<TopupCardPage> {
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
   }
 
   /// Fetches the profile and the contract list together.
@@ -114,14 +108,6 @@ class _TopupCardPageState extends State<TopupCardPage> {
         _contracts = selectable;
         _index = _preselectedIndex(selectable);
       });
-      // The carousel is built after this frame, so jump once it exists.
-      if (_index > 0) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _pageController.hasClients) {
-            _pageController.jumpToPage(_index);
-          }
-        });
-      }
     } on UserApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on SrisawadApiException catch (e) {
@@ -168,7 +154,11 @@ class _TopupCardPageState extends State<TopupCardPage> {
   }
 
   /// Starts a request against [contract] and opens step 2.
-  void _start(LoanContract contract) {
+  ///
+  /// [product] is set when the customer tapped a สิทธิพิเศษเฉพาะคุณ tile
+  /// rather than the plain button: that picks the purpose for them, so step 2
+  /// opens with it already chosen and step 3 prices it.
+  void _start(LoanContract contract, {LoanProduct? product}) {
     if (!contract.hasNoRequestYet) {
       _openStatus(contract);
       return;
@@ -192,6 +182,16 @@ class _TopupCardPageState extends State<TopupCardPage> {
     )
       ..contract = contract
       ..customer = _customer;
+    if (product != null) {
+      flow
+        ..purpose = TopupPurpose(
+          productCode: product.productCode,
+          productName: product.productName,
+          productDescription: product.productDescription,
+          productPrice: product.productPrice,
+        )
+        ..requestedAmount = product.productPrice;
+    }
     context.push(AppRoutes.topupPurpose, extra: flow);
   }
 
@@ -240,37 +240,66 @@ class _TopupCardPageState extends State<TopupCardPage> {
         ],
       );
     }
-    return Column(
+    final index = _index.clamp(0, contracts.length - 1);
+    final contract = contracts[index];
+
+    // **The whole page scrolls**, not just the card. The card grew tall — the
+    // credit summary plus a product grid can easily exceed a phone screen —
+    // and a PageView inside a scroll view needs a fixed height, which would
+    // either clip the tallest card or leave a gap under the shortest.
+    //
+    // So the carousel is unrolled: one card is rendered inline and the pager
+    // moves between them. Swipe is kept with a horizontal drag rather than
+    // lost (the ListView claims the vertical axis, this claims the
+    // horizontal), so the interaction the manual describes still works.
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 28),
       children: [
         const TopupConditionsPanel(),
         _header(contracts.length),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            '« ปัดซ้าย-ขวา เพื่อดูสัญญาอื่น »',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 12.5,
-              color: LoanRegisterStyles.primary,
+        if (contracts.length > 1)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '« ปัดซ้าย-ขวา เพื่อดูสัญญาอื่น »',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 12.5,
+                  color: LoanRegisterStyles.primary,
+                ),
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: contracts.length,
-            onPageChanged: (i) => setState(() => _index = i),
-            itemBuilder: (context, i) => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(6, 4, 6, 24),
-              child: _TopupContractCard(
-                contract: contracts[i],
-                onSelect: () => _start(contracts[i]),
-                onViewStatus: () => _openStatus(contracts[i]),
-              ),
+        GestureDetector(
+          onHorizontalDragEnd: contracts.length > 1
+              ? (details) {
+                  final velocity = details.primaryVelocity ?? 0;
+                  // Ignore a flick too slow to be a deliberate swipe.
+                  if (velocity.abs() < 100) return;
+                  _movePage(velocity < 0 ? 1 : -1, contracts.length);
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: _TopupContractCard(
+              // Keyed by contract so switching cards rebuilds rather than
+              // animating one card's content into another's.
+              key: ValueKey(contract.contractNo),
+              contract: contract,
+              onSelect: () => _start(contract),
+              onViewStatus: () => _openStatus(contract),
+              onSelectProduct: (product) => _start(contract, product: product),
             ),
           ),
         ),
       ],
     );
+  }
+
+  /// Steps the pager by [delta], clamped — the ends do not wrap.
+  void _movePage(int delta, int total) {
+    final next = (_index + delta).clamp(0, total - 1);
+    if (next != _index) setState(() => _index = next);
   }
 
   Widget _header(int total) {
@@ -304,19 +333,11 @@ class _TopupCardPageState extends State<TopupCardPage> {
             ),
           ),
           const Spacer(),
-          _chevron(Icons.chevron_left, _index > 0, () {
-            _pageController.previousPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.ease,
-            );
-          }),
+          _chevron(Icons.chevron_left, _index > 0,
+              () => _movePage(-1, total)),
           const SizedBox(width: 8),
-          _chevron(Icons.chevron_right, _index < total - 1, () {
-            _pageController.nextPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.ease,
-            );
-          }),
+          _chevron(Icons.chevron_right, _index < total - 1,
+              () => _movePage(1, total)),
         ],
       ),
     );
@@ -355,20 +376,27 @@ class _TopupCardPageState extends State<TopupCardPage> {
 /// whatever `can_topup` says.
 class _TopupContractCard extends StatelessWidget {
   const _TopupContractCard({
+    super.key,
     required this.contract,
     required this.onSelect,
     required this.onViewStatus,
+    required this.onSelectProduct,
   });
 
   final LoanContract contract;
   final VoidCallback onSelect;
   final VoidCallback onViewStatus;
 
+  /// Tapping a สิทธิพิเศษเฉพาะคุณ tile starts the flow with that product as
+  /// the purpose.
+  final ValueChanged<LoanProduct> onSelectProduct;
+
   @override
   Widget build(BuildContext context) {
     final detail = contract.topupDetail;
     final pending = !contract.hasNoRequestYet;
     final eligible = contract.isEligible;
+    final variant = TopupCardVariant.of(contract);
 
     /// The special limit is granted on top of the default and is **not**
     /// included in it, so the headline figure has to add the two.
@@ -376,7 +404,7 @@ class _TopupContractCard extends StatelessWidget {
     final offered = detail.defaultTopupAmount + specials;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -386,9 +414,16 @@ class _TopupContractCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!pending && eligible) ...[
-            _MaxTransferBanner(amount: detail.defaultTransferAmount.round()),
-            const SizedBox(height: 12),
+          // One of three headers — see TopupCardVariant.
+          if (variant == TopupCardVariant.ineligible)
+            const _IneligibleHeader()
+          else ...[
+            if (variant == TopupCardVariant.specialOffer)
+              _SpecialOfferHeader(specials: specials),
+            if (!pending) ...[
+              _MaxTransferBanner(amount: detail.defaultTransferAmount.round()),
+              const SizedBox(height: 12),
+            ],
           ],
           ContractSummaryCard(
             loanTypeCode: contract.contractDetails.loanTypeCode,
@@ -422,6 +457,14 @@ class _TopupContractCard extends StatelessWidget {
           ] else ...[
             const SizedBox(height: 12),
             _creditSummary(contract, detail, offered, specials),
+            if (showsSpecialOffers(contract)) ...[
+              const SizedBox(height: 12),
+              _SpecialOffersGrid(
+                products:
+                    detail.products.where((p) => !p.isEmpty).toList(),
+                onSelect: onSelectProduct,
+              ),
+            ],
             const SizedBox(height: 12),
             TopupPrimaryButton(label: 'เติมวงเงิน', onPressed: onSelect),
           ],
@@ -658,6 +701,239 @@ class _MaxTransferBanner extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+/// Header for a contract that cannot be topped up at all
+/// (`can_topup == 'N'`). No amount and no action — the customer is pointed at
+/// a branch, because nothing in this flow can change the answer.
+class _IneligibleHeader extends StatelessWidget {
+  const _IneligibleHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F3F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 20, color: LoanRegisterStyles.label),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ยังไม่สามารถเติมวงเงินได้ในขณะนี้',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: LoanRegisterStyles.value,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'ติดต่อสาขาเพื่อขอคำแนะนำ',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 12.5,
+                    color: LoanRegisterStyles.label,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Header for a contract carrying add-on products — it leads with the offer
+/// rather than the limit.
+class _SpecialOfferHeader extends StatelessWidget {
+  const _SpecialOfferHeader({required this.specials});
+
+  /// Extra limit granted on top of the ordinary one. Shown only when there
+  /// actually is one; a contract can carry products without a special limit.
+  final int specials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E6),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome_outlined,
+              size: 18, color: LoanRegisterStyles.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'ข้อเสนอพิเศษสำหรับคุณ',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: LoanRegisterStyles.primary,
+              ),
+            ),
+          ),
+          if (specials > 0)
+            Text(
+              '+${formatMoney(specials)} บาท',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: LoanRegisterStyles.required,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// **สิทธิพิเศษเฉพาะคุณ** — the add-on products this contract's limit can be
+/// spent on, as a three-across grid of tiles.
+///
+/// Tapping one starts the flow with that product as the purpose, which is why
+/// the section is withheld when a request is already in flight: there would be
+/// nothing to start.
+///
+/// ⚠ **The tiles show a generic icon, not the product's own.** The source
+/// resolves an SVG URL from a Firestore `topup_product_config` document in the
+/// *LandAndHouseWeb* Firebase project, which this build has no access to — and
+/// even the source falls back to a placeholder square when a product code is
+/// missing from it. A neutral icon beats a broken image; wiring the real ones
+/// means publishing that mapping somewhere this project can read.
+class _SpecialOffersGrid extends StatelessWidget {
+  const _SpecialOffersGrid({required this.products, required this.onSelect});
+
+  final List<LoanProduct> products;
+  final ValueChanged<LoanProduct> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: LoanRegisterStyles.divider, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.shopping_bag_outlined,
+                  size: 20, color: LoanRegisterStyles.value),
+              const SizedBox(width: 8),
+              Text(
+                'สิทธิพิเศษเฉพาะคุณ',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.arrow_upward, size: 14, color: Color(0xFF0E8C86)),
+              const SizedBox(width: 6),
+              Text(
+                'ใช้เงินก้อนเดียวกับข้อเสนอด้านบน',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0E8C86),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            padding: EdgeInsets.zero,
+            primary: false,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              childAspectRatio: 1.2,
+            ),
+            itemCount: products.length,
+            itemBuilder: (context, i) =>
+                _ProductTile(product: products[i], onTap: () => onSelect(products[i])),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  const _ProductTile({required this.product, required this.onTap});
+
+  final LoanProduct product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: LoanRegisterStyles.cardBorder, width: 1.5),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.card_giftcard_outlined,
+                size: 21, color: LoanRegisterStyles.primary),
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(
+                product.productName,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+            ),
+            if (product.productPrice > 0)
+              Text(
+                formatWholeMoney(product.productPrice),
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 10,
+                  color: LoanRegisterStyles.label,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

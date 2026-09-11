@@ -8,6 +8,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dar
 import 'package:sawad_loan_universal/p_loan/application/models/loan_documents.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_flow.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart';
+import 'package:sawad_loan_universal/topup/models/topup_card_variant.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 import 'package:sawad_loan_universal/topup/models/topup_photo.dart';
 import 'package:sawad_loan_universal/topup/models/topup_purpose.dart';
@@ -600,6 +601,76 @@ void main() {
         'yield': '2987.84',
       });
       expect(detail.interestYield, 2987.84);
+    });
+  });
+
+  group('contract card — three header variants', () {
+    LoanContract withTopupDetail(Map<String, dynamic> overrides) {
+      final base = mockContracts().first.rawJson;
+      return LoanContract.fromJson({
+        ...base,
+        'topup_detail': {
+          ...(base['topup_detail'] as Map<String, dynamic>),
+          ...overrides,
+        },
+      });
+    }
+
+    const product = {
+      'product_code': 'INS001',
+      'product_name': 'ประกันภัย',
+      'product_description': '',
+      'product_price': 3000,
+    };
+
+    test('can_topup N wins over everything, products included', () {
+      final contract =
+          withTopupDetail({'can_topup': 'N', 'products': [product]});
+      expect(TopupCardVariant.of(contract), TopupCardVariant.ineligible);
+      // …and the offer grid is withheld with it.
+      expect(showsSpecialOffers(contract), isFalse);
+    });
+
+    test('products give the special-offer header', () {
+      final contract = withTopupDetail({'products': [product]});
+      expect(TopupCardVariant.of(contract), TopupCardVariant.specialOffer);
+      expect(showsSpecialOffers(contract), isTrue);
+    });
+
+    test('no products gives the plain header', () {
+      expect(
+        TopupCardVariant.of(withTopupDetail(const {'products': []})),
+        TopupCardVariant.plain,
+      );
+    });
+
+    test('an all-empty product entry does not count as an offer', () {
+      // The API pads the array; an entry with no code and no name is not a
+      // product and must not flip the card into its offer layout.
+      final contract = withTopupDetail(const {
+        'products': [
+          {'product_code': '', 'product_name': '', 'product_price': 0},
+        ],
+      });
+      expect(TopupCardVariant.of(contract), TopupCardVariant.plain);
+      expect(showsSpecialOffers(contract), isFalse);
+    });
+
+    test('a request already in flight withholds the grid but not the header',
+        () {
+      final base = mockContracts().first.rawJson;
+      final contract = LoanContract.fromJson({
+        ...base,
+        'request_status': 'รอตรวจสอบ',
+        'topup_detail': {
+          ...(base['topup_detail'] as Map<String, dynamic>),
+          'products': [product],
+        },
+      });
+      expect(contract.hasNoRequestYet, isFalse);
+      // Picking a product would start a request the contract cannot take.
+      expect(showsSpecialOffers(contract), isFalse);
+      expect(TopupCardVariant.of(contract), TopupCardVariant.specialOffer);
     });
   });
 
