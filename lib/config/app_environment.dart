@@ -171,6 +171,41 @@ const bool kPLoanUseMockData = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Base URL of the **lead** service the top-up flow falls back to when a
+/// self-service top-up is not possible (`TopupOutcome.lead`): land/house loan
+/// types, a `can_topup` refusal, or a payout above the contract's
+/// `max_transfer_amount`. The path appended to it is
+/// `/ssw_service_api/api/leads/lh-save`.
+///
+/// Reachable from `api_url['lead_url_base']` in the Firestore runtime config
+/// too — see `TopupApi.leadBaseUrl`. Config first, this define as the
+/// degrade-to value, the same rule every other endpoint here follows.
+const String kTopupLeadApiBase = String.fromEnvironment('TOPUP_LEAD_API_BASE');
+
+/// Credentials for that lead service.
+///
+/// ⚠ **Empty by default, and that is deliberate.** The FlutterFlow source
+/// hardcoded both an `x-api-key` and a Basic-style bearer into the bundle.
+/// Reintroducing them here would put a shared service credential back into a
+/// web build that anyone can read — exactly the finding that closing
+/// `kPLoanSaveApiAuth` resolved on 2026-08-04. So they are build-time inputs
+/// with no shipped value: unset, the lead branch reports itself unconfigured
+/// rather than calling the endpoint unauthenticated.
+///
+/// ```sh
+/// flutter build web ... --dart-define=TOPUP_LEAD_API_KEY=... \
+///                       --dart-define=TOPUP_LEAD_API_AUTH=...
+/// ```
+///
+/// The real fix is for this call to move behind the mobile API and
+/// authenticate with the customer's own bearer token, like `POST /ploan` does.
+const String kTopupLeadApiKey = String.fromEnvironment('TOPUP_LEAD_API_KEY');
+const String kTopupLeadApiAuth = String.fromEnvironment('TOPUP_LEAD_API_AUTH');
+
+/// Whether the lead fallback is configured well enough to call.
+bool get kTopupLeadApiConfigured =>
+    kTopupLeadApiKey.isNotEmpty && kTopupLeadApiAuth.isNotEmpty;
+
 /// Firestore path of the runtime-config document read at startup
 /// (`services/app_config_api.dart`). Overridable so the config can be moved to
 /// a document with narrower security rules without a code change:

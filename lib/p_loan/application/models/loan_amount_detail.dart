@@ -197,11 +197,17 @@ class LoanAmountDetail {
   /// a new P-Loan additionally takes [interestRate], [dueDay] and
   /// [firstDueDate] from the calculator, since it skipped `GET /topup/detail`
   /// where those would otherwise come from.
+  /// The top-up flow additionally raises [defaultTopupAmount],
+  /// [maxTopupAmount] and [topupSpecials] together when the contract carries a
+  /// special limit — see `TopupFlow.applySpecialLimit`.
   LoanAmountDetail copyWith({
     int? feeAmount,
     double? interestRate,
     int? dueDay,
     String? firstDueDate,
+    int? defaultTopupAmount,
+    int? maxTopupAmount,
+    int? topupSpecials,
   }) =>
       LoanAmountDetail(
         code: code,
@@ -213,11 +219,11 @@ class LoanAmountDetail {
         firstDueDate: firstDueDate ?? this.firstDueDate,
         dueDay: dueDay ?? this.dueDay,
         contractDate: contractDate,
-        defaultTopupAmount: defaultTopupAmount,
+        defaultTopupAmount: defaultTopupAmount ?? this.defaultTopupAmount,
         installmentNumber: installmentNumber,
         installmentAmount: installmentAmount,
         minAmountWithRate: minAmountWithRate,
-        maxTopupAmount: maxTopupAmount,
+        maxTopupAmount: maxTopupAmount ?? this.maxTopupAmount,
         interestRate: interestRate ?? this.interestRate,
         transferAmount: transferAmount,
         osBalance: osBalance,
@@ -236,6 +242,6 @@ class LoanAmountDetail {
         overdueTo: overdueTo,
         interestPaidFlag: interestPaidFlag,
         interestYield: interestYield,
-        topupSpecials: topupSpecials,
+        topupSpecials: topupSpecials ?? this.topupSpecials,
       );
 }

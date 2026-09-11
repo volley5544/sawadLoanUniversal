@@ -43,6 +43,8 @@ class LoanContract {
     this.requestStatus = '',
     this.requestStatusCode = '',
     this.carDetails = const CarDetails(),
+    this.topupSpecialFlag = false,
+    this.rawJson = const {},
   });
 
   final String contractName;
@@ -78,6 +80,25 @@ class LoanContract {
   final String requestStatus;
   final String requestStatusCode;
   final CarDetails carDetails;
+
+  /// `topup_special_flag` — the customer has been granted `topup_specials` on
+  /// top of this contract's ordinary limit.
+  ///
+  /// Only the top-up flow reads it, and it has to: `GET /topup/detail` does
+  /// **not** include the uplift, so both the default amount and the ceiling
+  /// have to be raised client-side or the extra limit is offered nowhere. See
+  /// `TopupFlow.applySpecialLimit`.
+  final bool topupSpecialFlag;
+
+  /// The row exactly as it arrived.
+  ///
+  /// Kept only because the top-up flow's **lead** fallback forwards whole
+  /// sub-objects (`contract_details`, `car_details`, `payment_details`,
+  /// `topup_detail`, `barcode_details`, `insurances`) to a service that is not
+  /// ours, and re-serialising them from the typed fields would silently drop
+  /// any key this model does not know about. Read it only for that; everything
+  /// else should use the typed fields, which are the checked contract.
+  final Map<String, dynamic> rawJson;
 
   /// The status text the API uses for "no request raised yet". The flow may
   /// only be started from this state; any other status means a request is
@@ -131,6 +152,8 @@ class LoanContract {
         requestStatus: asString(json['request_status']),
         requestStatusCode: asString(json['request_status_code']),
         carDetails: CarDetails.fromJson(asMap(json['car_details'])),
+        topupSpecialFlag: json['topup_special_flag'] == true,
+        rawJson: json,
       );
 
   @override

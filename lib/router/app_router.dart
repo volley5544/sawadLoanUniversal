@@ -29,6 +29,17 @@ import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../p_loan/application/p_loan_vehicle_photos_page.dart';
 import '../p_loan/submit_form/p_loan_form_page.dart';
 import '../services/diagnostics.dart';
+import '../topup/models/topup_flow.dart';
+import '../topup/topup_amount_page.dart';
+import '../topup/topup_card_page.dart';
+import '../topup/topup_conclusion_page.dart';
+import '../topup/topup_customer_data_page.dart';
+import '../topup/topup_installment_page.dart';
+import '../topup/topup_photos_page.dart';
+import '../topup/topup_purpose_page.dart';
+import '../topup/topup_qr_payment_page.dart';
+import '../topup/topup_status_page.dart';
+import '../topup/topup_success_page.dart';
 
 /// Route paths for the loan-register wizard. These map 1:1 to the browser URL
 /// (path strategy is enabled in main.dart), e.g.
@@ -83,6 +94,37 @@ abstract final class AppRoutes {
   static const String pLoanCustomerData = '/pLoan/customer';
   static const String pLoanConclusion = '/pLoan/conclusion';
   static const String pLoanSuccess = '/pLoan/success';
+
+  // Top-up flow (lib/topup/) — a 7-step wizard over the same mobile API.
+  //
+  // A **top-up is not a P-Loan Extra**: it closes the existing contract out and
+  // reissues it larger, so the old principal comes off the payout and
+  // `min/max_topup_amount` apply. See `TopupFlow`.
+
+  /// Entry. Accepts optional `?source=&referId=&contNo=&fromHost=` — the first
+  /// two are attribution carried into the submit payload, `contNo` preselects a
+  /// contract, and `fromHost` tells the first screen's back button to close the
+  /// WebView rather than pop to a route that isn't there.
+  static const String topupCard = '/topup';
+  static const String topupPurpose = '/topup/purpose';
+  static const String topupAmount = '/topup/amount';
+  static const String topupInstallment = '/topup/installment';
+  static const String topupPhotos = '/topup/photos';
+  static const String topupCustomerData = '/topup/customer';
+  static const String topupConclusion = '/topup/conclusion';
+
+  /// Terminal screen for both endings — a filed top-up and a filed lead.
+  /// `?kind=topup|lead` and, for a top-up, `&transNo=`.
+  static const String topupSuccess = '/topup/success';
+
+  /// Status of a request already filed. URL-addressable (`?dbName=&transNo=`)
+  /// rather than `extra`-carried, because the contract card links straight to
+  /// it and a reload has to work.
+  static const String topupStatus = '/topup/status';
+
+  /// Interest-payment QR — the dead end for a contract with unpaid accrued
+  /// interest, which has to be settled before a top-up can be raised.
+  static const String topupQrPayment = '/topup/qr';
 }
 
 /// The app router.
@@ -184,6 +226,100 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final (flow, transNo) = state.extra as (PLoanFlow, String);
         return PLoanSuccessPage(flow: flow, transNo: transNo);
+      },
+    ),
+    // ── Top-up flow ────────────────────────────────────────────────────
+    // Steps 2-7 carry the accumulated TopupFlow in `extra`, so — exactly like
+    // the P-Loan flow — a URL cannot enter mid-flow and a deep link without it
+    // redirects to step 1 rather than rendering a half-empty screen.
+    //
+    // The two exceptions are `topupStatus` and `topupSuccess`, which carry
+    // everything they need in the query string precisely because they are
+    // reachable without a flow (a link from the contract card, and a reload
+    // after submitting).
+    GoRoute(
+      path: AppRoutes.topupCard,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return TopupCardPage(
+          source: q['source'] ?? '',
+          referId: q['referId'] ?? '',
+          contractNo: q['contNo'] ?? '',
+          fromHost: q['fromHost'] == 'true',
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.topupPurpose,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupPurposePage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupAmount,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupAmountPage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupInstallment,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupInstallmentPage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupPhotos,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupPhotosPage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupCustomerData,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupCustomerDataPage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupConclusion,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupConclusionPage(flow: state.extra as TopupFlow),
+    ),
+    GoRoute(
+      path: AppRoutes.topupQrPayment,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCard,
+      builder: (context, state) =>
+          TopupQrPaymentPage(flow: state.extra as TopupFlow),
+    ),
+    // No redirect: the flow is a bonus here, not a requirement. A reload after
+    // submitting has no `extra` and must still show the confirmation rather
+    // than bouncing the customer back into a flow they already completed.
+    GoRoute(
+      path: AppRoutes.topupSuccess,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return TopupSuccessPage(
+          kind: TopupSuccessKind.parse(q['kind']),
+          transNo: q['transNo'] ?? '',
+          flow: state.extra is TopupFlow ? state.extra as TopupFlow : null,
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.topupStatus,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return TopupStatusPage(
+          dbName: q['dbName'] ?? '',
+          transNo: q['transNo'] ?? '',
+        );
       },
     ),
     GoRoute(

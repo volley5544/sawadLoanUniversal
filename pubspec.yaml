@@ -74,6 +74,11 @@ dependencies:
   http_parser: ^4.0.2
   pdfx: 2.9.2
 
+  # Renders the Thai bill-payment QR on the top-up flow's interest-payment
+  # screen (lib/topup/topup_qr_payment_page.dart). Pure Dart, so it works in
+  # the web build; the same package the source project uses for this screen.
+  barcode_widget: ^2.0.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

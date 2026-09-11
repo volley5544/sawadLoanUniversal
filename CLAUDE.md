@@ -31,6 +31,13 @@ passes that again, archive the next round the same way.
 
 ## Current state (read this first)
 
+- **The top-up flow is live too, and it is a different product** (added
+  2026-09-11, `lib/topup/`). Home menu → **สินเชื่อเพิ่ม**, or `/topup`. It is
+  **not** a P-Loan Extra: a top-up closes the existing contract out and
+  reissues it larger, so the old principal comes off the payout and
+  `min/max_topup_amount` apply. The two flows share models, services and
+  components but have **separate page sets**, so adding it touched no P-Loan
+  screen. Read **Top-up flow** before changing either.
 - **The P-Loan application flow is the live one.** Its screens have no mock
   fallback (fixtures exist behind a default-off define — see **Mock mode**).
   **Both kinds now file with `POST /ploan`** on the mobile API base (changed
@@ -131,10 +138,11 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 222 tests (models, payloads, headers, NDID terms +
+flutter test               # 271 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
-                           # failure report, mock-mode guard) — green
+                           # failure report, mock-mode guard, the top-up flow's
+                           # pricing/outcome rules + its two payloads) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1519,7 +1527,7 @@ data (an existing contract, its limit, its installment calculation).
 | File | Contents |
 | --- | --- |
 | `srisawad_api.dart` | Shared base-URL resolution, headers, send helper, `SrisawadApiException`, and `GET /loan/list` (shared by both products) |
-| `topup_api.dart` | `TopupApi` — `/topup/detail`, `/topup/calculator`, `POST /topup` |
+| `topup_api.dart` | `TopupApi` — the single seam the **top-up flow** talks to: `/topup/detail`, `/topup/calculator`, `POST /topup`, `/topup/status-detail`, `POST /payment/interest`, the lead fallback, and thin delegates to `PLoanApi` for the product-neutral `/pdf/loan` + `/vision/thai-id-validate` |
 | `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan`, `/vision/thai-id-validate`, and `calculateNewLoanInstallments` (interim client-side estimate for a new P-Loan) |
 | `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /ploan`, the **P-Loan save API** (mobile API base, **bearer** auth, JSON). Reached via `PLoanApi.savePLoanContract` |
 | `user_api.dart` | Customer profile + address book |
@@ -1582,6 +1590,216 @@ directly, even inside the host: the `httpRequest` bridge carries its body as a J
 string and can't round-trip binary. That's safe for the mobile API specifically
 because it sends `access-control-allow-origin: *` — do **not** reuse it for the
 NDID gateway.
+
+### Top-up flow (`lib/topup/`)
+
+**A 7-step wizard**, ported from LandAndHouseWeb's `lib/customer_topup/`
+(entry `TopupCardPage`). Added 2026-09-11.
+
+**Two entry points:**
+
+| From | How |
+| --- | --- |
+| this app's home menu card **สินเชื่อเพิ่ม** | `context.push(AppRoutes.topupCard)` |
+| the srisawad app's home menu **เติมวงเงินใหม่** | `/loan-universal-webview` with `path: '/topup'`, `params: {'fromHost': 'true'}` |
+
+The second was added to the host on 2026-09-11
+(`lib/pages/home_page_component/home_page_options.dart`, branch
+`pentest_resolved`) and is **QA-only**, behind `_showTopupNew =
+FlavorConfig.isQa`. It uses the same host mechanism the `PLD001` chip uses to
+reach `/pLoan/resume`, so no route or widget changed there.
+⚠ Like every host edit, it **needs an app release to reach testers** — a web
+deploy of this repo cannot carry it (same constraint as Outstanding #10).
+
+`fromHost=true` is what tells `TopupCardPage` that nothing sits beneath it on
+this build's own stack, so its back button calls `closeWebview()` instead of
+navigating to this build's home — and the success screen does the same.
+
+`/topup` also accepts `?source=&referId=&contNo=` (attribution, and a contract
+to preselect).
+
+⚠ **A top-up is not a P-Loan Extra, and this is the thing to get straight
+before editing either.** They look alike and price differently:
+
+| | Top-up (`lib/topup/`) | P-Loan Extra (`lib/p_loan/application/`) |
+| --- | --- | --- |
+| What it does to the old contract | **closes it out** and reissues it larger | only **references** it |
+| Payout | `requested − closing_balance − duty` | `requested − duty` |
+| `min/max_topup_amount` | **apply** | deliberately ignored |
+| Amount | customer chooses, within the range | fixed at `topup_extra` |
+| `interest_paid_flag == 'Y'` | locks the field → pay interest first | not a factor |
+| Submits to | `POST /topup` | `POST /ploan` |
+| NDID signing | none | required |
+
+The two flows are **separate page sets** on purpose. They share the models,
+services and the `p_loan_components` kit — those are product-neutral — but not
+their screens, so the live, pentested, NDID-reviewed P-Loan flow was not
+touched to add this.
+
+Screens (`TopupStepIndicator` counts 1–7):
+
+| # | Page | Title | Calls |
+| --- | --- | --- | --- |
+| 1 | `topup_card_page` | สินเชื่อเพิ่ม | `/user/detail`, `/loan/list` |
+| 2 | `topup_purpose_page` | วัตถุประสงค์ | — |
+| 3 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
+| 4 | `topup_installment_page` | เลือกจำนวนงวด | — |
+| 5 | `topup_photos_page` | รูปภาพหลักประกัน | host camera |
+| 6 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
+| 7 | `topup_conclusion_page` | สรุปรายละเอียดสินเชื่อ | `/pdf/loan`, `/vision/thai-id-validate`, `POST /topup` |
+| — | `topup_success_page` | (terminal, both endings) | — |
+| — | `topup_status_page` | สถานะคำขอ | `/topup/status-detail` |
+| — | `topup_qr_payment_page` | ชำระด้วย QR | `POST /payment/interest` (made on step 3) |
+
+`TopupFlow` (`models/topup_flow.dart`) is the mutable state passed page → page
+as go_router `extra`, same convention as `LoanRegisterForm` / `PLoanFlow`.
+Steps 2–7 redirect to step 1 without one; `topupStatus` and `topupSuccess`
+carry everything in the query string instead, because both are reachable
+without a flow (a link from the contract card, and a reload after submitting).
+
+**Step 3's button does one of three things** (`TopupFlow.outcome`) — this is
+the flow's central rule, and it is the source's, kept verbatim:
+
+| Outcome | When | Button |
+| --- | --- | --- |
+| `payInterest` | `interest_paid_flag == 'Y'` | **ชำระเงิน** → `/payment/interest` → the QR screen |
+| `lead` | `loan_type_code` is `L`/`H`, **or** `can_topup != 'Y'`, **or** `netTransferAmount > max_transfer_amount` | **ส่งข้อมูล** → files a lead |
+| `topup` | otherwise | **ถัดไป** |
+
+⚠ **An absent `max_transfer_amount` reads as 0, and 0 refuses everything** — no
+positive payout is under it, so *every* contract files a lead. Reproduced from
+the source and pinned by a test, because it looks exactly like a bug. If the
+flow suddenly offers ส่งข้อมูล for every contract, the field is missing from
+`/loan/list`. It is deliberately **not** treated as "no limit": guessing the
+cap open would let through a request the backend meant to hold back.
+
+**Two payout figures, deliberately not merged.** `payoutAmount` (what
+`transfer_amount` sends) is `amount − closing_balance − fee`;
+`netTransferAmount` (what the lead check tests) additionally nets off unpaid
+interest and the collection fee. The source really does compute both, and
+collapsing them would change what gets filed.
+
+**`topup_special_flag`.** When the contract carries it, `topup_specials` is
+granted **on top of** the ordinary limit and `GET /topup/detail` does **not**
+include it — so `TopupFlow.applySpecialLimit` raises `default_topup_amount`
+*and* `max_topup_amount` client-side, between the detail call and the first
+calculator run. Without that the uplift the card advertised is offered nowhere.
+`LoanContract.topupSpecialFlag` was added for this (additive; P-Loan ignores it).
+
+**The duty is the calculator's.** Step 3 folds `plan.feeAmount` back in with
+`detail.copyWith(feeAmount: …)` — same rule the P-Loan flow follows and for the
+same reason: `/topup/detail` returns the duty on the contract's *default* limit,
+`/topup/calculator` on the amount actually requested.
+
+#### Deliberate deviations from the source
+
+Each of these is a behaviour change, not a port artefact:
+
+- **The four hardcoded Thai IDs are not reproduced.** The source's ID check
+  accepted `1103000101931` / `1103701967986` / `1331400042203` /
+  `3401700351967` alongside the customer's own, which let anyone holding one of
+  those cards verify for **any** account. Same decision the P-Loan port made;
+  `test/topup_flow_test.dart` pins it shut.
+- **The PDPA consents are real.** The source hardcoded `marketing_consent` and
+  `sensitive_consent` to `'Y'` in the submit body, recording a marketing
+  consent the customer was never asked for. Step 7 asks: ยินยอมข้อมูลอ่อนไหว is
+  required and gates `canSubmit`, ยินยอมการตลาด is a genuine opt-in that gates
+  nothing. `N` is a real answer, so neither is ever reported as unresolved.
+- **No baked-in lead credential.** See **The lead fallback** below.
+- **No Firebase Storage mirror.** The source uploaded every photo to Storage
+  and threaded three parallel URL/file/base64 fields per slot through the page
+  model — 21 fields for 7 photos, and a Firebase Storage dependency this app
+  does not have. The bytes are what `POST /topup` wants; the Storage copy was
+  never read back. Photos are held as raw bytes and base64-encoded once, at
+  submit.
+- **The purpose list is rebuilt, not appended to.** The source's
+  `generateTopupProductListNew` appended "อื่นๆ" straight onto the contract's
+  own `topup_detail.products`, so the list grew by one every time the screen
+  opened. `TopupPurpose.forContract` builds a fresh list; a test pins it.
+- **Errors keep the customer on the screen** with a retry, instead of the
+  source's modal-then-pop, which left them with nothing to act on.
+- **A loan type outside `M`/`C` stays completable** (tax disc only) rather than
+  hitting the source's permanently-disabled confirm button. Same deviation the
+  P-Loan port made.
+
+#### The JS bridge replaces the console-log protocol
+
+The source talks to the native host by **printing magic strings** and waiting
+for a `CustomEvent` back. This port uses the `flutter_inappwebview`
+`callHandler` bridge this repo already has (`services/native_bridge.dart`):
+
+| Source | Here |
+| --- | --- |
+| `print("${action}CameraAction5544${type}")`, then a global `fromFlutterMobile` listener carrying `{dataBase64, actionName}` | `await NativeCameraBridge.captureDocument(action)` — the promise resolves with the image |
+| `print("CloseWebviewPageFromVolley5544Web")` | `NativeCameraBridge.closeWebview()` |
+| `print("DoneLoadingVolley5544Web")` / `returnTextToApp` | not needed — nothing polls for readiness |
+
+The difference that matters: `callHandler` returns a promise, so a capture is
+just an awaited result. There is no global listener, no correlation by action
+name, and a cancel is `null` rather than silence.
+
+⚠ **`TopupPhoto.cameraAction` strings are not free-form.** The host branches on
+`action.toLowerCase() == 'selfie'` and falls through to the rear ID-card mask
+for **everything else**, so a near-miss fails silently with a wrong-looking
+camera rather than an error. That exact bug cost the P-Loan flow its front
+camera once; a test pins the selfie slot's string.
+
+#### The lead fallback (`TopupApi.saveLead`)
+
+`POST {lead base}/ssw_service_api/api/leads/lh-save` — filed instead of a
+top-up when `TopupFlow.outcome` is `lead`. Somebody calls the customer back.
+
+⚠ **Its credentials are build-time inputs that default to empty, and that is
+deliberate.** The source hardcoded both an `x-api-key` and a bearer into the
+bundle. Shipping either would put a shared service credential back into a web
+build anyone can read — the finding that deleting `kPLoanSaveApiAuth` closed on
+2026-08-04. Unset, the branch reports itself unconfigured
+("ระบบส่งข้อมูลยังไม่พร้อมใช้งาน กรุณาติดต่อสาขา") rather than calling the
+endpoint unauthenticated. `test/topup_flow_test.dart` pins that nothing ships.
+
+```sh
+flutter build web ... --dart-define=TOPUP_LEAD_API_BASE=...                       --dart-define=TOPUP_LEAD_API_KEY=...                       --dart-define=TOPUP_LEAD_API_AUTH=...
+```
+
+The base is also readable from `api_url['lead_url_base']` in the Firestore
+runtime config (config first, define as the degrade-to). **The real fix** is
+for this call to move behind the mobile API and authenticate with the
+customer's own bearer token, the way `POST /ploan` does — see Outstanding #28.
+
+`TopupLeadSubmission` forwards the contract's own sub-objects
+(`contract_details`, `car_details`, `payment_details`, `topup_detail`,
+`barcode_details`, `insurances`) from `LoanContract.rawJson` rather than
+re-serialising them from typed fields, which would silently drop any key this
+model does not know about. `rawJson` exists for that and nothing else.
+`pdpa_flg` goes out **empty**: a lead never reaches step 7, so claiming a
+consent there would record one that was never given.
+
+#### The interest-payment QR
+
+⚠ **`topup_qr_payment_page`'s barcode payload is byte-for-byte the source's
+`genQRCodePayment`, trailing `.0` included.** It multiplies by 100 and calls
+`toString()` on a `double`, so ฿1,234 renders as `123400.0` rather than the
+integer satang the barcode standard describes. That looks wrong, but it is what
+the shipped app prints and what the bank's scanner is known to accept, so it is
+reproduced rather than "fixed" — changing a live payment reference on a hunch is
+not a change to make from here. Confirm the intended format with the payments
+team before touching it (Outstanding #29).
+
+#### Payload (`models/topup_submission.dart`)
+
+`POST /topup` — **37 keys**, transcribed from the source's `SaveNewTopupCall`
+and pinned by `test/topup_submission_test.dart` (the produced key set must
+equal the API's exactly). Wire quirks that are real: `topup_argeement_file`
+(the misspelling is the API's) and `save_pdf`, which nests the same
+`ContractPdfRequest` that `/pdf/loan` was called with — so the request that
+made the documents and the request that files them cannot disagree.
+
+`unresolvedFields` reports only what is *unexpectedly* blank: a photo slot this
+loan type never asks for is blank by design, and `latitude`/`longitude`/
+`transno` are in `acceptedBlank` (GPS is captured un-awaited on step 7, and the
+server assigns the transaction number). A failed submit appends the blank ones
+to the message, because "HTTP 400" against 37 fields is unactionable on a
+device, and drops a `Diagnostics.log` crumb readable from the `(UAT ver…)` tag.
 
 ### P-Loan submission form (`lib/p_loan/submit_form/`)
 
@@ -2202,7 +2420,9 @@ the WebView host to support the file chooser), **`pdfx` 2.9.2** (renders the ste
 contract PDFs; pinned to the version the LandAndHouseWeb top-up flow uses, and
 **needs the pdf.js script tags in `web/index.html`** — see **Step 6 documents**.
 It also pulls native plugins for Android/iOS/desktop, harmless in a web-only
-build, but do not open a document under `flutter test` — pdf.js isn't there).
+build, but do not open a document under `flutter test` — pdf.js isn't there),
+**`barcode_widget`** (the Thai bill-payment QR on the top-up flow's
+interest-payment screen; pure Dart, the same package the source uses there).
 The wizard's OCR/document capture
 still goes through the host bridge — the host owns that camera. SDK
 `^3.10.4` — code uses **Dart dot-shorthand syntax** (e.g.
@@ -2267,6 +2487,16 @@ registered identity. The uat gateway now has real ones, so the define and its
 `ndidThaiIdOverride` gate are **deleted** and no environment substitutes an
 identity — `PLoanFlow.ndidThaiId` is the customer's own id, pinned by a test. No
 build flag can bring the substitution back.
+
+**The top-up flow ships no credential either.** Its lead fallback needs an
+`x-api-key` and a bearer that the FlutterFlow source hardcoded; here both are
+`--dart-define` inputs that default to **empty**, and an unconfigured build
+reports the branch unavailable rather than calling the endpoint
+unauthenticated. A test pins that nothing ships. See **The lead fallback**.
+
+**The top-up flow's ID check is not weakened either.** The source accepted four
+hardcoded Thai IDs alongside the customer's own — the same backdoor the P-Loan
+port refused — and it is not reproduced. A test pins all four shut.
 
 **No identity check is weakened anywhere now.** Keep it that way: if a future
 environment lacks test identities, the answer is to register them on that node,
@@ -2539,6 +2769,42 @@ reason recorded.
     same app release as #22 — the shipped app does not allowlist
     `ndid.srisawadpower.com`, so in-app NDID cannot reach it. The uat gateway is
     allowlisted, which is why testing could proceed at all.
+
+**Top-up flow (added 2026-09-11):**
+
+28. **The lead fallback needs a home.** `POST /ssw_service_api/api/leads/lh-save`
+    is on a different host and wants its own `x-api-key` + bearer, which the
+    FlutterFlow source hardcoded into the bundle. Here both default to empty
+    (`TOPUP_LEAD_API_KEY` / `TOPUP_LEAD_API_AUTH`) and the branch reports itself
+    unconfigured rather than shipping a shared credential — so **the lead path
+    does not work until someone either supplies the defines or, better, moves
+    the call behind the mobile API** with the customer's own bearer token the
+    way `POST /ploan` does. The second is the right fix; the first is a
+    stopgap that puts the credential back in a readable bundle.
+29. **Confirm the QR payload format with the payments team.** The interest
+    barcode is reproduced byte-for-byte from the source, including an amount
+    rendered as `123400.0` (a `double.toString()`) where the Thai bill-payment
+    standard describes integer satang. It was not "fixed" because the source is
+    live and the scanner evidently accepts it, but it should be confirmed
+    rather than assumed. One line in `topup_qr_payment_page.dart`.
+30. **No live top-up has been filed from this build.** Everything is unit-
+    tested and the flow compiles and runs, but `POST /topup` has never been
+    exercised end to end from here. Worth doing before the flow is offered to
+    customers — the same caveat #12 carried for `/ploan` until 2026-08-17.
+    A top-up also files against a **real contract**, so pick a test customer.
+31. **`max_transfer_amount` gates every contract.** Absent or 0, no payout is
+    under it and **every** contract falls to the lead branch (see **Top-up
+    flow**). Confirm `/loan/list` actually sends it on uat before reading a
+    screen full of ส่งข้อมูล as a bug in this code.
+32. **Mock mode covers the top-up flow, and its write paths are guarded.**
+    `--dart-define=P_LOAN_MOCK=true` serves the P-Loan fixtures through
+    `TopupApi`'s delegating methods, plus `mockTopupStatus` for the status
+    screen. ⚠ The guard on `submit` / `payInterest` / `saveLead` is the
+    load-bearing part: without it a *demo* build would really file a top-up,
+    really raise an interest payment and really create a lead, because those
+    three are `TopupApi`'s own implementations rather than delegates to the
+    already-guarded `PLoanApi`. A test asserts every one of them still has it —
+    don't add a `/topup/*` write without one.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

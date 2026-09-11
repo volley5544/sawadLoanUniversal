@@ -19,7 +19,7 @@ class LoanRegisterListPage extends StatefulWidget {
   State<LoanRegisterListPage> createState() => _LoanRegisterListPageState();
 }
 
-enum _RegisterCategory { motorcycle, draft, pLoan, pLoanFlow }
+enum _RegisterCategory { motorcycle, draft, pLoan, pLoanFlow, topup }
 
 class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   _RegisterCategory _selected = _RegisterCategory.motorcycle;
@@ -126,9 +126,21 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
                     },
                   ),
                 ),
-                // Empty slots keep the card the same width as the row above.
                 const SizedBox(width: 16),
-                const Expanded(child: SizedBox.shrink()),
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'DocumentIcon.svg',
+                    // A top-up, not a P-Loan Extra: it closes the existing
+                    // contract out and reissues it larger. See `TopupFlow`.
+                    label: 'สินเชื่อเพิ่ม',
+                    selected: _selected == _RegisterCategory.topup,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.topup);
+                      context.push(AppRoutes.topupCard);
+                    },
+                  ),
+                ),
+                // Empty slot keeps the cards the same width as the row above.
                 const SizedBox(width: 16),
                 const Expanded(child: SizedBox.shrink()),
               ],
