@@ -176,7 +176,9 @@ class TopupFlow {
   int get closingBalance => amountDetail?.contractDetails.closingBalance ?? 0;
 
   /// Accrued interest, counted only when it has not already been settled.
-  int get outstandingInterest =>
+  ///
+  /// `double`, not `int` — see [LoanAmountDetail.interestYield].
+  double get outstandingInterest =>
       hasUnpaidInterest ? (amountDetail?.interestYield ?? 0) : 0;
 
   /// `'Y'` means the accrued interest is still owed, and it must be paid
@@ -191,15 +193,124 @@ class TopupFlow {
   /// top-up settles the old principal, a P-Loan Extra does not.
   int get payoutAmount => calculatedAmount - closingBalance - feeAmount;
 
-  /// The stricter figure the eligibility check uses, which additionally nets
-  /// off unpaid interest and the collection fee.
+  /// Deduction **item 5** — the old contract's unpaid interest and collection
+  /// fee together, which the customer must settle before the request can go
+  /// through. Zero unless [hasUnpaidInterest].
+  double get overdueDeduction => hasUnpaidInterest
+      ? (amountDetail?.interestYield ?? 0) + (amountDetail?.collectionFee ?? 0)
+      : 0;
+
+  /// **`จำนวนเงินที่จะได้รับ`** — the figure shown to the customer, item 3
+  /// less item 5.
   ///
-  /// Kept separate from [payoutAmount] on purpose: the source really does
-  /// compute two different numbers here, one to decide whether a self-service
-  /// top-up is allowed at all and one to send. Collapsing them would change
-  /// what gets filed.
-  int get netTransferAmount =>
+  /// ⚠ This is **not** [payoutAmount] and **not** [netTransferAmount]; the
+  /// screen genuinely shows a third number. It differs from [payoutAmount]
+  /// only when there is unpaid interest, and from [netTransferAmount] only
+  /// when there is not — see that getter for why the collection fee is
+  /// unconditional there and conditional here.
+  double get receivableAmount => payoutAmount - overdueDeduction;
+
+  /// The stricter figure the **eligibility** check uses, which additionally
+  /// nets off unpaid interest and the collection fee.
+  ///
+  /// Kept separate from [payoutAmount] and [receivableAmount] on purpose: the
+  /// source really does compute three different numbers here — one to send
+  /// (`transfer_amount`), one to show, and this one to decide whether a
+  /// self-service top-up is allowed at all. Collapsing any two would change
+  /// either what is filed or what the customer is promised.
+  ///
+  /// ⚠ Note the collection fee comes off here **unconditionally**, where
+  /// [receivableAmount] only subtracts it as part of item 5. That asymmetry is
+  /// the source's, reproduced deliberately.
+  double get netTransferAmount =>
       payoutAmount - outstandingInterest - (amountDetail?.collectionFee ?? 0);
+
+  /// The numbered deduction list the amount screen renders.
+  ///
+  /// ⚠ **The numbering really does skip 4.** Item 4 (`ยอดค้างชำระงวดที่`) has
+  /// a *different* render condition from item 5 — it additionally needs a
+  /// non-zero `overdue_amount` — so the two rarely appear together and the
+  /// on-screen list commonly reads 1, 2, 3, 5. That is the source's behaviour
+  /// and the numbers are fixed labels, not positions: renumbering them would
+  /// make this build disagree with every screenshot and with the QA manual.
+  List<TopupDeductionLine> get deductionLines {
+    final detail = amountDetail;
+    if (detail == null) return const [];
+    final contractNo = detail.contractNo;
+    final lines = <TopupDeductionLine>[
+      TopupDeductionLine(
+        number: '1',
+        label: 'หักยอดเงินต้นคงเหลือสัญญาเก่า',
+        amount: closingBalance,
+        contractNo: contractNo,
+      ),
+      TopupDeductionLine(
+        number: '2',
+        label: 'หักอากรสแตมป์',
+        amount: feeAmount,
+        contractNo: contractNo,
+      ),
+    ];
+    if (!hasUnpaidInterest) {
+      // Nothing outstanding: item 3 *is* the payout, so the list stops here
+      // and the screen shows จำนวนเงินที่จะได้รับ on its own.
+      return lines;
+    }
+    lines.add(TopupDeductionLine(
+      number: '3',
+      label: 'จำนวนเงินก่อนจ่ายยอดค้างชำระ',
+      amount: payoutAmount,
+      contractNo: '',
+      caption: '(ก่อนจ่ายยอดค้างชำระ)',
+      highlight: true,
+    ));
+    final overdue = detail.overdueAmount.round();
+    if (overdue != 0) {
+      final period = _overduePeriod(detail);
+      lines.add(TopupDeductionLine(
+        number: '4',
+        label: 'ยอดค้างชำระงวดที่$period',
+        amount: overdue,
+        contractNo: contractNo,
+      ));
+    }
+    lines.add(TopupDeductionLine(
+      number: '5',
+      label: 'รวมหักดอกเบี้ยและยอดติดตามทวงถามสัญญาเก่า',
+      amount: overdueDeduction,
+      contractNo: contractNo,
+      warning: '*กรุณาชำระเงินก่อนดำเนินการ',
+      children: [
+        TopupDeductionLine(
+          number: '5.1',
+          label: 'ดอกเบี้ย',
+          amount: detail.interestYield,
+          contractNo: '',
+        ),
+        TopupDeductionLine(
+          number: '5.2',
+          label: 'ค่าติดตามทวงถาม',
+          amount: detail.collectionFee,
+          contractNo: '',
+        ),
+      ],
+    ));
+    return lines;
+  }
+
+  /// `" (5-3)"` — the overdue instalment range, or `''` when the API sent
+  /// neither bound.
+  ///
+  /// The source prints `overdue_to`–`overdue_from`, in that order. It reads
+  /// backwards, and it is kept that way: the figures come from the server and
+  /// swapping them here would make this build disagree with the native app
+  /// for the same contract.
+  String _overduePeriod(LoanAmountDetail detail) {
+    final from = detail.overdueFrom.trim();
+    final to = detail.overdueTo.trim();
+    if (from.isEmpty && to.isEmpty) return '';
+    return ' ($to-$from)';
+  }
 
   /// Upper bound on what may be transferred without a person involved.
   ///
@@ -402,4 +513,46 @@ class TopupFlow {
       vehicleType: contract.contractDetails.loanTypeName,
     );
   }
+}
+
+
+/// One row of the amount screen's numbered deduction list.
+///
+/// [number] is a **label**, not a position — see [TopupFlow.deductionLines]
+/// for why the on-screen list can read 1, 2, 3, 5.
+class TopupDeductionLine {
+  const TopupDeductionLine({
+    required this.number,
+    required this.label,
+    required this.amount,
+    required this.contractNo,
+    this.caption = '',
+    this.warning = '',
+    this.highlight = false,
+    this.children = const [],
+  });
+
+  final String number;
+  final String label;
+
+  /// `num`, because the interest and fee rows are decimals while the
+  /// principal and duty rows are whole baht.
+  final num amount;
+
+  /// Shown small under the label, the way the source repeats the contract
+  /// number beneath each deduction. Empty for rows that are not a deduction
+  /// against the old contract.
+  final String contractNo;
+
+  /// Extra parenthetical under the label.
+  final String caption;
+
+  /// Red line under the row, e.g. "*กรุณาชำระเงินก่อนดำเนินการ".
+  final String warning;
+
+  /// Renders the amount in red — the source highlights item 3.
+  final bool highlight;
+
+  /// Indented sub-rows (5.1, 5.2).
+  final List<TopupDeductionLine> children;
 }

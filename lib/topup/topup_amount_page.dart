@@ -251,14 +251,27 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     if (contract == null || detail == null) return;
     setState(() => _submittingLead = true);
     try {
+      // ⚠ Three things here are easy to get wrong, and all three produce a
+      // 500 rather than a validation error:
+      //
+      //  - `comcode` is **`barcode_details.comcode`**, not
+      //    `contract_details.comcode`. They are different fields with
+      //    different values; this one identifies the biller.
+      //  - `firstname`/`lastname` are split from the **contract holder's**
+      //    name, not taken from the app user's profile. The two can differ,
+      //    and the bill is raised against the contract.
+      //  - the three amounts are **decimals**. Sending `2987` where the
+      //    server expects `2987.84` both misstates the amount and changes the
+      //    JSON type.
+      final holder = _splitContractName(contract.contractName);
       await TopupApi.payInterest(
         token: _flow.authToken,
         payload: {
-          'comcode': contract.contractDetails.comcode,
+          'comcode': contract.barcodeDetails.comcode,
           'contract_no': contract.contractNo,
           'contract_name': contract.contractName,
-          'firstname': customer?.firstName ?? '',
-          'lastname': customer?.lastName ?? '',
+          'firstname': holder.$1,
+          'lastname': holder.$2,
           'national_thai_id': customer?.thaiId ?? '',
           'hash_thai_id': _flow.hashThaiId,
           'interest_amount': detail.interestYield,
@@ -278,6 +291,21 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
     }
+  }
+
+  /// Splits a contract holder's name into first and last.
+  ///
+  /// The source does `name.split(' ')[0]` and `[1]`, which throws RangeError
+  /// on a single-word name and silently drops the rest of a three-part one.
+  /// Here the first token is the given name and **everything after it** is the
+  /// surname, and a name with no space yields an empty surname rather than
+  /// crashing the payment.
+  (String, String) _splitContractName(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return ('', '');
+    if (parts.length == 1) return (parts.first, '');
+    return (parts.first, parts.sublist(1).join(' '));
   }
 
   /// Files a lead and ends the flow on the success screen.
@@ -355,8 +383,19 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
             label: 'ยอดเงินต้นคงเหลือสัญญาเดิม',
             value: '${formatMoney(detail.contractDetails.closingBalance)} บาท',
           ),
-          const PLoanSectionHeader('ยอดจัดสินเชื่อ'),
+          const PLoanSectionHeader('วงเงินที่ต้องการกู้ใหม่'),
           _amountField(),
+          if (_flow.isAmountEditable && !_flow.hasUnpaidInterest)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'เลื่อนเพื่อปรับลดวงเงิน',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 13,
+                  color: LoanRegisterStyles.primary,
+                ),
+              ),
+            ),
           if (_flow.hasUnpaidInterest)
             TopupNotice(
               'สัญญานี้มีดอกเบี้ยค้างชำระ ${formatMoney(detail.interestYield)} บาท '
@@ -376,28 +415,13 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
               '(${_flow.purpose?.productName ?? ''})',
             ),
           if (_flow.isAmountEditable && !_flow.hasUnpaidInterest) _slider(detail),
-          const PLoanSectionHeader('รายละเอียดยอดเงิน'),
+          const PLoanSectionHeader('รายการหัก'),
+          // The numbered list, 1 / 2 / 3 / (4) / 5 — see
+          // TopupFlow.deductionLines for why the sequence can skip 4.
+          for (final line in _flow.deductionLines) TopupDeductionRow(line),
           PLoanAmountRow(
-            label: 'ยอดจัดสินเชื่อ',
-            value: '${formatMoney(_flow.calculatedAmount)} บาท',
-          ),
-          PLoanAmountRow(
-            label: 'หักยอดเงินต้นสัญญาเดิม',
-            value: '${formatMoney(_flow.closingBalance)} บาท',
-          ),
-          PLoanAmountRow(
-            label: 'ค่าอากรแสตมป์',
-            value: '${formatMoney(_flow.feeAmount)} บาท',
-          ),
-          if (_flow.outstandingInterest > 0)
-            PLoanAmountRow(
-              label: 'ดอกเบี้ยค้างชำระ',
-              value: '${formatMoney(_flow.outstandingInterest)} บาท',
-              emphasis: true,
-            ),
-          PLoanAmountRow(
-            label: 'ยอดโอนเงินเข้าบัญชี',
-            value: '${formatMoney(_flow.payoutAmount)} บาท',
+            label: 'จำนวนเงินที่จะได้รับ',
+            value: '${formatMoney(_flow.receivableAmount)} บาท',
             large: true,
             emphasis: true,
             showDivider: false,
@@ -485,12 +509,58 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     );
   }
 
+  /// Re-prices the current amount on demand — the source's
+  /// **ปรับปรุงยอดชำระ**.
+  ///
+  /// On the overdue screen this is how the customer refreshes the figures
+  /// after paying, without the blur/slider interaction that drives the normal
+  /// path. It re-reads `/topup/detail` as well as the calculator, because
+  /// settling the interest changes `interest_paid_flag` and the whole screen
+  /// with it.
+  Future<void> _refreshFigures() async {
+    setState(() => _recalculating = true);
+    await _load();
+    if (mounted) setState(() => _recalculating = false);
+  }
+
   Widget? _bottomBar() {
     final busy = _recalculating || _submittingLead;
     final editing = _amountFocus.hasFocus;
+
+    // Unpaid interest: the customer pays, then refreshes. Two buttons, as in
+    // the source — ปรับปรุงยอดชำระ is the only way back from a payment the
+    // app cannot observe.
+    if (_flow.outcome == TopupOutcome.payInterest) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: LoanRegisterStyles.divider)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TopupPrimaryButton(
+                label: 'ชำระเงิน',
+                busy: _submittingLead,
+                onPressed: busy ? null : _payInterest,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TopupPrimaryButton(
+                label: 'ปรับปรุงยอดชำระ',
+                outlined: true,
+                busy: _recalculating,
+                onPressed: busy ? null : _refreshFigures,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final ready = switch (_flow.outcome) {
-      // Paying the interest needs no valid top-up amount — the amount field is
-      // locked in that state anyway.
       TopupOutcome.payInterest => true,
       TopupOutcome.lead => true,
       TopupOutcome.topup =>

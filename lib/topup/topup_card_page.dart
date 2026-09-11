@@ -220,24 +220,40 @@ class _TopupCardPageState extends State<TopupCardPage> {
       return const PLoanLoadingView(message: 'กำลังโหลดข้อมูลสัญญา...');
     }
     if (contracts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Text(
-            'ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansThai(
-              fontSize: 15,
-              height: 1.6,
-              color: LoanRegisterStyles.label,
+      // The conditions still belong here: they are often *why* there is
+      // nothing to show (pay on time, keep the credit record).
+      return ListView(
+        children: [
+          const TopupConditionsPanel(),
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text(
+              'ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansThai(
+                fontSize: 15,
+                height: 1.6,
+                color: LoanRegisterStyles.label,
+              ),
             ),
           ),
-        ),
+        ],
       );
     }
     return Column(
       children: [
+        const TopupConditionsPanel(),
         _header(contracts.length),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            '« ปัดซ้าย-ขวา เพื่อดูสัญญาอื่น »',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 12.5,
+              color: LoanRegisterStyles.primary,
+            ),
+          ),
+        ),
         Expanded(
           child: PageView.builder(
             controller: _pageController,
@@ -370,6 +386,10 @@ class _TopupContractCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!pending && eligible) ...[
+            _MaxTransferBanner(amount: detail.defaultTransferAmount.round()),
+            const SizedBox(height: 12),
+          ],
           ContractSummaryCard(
             loanTypeCode: contract.contractDetails.loanTypeCode,
             loanTypeName: contract.loanTypeName.isEmpty
@@ -400,30 +420,243 @@ class _TopupContractCard extends StatelessWidget {
               tone: TopupNoticeTone.warning,
             ),
           ] else ...[
-            PLoanAmountRow(
-              label: 'วงเงินสินเชื่อใหม่',
-              value: '${formatWholeMoney(offered)} บาท',
-              large: true,
-            ),
-            if (specials > 0)
-              PLoanAmountRow(
-                label: 'วงเงินพิเศษเพิ่มเติม',
-                value: '${formatWholeMoney(specials)} บาท',
-                emphasis: true,
-              ),
-            PLoanAmountRow(
-              label: 'ยอดปิดสัญญาเดิม',
-              value: '${formatWholeMoney(detail.balanceReceivable)} บาท',
-            ),
-            PLoanAmountRow(
-              label: 'ค่างวดปัจจุบัน',
-              value:
-                  '${formatWholeMoney(contract.paymentDetails.installmentAmount)} บาท',
-              showDivider: false,
-            ),
             const SizedBox(height: 12),
-            TopupPrimaryButton(label: 'ขอสินเชื่อเพิ่ม', onPressed: onSelect),
+            _creditSummary(contract, detail, offered, specials),
+            const SizedBox(height: 12),
+            TopupPrimaryButton(label: 'เติมวงเงิน', onPressed: onSelect),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// The credit-summary block: the existing line, the appraisal, the new line,
+  /// what closing the old contract costs, and what actually lands in the
+  /// account.
+  ///
+  /// Every figure here is one the customer sees *before* committing, so they
+  /// all come straight off `/loan/list` rather than being recomputed.
+  Widget _creditSummary(
+    LoanContract contract,
+    TopupDetail detail,
+    int offered,
+    int specials,
+  ) {
+    final details = contract.contractDetails;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F7FC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'วงเงินสินเชื่อ (สัญญา ${contract.contractNo})',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 12.5,
+              color: LoanRegisterStyles.label,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _summaryLine('วงเงินสินเชื่อเดิม', details.creditLimit),
+          _summaryLine(
+              'ราคาประเมินหลักทรัพย์ปัจจุบัน', details.currentLtvAmount),
+          Divider(height: 18, color: LoanRegisterStyles.divider),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text(
+                  'วงเงินสินเชื่อปัจจุบัน',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: LoanRegisterStyles.value,
+                  ),
+                ),
+              ),
+              Text(
+                formatMoney(offered),
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+              Text(' บาท',
+                  style: GoogleFonts.notoSansThai(
+                      fontSize: 12, color: LoanRegisterStyles.label)),
+            ],
+          ),
+          if (specials > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'รวมวงเงินพิเศษเพิ่มเติม ${formatMoney(specials)} บาท',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 12.5,
+                  color: LoanRegisterStyles.required,
+                ),
+              ),
+            ),
+          Divider(height: 18, color: LoanRegisterStyles.divider),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  // The date is when the contract data was fetched, not today
+                  // — it rides on the payload as `data_date`.
+                  'ยอดปิดบัญชี ณ วันที่ ${formatThaiDate(contract.dataDate)}',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 13,
+                    color: LoanRegisterStyles.value,
+                  ),
+                ),
+              ),
+              Text(
+                '-${formatMoney(detail.balanceReceivable)} บาท',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: LoanRegisterStyles.primarySoft,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined,
+                    size: 18, color: LoanRegisterStyles.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'เงินคงเหลือโอนเข้าบัญชี',
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 13,
+                      color: LoanRegisterStyles.value,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${formatMoney(detail.defaultTransferAmount)} บาท',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryLine(String label, num value) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 13,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+            ),
+            Text(
+              formatMoney(value),
+              style: GoogleFonts.notoSansThai(
+                fontSize: 13.5,
+                color: LoanRegisterStyles.value,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// The blue band at the top of an eligible contract card.
+///
+/// `default_transfer_amount` is the API's own headline — what the customer
+/// would receive if they took the full line — so it is read, not recomputed.
+class _MaxTransferBanner extends StatelessWidget {
+  const _MaxTransferBanner({required this.amount});
+
+  final int amount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B3A6B),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'รับเงินโอนเข้าบัญชีสูงสุด',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('สูงสุด ',
+                  style: GoogleFonts.notoSansThai(
+                      fontSize: 14, color: Colors.white70)),
+              Text(
+                formatWholeMoney(amount),
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              Text(' บาท',
+                  style: GoogleFonts.notoSansThai(
+                      fontSize: 14, color: Colors.white70)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.check_circle_outline,
+                  size: 16, color: Colors.white70),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'เพียงเติมวงเงินเต็มจำนวน รับเงินสดใช้จ่ายได้เลย '
+                  'หลังปิดบัญชีเดิม',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

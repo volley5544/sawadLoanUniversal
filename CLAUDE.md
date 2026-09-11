@@ -1644,7 +1644,7 @@ Screens (`TopupStepIndicator` counts 1–7):
 | 2 | `topup_purpose_page` | วัตถุประสงค์ | — |
 | 3 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
 | 4 | `topup_installment_page` | เลือกจำนวนงวด | — |
-| 5 | `topup_photos_page` | รูปภาพหลักประกัน | host camera |
+| 5 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
 | 6 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
 | 7 | `topup_conclusion_page` | สรุปรายละเอียดสินเชื่อ | `/pdf/loan`, `/vision/thai-id-validate`, `POST /topup` |
 | — | `topup_success_page` | (terminal, both endings) | — |
@@ -1673,11 +1673,43 @@ flow suddenly offers ส่งข้อมูล for every contract, the field i
 `/loan/list`. It is deliberately **not** treated as "no limit": guessing the
 cap open would let through a request the backend meant to hold back.
 
-**Two payout figures, deliberately not merged.** `payoutAmount` (what
-`transfer_amount` sends) is `amount − closing_balance − fee`;
-`netTransferAmount` (what the lead check tests) additionally nets off unpaid
-interest and the collection fee. The source really does compute both, and
-collapsing them would change what gets filed.
+**Three payout figures, deliberately not merged.** The source really does
+compute three different numbers, and collapsing any two changes either what is
+filed or what the customer is promised:
+
+| Getter | Is | Used by |
+| --- | --- | --- |
+| `payoutAmount` | `amount − closing_balance − fee` | `transfer_amount` on the submit body; deduction item 3 |
+| `receivableAmount` | `payoutAmount − overdueDeduction` | **`จำนวนเงินที่จะได้รับ`**, the figure on screen |
+| `netTransferAmount` | `payoutAmount − yield − collection_fee` | the lead-branch eligibility test only |
+
+⚠ The collection fee comes off `netTransferAmount` **unconditionally** but off
+`receivableAmount` only as part of item 5 (i.e. only when there is unpaid
+interest). That asymmetry is the source's, reproduced deliberately and pinned
+by a test.
+
+**The amount screen's deductions are a numbered list** (`deductionLines`),
+matching the source's layout:
+
+| # | Row | Shown when |
+| --- | --- | --- |
+| 1 | หักยอดเงินต้นคงเหลือสัญญาเก่า | always |
+| 2 | หักอากรสแตมป์ | always |
+| 3 | จำนวนเงินก่อนจ่ายยอดค้างชำระ | unpaid interest |
+| 4 | ยอดค้างชำระงวดที่ (`overdue_to`-`overdue_from`) | unpaid interest **and** `overdue_amount != 0` |
+| 5 | รวมหักดอกเบี้ยและยอดติดตามทวงถาม (+ 5.1 ดอกเบี้ย, 5.2 ค่าติดตามทวงถาม) | unpaid interest |
+
+⚠ **The on-screen numbering really does skip 4**, because item 4 needs a
+non-zero overdue amount and item 5 does not, so the list commonly reads
+1, 2, 3, 5. The numbers are fixed labels, not positions — renumbering them
+would make this build disagree with every QA screenshot. A test pins it.
+(The user manual calls this out too, as note A6.)
+
+⚠ **`interest_paid_flag == 'Y'` means interest is *outstanding***, despite how
+the name reads. Both item 4 and item 5 render on `== 'Y'`, and the amount
+field locks. The user manual's §2.2 prose says the opposite ("shown when
+interest_paid_flag is not 'Y'") — that prose is **wrong**; its own mapping
+table and the source code both say `== 'Y'`.
 
 **`topup_special_flag`.** When the contract carries it, `topup_specials` is
 granted **on top of** the ordinary limit and `GET /topup/detail` does **not**
@@ -1690,6 +1722,31 @@ calculator run. Without that the uplift the card advertised is offered nowhere.
 `detail.copyWith(feeAmount: …)` — same rule the P-Loan flow follows and for the
 same reason: `/topup/detail` returns the duty on the contract's *default* limit,
 `/topup/calculator` on the amount actually requested.
+
+#### Section inventory (against the QA user manual)
+
+The screens are built to match **`LandAndHouseWeb/docs/topup-user-manual-v2.md`**
+(+ its `screenshots/`), which is the reference for what each one must carry.
+Sections present:
+
+| Manual | Screen | Carries |
+| --- | --- | --- |
+| §1.2 | card | วิธีขอปรับวงเงินเพิ่ม conditions panel, contract pager, swipe hint |
+| §1.3 | card | รับเงินโอนเข้าบัญชีสูงสุด band; credit summary — วงเงินสินเชื่อเดิม, ราคาประเมินหลักทรัพย์ปัจจุบัน, วงเงินสินเชื่อปัจจุบัน, ยอดปิดบัญชี ณ วันที่ (`data_date`), เงินคงเหลือโอนเข้าบัญชี |
+| §2.1/2.2 | amount | amount field + slider + min/max, the numbered deduction list (see above), จำนวนเงินที่จะได้รับ, ชำระเงิน / ปรับปรุงยอดชำระ |
+| §2.3 | QR | amount due, payment-window note, QR, R1/R2, bank exclusions, ปรับปรุงยอดชำระ |
+| §3.1 | installments | ยอดจัดสินเชื่อใหม่ + tenor list |
+| §3.2 | photos | ทะเบียนจังหวัด / วันหมดอายุทะเบียน / ยี่ห้อสินค้า / รุ่นสินค้า, then the required photos |
+| §4.1/4.2 | customer data | account, name, phone, four addresses, ไม่ถูกต้อง / ยืนยัน, confirm sheet |
+| §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents, PDPA |
+| §5.4 | success | payout + deadline caveat, ดูสถานะการขอเพิ่มวงเงิน, กลับสู่หน้าแรก |
+
+⚠ **`บันทึกรูปภาพ` (save the QR image) is deliberately left out.** The source
+saves it through a native custom action this build has no equivalent for, and a
+web `<a download>` inside the WebView is not reliably honoured — a button that
+silently does nothing is worse than no button. The payment payload can be
+copied instead, and a screenshot works. Add it back only alongside a host
+handler that actually saves.
 
 #### Deliberate deviations from the source
 
@@ -1744,6 +1801,32 @@ for **everything else**, so a near-miss fails silently with a wrong-looking
 camera rather than an error. That exact bug cost the P-Loan flow its front
 camera once; a test pins the selfie slot's string.
 
+**Which is why step 5 does not use the bridge at all** (changed 2026-09-11).
+That same fall-through means the host puts an **ID-card framing mask** over a
+whole vehicle, a tax disc and an odometer, and it cannot be taught new masks
+without an app release. So the collateral screen takes the plain
+`image_picker` camera — no mask, the customer frames the shot — while **step 7
+keeps the bridge**, where the ID-card and selfie masks are exactly right. A
+test pins the split, because "tidy up the two capture paths" would quietly
+undo it.
+
+⚠ **That made a downscale mandatory**, and it is not optional decoration:
+`image_picker_for_web` **ignores `maxWidth`/`imageQuality`** (it is a hidden
+`<input type="file" accept="image/*" capture>`), so the browser hands back the
+camera's full-resolution file and the ≈1280 px/JPEG-80 downscale the bridge
+used to do no longer happens. Seven of those base64-encoded into one JSON body
+is tens of megabytes. `services/image_downscale.dart` re-encodes each capture
+through a canvas and `toDataURL('image/jpeg', q)` — the browser's own native
+encoder, because `dart:ui` cannot encode JPEG at all (PNG and raw RGBA only,
+and a PNG of a photograph is *larger*) and `package:image` takes seconds per
+12-megapixel photo inside a WebView. It never throws: any failure returns the
+original bytes, since an oversized photo beats a lost one.
+
+Step 5 also now depends on the **host's file chooser** (`onShowFileChooser` and
+its iOS equivalent) rather than the camera handler. That path is already
+exercised by `p_loan/submit_form`'s attachment groups, so it is not new ground
+— but it is the first thing to check if the button does nothing on a device.
+
 #### The lead fallback (`TopupApi.saveLead`)
 
 `POST {lead base}/ssw_service_api/api/leads/lh-save` — filed instead of a
@@ -1773,6 +1856,32 @@ re-serialising them from typed fields, which would silently drop any key this
 model does not know about. `rawJson` exists for that and nothing else.
 `pdpa_flg` goes out **empty**: a lead never reaches step 7, so claiming a
 consent there would record one that was never given.
+
+#### `POST /payment/interest` — three things that 500 rather than 400
+
+Found 2026-09-11 chasing a live HTTP 500 that Postman did not reproduce. All
+three are silent mismatches: the request is well-formed, so the server gets as
+far as using the values before failing.
+
+| Field | Wrong | Right |
+| --- | --- | --- |
+| `comcode` | `contract_details.comcode` | **`barcode_details.comcode`** — a different field, and the one that identifies the biller |
+| `firstname` / `lastname` | the app user's profile name | split from the **contract holder's** name (`contract_name`) |
+| `interest_amount`, `collection_fee`, `penalty_fee` | `int` | **`double`** — see below |
+
+⚠ **`yield`, `collection_fee` and `penalty_fee` are decimals on the wire** and
+were being parsed as `int` on both `LoanAmountDetail` and
+`LoanContract.topupDetail`. That truncated `2987.84` to `2987` — misstating an
+amount the server bills against an exact figure, *and* changing the JSON type
+it is handed. It also made the QR total and the deduction rows wrong (the
+manual's screenshot shows `9.15`, which an int renders as `9`). Now `double`
+everywhere, with tests. Nothing in the P-Loan flow reads these three, so the
+widening touched no P-Loan behaviour.
+
+The name split is also made safe: the source does `name.split(' ')[1]`, which
+throws `RangeError` on a single-word contract name and drops the third token of
+a three-part one. `_splitContractName` takes the first token as the given name
+and everything after it as the surname.
 
 #### The interest-payment QR
 

@@ -395,12 +395,14 @@ class TopupDetail {
 
   /// Total payable to close the old contract.
   final int balanceReceivable;
-  final int collectionFee;
-  final int penaltyFee;
+  /// ⚠ Decimal on the wire — see `LoanAmountDetail.collectionFee`.
+  final double collectionFee;
+  final double penaltyFee;
 
   /// `yield` on the wire — accrued interest. Renamed here because `yield` is
   /// a Dart reserved word.
-  final int interestYield;
+  /// ⚠ Decimal on the wire — see `LoanAmountDetail.interestYield`.
+  final double interestYield;
   final String interestPaidFlag;
 
   /// Why [canTopup] isn't `Y`; shown to the user in place of the limits.
@@ -424,9 +426,9 @@ class TopupDetail {
         topupExtra: asInt(json['topup_extra']),
         feeAmount: asInt(json['fee_amount']),
         balanceReceivable: asInt(json['balance_receivable']),
-        collectionFee: asInt(json['collection_fee']),
-        penaltyFee: asInt(json['penalty_fee']),
-        interestYield: asInt(json['yield']),
+        collectionFee: asDouble(json['collection_fee']),
+        penaltyFee: asDouble(json['penalty_fee']),
+        interestYield: asDouble(json['yield']),
         interestPaidFlag: asString(json['interest_paid_flag']),
         canTopupMsg: asString(json['can_topup_msg']),
         maxTransferAmount: asInt(json['max_transfer_amount']),

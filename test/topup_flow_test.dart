@@ -314,6 +314,28 @@ void main() {
       expect(actions.where((a) => a.isEmpty), isEmpty);
       expect(actions.toSet(), hasLength(actions.length));
     });
+
+    test('the collateral screen does NOT use the camera bridge', () {
+      // Step 5 deliberately takes the plain `image_picker` camera: the host
+      // applies its ID-card framing mask to every action but 'selfie', which
+      // is the wrong frame for a vehicle, a tax disc or an odometer. Step 7
+      // keeps the bridge, where the masks are right.
+      //
+      // Asserted on the source because the difference is a call site, not a
+      // value — and it is the kind of thing a later "tidy up the two capture
+      // paths" would quietly undo.
+      final photos = File('lib/topup/topup_photos_page.dart').readAsStringSync();
+      expect(photos.contains('NativeCameraBridge'), isFalse,
+          reason: 'step 5 must not capture through the host camera bridge');
+      expect(photos.contains('ImageDownscale.jpeg'), isTrue,
+          reason: 'image_picker_for_web ignores maxWidth/imageQuality, so the '
+              'capture has to be downscaled before it reaches the payload');
+
+      final conclusion =
+          File('lib/topup/topup_conclusion_page.dart').readAsStringSync();
+      expect(conclusion.contains('NativeCameraBridge'), isTrue,
+          reason: 'step 7 keeps the bridge for the ID-card and selfie masks');
+    });
   });
 
   group('identity', () {
@@ -478,6 +500,106 @@ void main() {
           reason: '$method has no kPLoanUseMockData guard before its request',
         );
       }
+    });
+  });
+
+  group('deduction list — the numbered rows on the amount screen', () {
+    test('no unpaid interest: items 1 and 2 only', () {
+      final flow = _flowFor('MOCK-C-6701002');
+      expect(flow.deductionLines.map((l) => l.number), ['1', '2']);
+      // จำนวนเงินที่จะได้รับ is then just the payout.
+      expect(flow.receivableAmount, flow.payoutAmount);
+      expect(flow.overdueDeduction, 0);
+    });
+
+    test('unpaid interest adds item 3 and item 5 with its two children', () {
+      final flow = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {'interest_paid_flag': 'Y', 'collection_fee': 38.0},
+      );
+      final numbers = flow.deductionLines.map((l) => l.number).toList();
+      // ⚠ 4 is absent because overdue_amount is 0 — the list really does read
+      // 1, 2, 3, 5. See TopupFlow.deductionLines.
+      expect(numbers, ['1', '2', '3', '5']);
+
+      final item5 = flow.deductionLines.last;
+      expect(item5.children.map((c) => c.number), ['5.1', '5.2']);
+      expect(item5.amount, flow.overdueDeduction);
+      expect(item5.amount, 1200 + 38.0);
+    });
+
+    test('item 4 appears only with a non-zero overdue amount', () {
+      final flow = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {
+          'interest_paid_flag': 'Y',
+          'overdue_amount': 1250.0,
+          'overdue_from': '3',
+          'overdue_to': '5',
+        },
+      );
+      final item4 =
+          flow.deductionLines.firstWhere((l) => l.number == '4');
+      expect(item4.amount, 1250);
+      // The source prints overdue_to–overdue_from, in that order.
+      expect(item4.label, contains('(5-3)'));
+    });
+
+    test('receivable is item 3 less item 5', () {
+      final flow = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {'interest_paid_flag': 'Y', 'collection_fee': 38.0},
+      );
+      expect(flow.receivableAmount, flow.payoutAmount - flow.overdueDeduction);
+    });
+
+    test(
+        'receivable and netTransfer differ when nothing is overdue — the '
+        'collection fee is unconditional in the eligibility check only', () {
+      final flow = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {'interest_paid_flag': 'N', 'collection_fee': 38.0},
+      );
+      expect(flow.receivableAmount, flow.payoutAmount);
+      expect(flow.netTransferAmount, flow.payoutAmount - 38.0);
+    });
+  });
+
+  group('decimal money fields', () {
+    test('yield, collection fee and penalty fee keep their decimals', () {
+      // Truncating these to int misstates what /payment/interest is billed
+      // for and changes the JSON type the server is handed — which is what
+      // made that call 500.
+      final detail = LoanAmountDetail.fromJson(const {
+        'code': '200',
+        'yield': 2987.84,
+        'collection_fee': 38.0,
+        'penalty_fee': 12.5,
+      });
+      expect(detail.interestYield, 2987.84);
+      expect(detail.collectionFee, 38.0);
+      expect(detail.penaltyFee, 12.5);
+    });
+
+    test('the contract copy keeps them too', () {
+      final contract = LoanContract.fromJson(const {
+        'topup_detail': {
+          'yield': 2987.84,
+          'collection_fee': 38.0,
+          'penalty_fee': 12.5,
+        },
+      });
+      expect(contract.topupDetail.interestYield, 2987.84);
+      expect(contract.topupDetail.collectionFee, 38.0);
+      expect(contract.topupDetail.penaltyFee, 12.5);
+    });
+
+    test('a string amount still parses', () {
+      final detail = LoanAmountDetail.fromJson(const {
+        'code': '200',
+        'yield': '2987.84',
+      });
+      expect(detail.interestYield, 2987.84);
     });
   });
 

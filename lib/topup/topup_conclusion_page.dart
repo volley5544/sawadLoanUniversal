@@ -307,24 +307,44 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
             collateralInformation:
                 contract.contractDetails.collateralInformation,
           ),
-          const PLoanSectionHeader('รายละเอียดคำขอสินเชื่อเพิ่ม'),
+          // ── สรุปยอดสินเชื่อใหม่ ─────────────────────────────────────
+          // The before/after picture: what the contract was approved for,
+          // what is being asked for now, and the two deductions. The customer
+          // has already seen these on step 3; repeating them here is the last
+          // chance to notice a wrong figure before filing.
+          const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
           PLoanAmountRow(
-            label: 'ยอดจัดสินเชื่อ',
+            label: 'ยอดจัดสินเชื่อเดิม',
+            value: '${formatMoney(detail.defaultTopupAmount)} บาท',
+          ),
+          PLoanAmountRow(
+            label: 'รวมยอดวงเงินที่อนุมัติ',
+            value: '${formatMoney(detail.maxTopupAmount)} บาท',
+          ),
+          PLoanAmountRow(
+            label: 'วงเงินที่ต้องการกู้ใหม่',
             value: '${formatMoney(flow.calculatedAmount)} บาท',
           ),
           PLoanAmountRow(
-            label: 'หักยอดเงินต้นสัญญาเดิม',
+            label: 'หักยอดเงินต้นสัญญาเก่า',
+            caption: 'เลขที่สัญญา ${contract.contractNo}',
             value: '${formatMoney(flow.closingBalance)} บาท',
           ),
           PLoanAmountRow(
-            label: 'ค่าอากรแสตมป์',
+            label: 'หักอากรสแตมป์',
+            caption: 'เลขที่สัญญา ${contract.contractNo}',
             value: '${formatMoney(flow.feeAmount)} บาท',
           ),
           PLoanAmountRow(
-            label: 'ยอดโอนเงินเข้าบัญชี',
-            value: '${formatMoney(flow.payoutAmount)} บาท',
+            label: 'จำนวนเงินที่จะได้รับ',
+            value: '${formatMoney(flow.receivableAmount)} บาท',
             emphasis: true,
             large: true,
+          ),
+          const PLoanSectionHeader('รายละเอียดคำขอสินเชื่อใหม่'),
+          PLoanAmountRow(
+            label: 'ยอดจัดสินเชื่อ',
+            value: '${formatMoney(flow.calculatedAmount)} บาท',
           ),
           PLoanAmountRow(
             label: 'ค่างวด',

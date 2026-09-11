@@ -14,6 +14,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../loan_register/components/env_version_tag.dart';
 import '../../loan_register/components/loan_register_styles.dart';
 import '../../loan_register/components/register_step_indicator.dart';
+import '../../p_loan/application/components/p_loan_components.dart';
+import '../models/topup_flow.dart';
 import '../models/topup_photo.dart';
 
 /// Number of screens in the top-up wizard, as the step indicator counts them:
@@ -385,4 +387,204 @@ class TopupConsentCheckbox extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// One row of the amount screen's numbered deduction list, plus its
+/// indented children.
+///
+/// The number is rendered as part of the label (`1.หักยอด…`) exactly as the
+/// source does, rather than as a separate column — see
+/// [TopupFlow.deductionLines] for why the sequence can skip 4.
+class TopupDeductionRow extends StatelessWidget {
+  const TopupDeductionRow(this.line, {super.key});
+
+  final TopupDeductionLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${line.number}.${line.label}',
+                      style: GoogleFonts.notoSansThai(
+                        fontSize: 14,
+                        color: LoanRegisterStyles.value,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${formatMoney(line.amount)} บาท',
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: line.highlight
+                          ? LoanRegisterStyles.required
+                          : LoanRegisterStyles.value,
+                    ),
+                  ),
+                ],
+              ),
+              if (line.caption.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    line.caption,
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 12,
+                      color: LoanRegisterStyles.required,
+                    ),
+                  ),
+                ),
+              if (line.contractNo.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'เลขที่สัญญา ${line.contractNo}',
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 11.5,
+                      color: LoanRegisterStyles.label,
+                    ),
+                  ),
+                ),
+              if (line.warning.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    line.warning,
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 12.5,
+                      color: LoanRegisterStyles.required,
+                    ),
+                  ),
+                ),
+              if (line.children.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'รายละเอียด (${line.number})',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 13,
+                    color: LoanRegisterStyles.label,
+                  ),
+                ),
+                for (final child in line.children)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16, top: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${child.number} ${child.label}',
+                            style: GoogleFonts.notoSansThai(
+                              fontSize: 13.5,
+                              color: LoanRegisterStyles.value,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${formatMoney(child.amount)} บาท',
+                          style: GoogleFonts.notoSansThai(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: LoanRegisterStyles.value,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        Divider(height: 1, thickness: 1, color: LoanRegisterStyles.divider),
+      ],
+    );
+  }
+}
+
+/// The "วิธีขอปรับวงเงินเพิ่ม" conditions panel at the top of the contract
+/// screen.
+///
+/// Wording is the source's, including the service hours and the 30-minute
+/// transfer promise — this is a commitment to the customer, not copy of ours
+/// to reword. The business-hours window is also enforced server-side:
+/// `GET /topup/detail` answers `503` outside 07:00–20:30.
+class TopupConditionsPanel extends StatelessWidget {
+  const TopupConditionsPanel({super.key});
+
+  static const List<String> _bullets = [
+    'จ่ายตรง -> เครดิตดี -> ได้วงเงินเพิ่ม',
+    'จ่ายช้า -> ขอปรับสัญญาที่สาขา -> รักษาเครดิต -> ปรับวงเงินเพิ่ม',
+  ];
+
+  static const List<String> _notes = [
+    '* สามารถทำการขอเติมวงเงินได้เวลาทำการ 07.00 - 20.30 น.',
+    '** เงื่อนไขอาจมีการเปลี่ยนแปลงได้ โดยไม่ต้องแจ้งให้ทราบล่วงหน้า',
+    '*** บริษัทจะดำเนินการโอนเงินภายใน 30 นาที ในวันและเวลาทำการ '
+        '07.00 - 20.30 น.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          LoanRegisterStyles.padding, 8, LoanRegisterStyles.padding, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: LoanRegisterStyles.primarySoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'วิธีขอปรับวงเงินเพิ่ม',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: LoanRegisterStyles.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final bullet in _bullets)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '• $bullet',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: LoanRegisterStyles.value,
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          for (final note in _notes)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                note,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  color: LoanRegisterStyles.required,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

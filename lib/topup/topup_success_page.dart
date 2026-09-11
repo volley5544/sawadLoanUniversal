@@ -46,6 +46,17 @@ class TopupSuccessPage extends StatelessWidget {
 
   bool get _isLead => kind == TopupSuccessKind.lead;
 
+  /// The status screen needs both a `db_name` and a `trans_no`. A reload
+  /// lands here with no flow, so the button is offered only when both are
+  /// actually available rather than opening a screen that can only error.
+  bool get _canTrack =>
+      transNo.isNotEmpty && (flow?.contract?.dbName ?? '').isNotEmpty;
+
+  /// The quote's expiry date, from the **server's** clock on the contract
+  /// rather than the device's.
+  String _deadline(TopupFlow flow) =>
+      formatThaiDate(flow.contract?.paymentDetails.currentDateTime);
+
   @override
   Widget build(BuildContext context) {
     final flow = this.flow;
@@ -99,11 +110,21 @@ class TopupSuccessPage extends StatelessWidget {
                       )
                     else if (flow != null)
                       Text(
-                        'ยอดเงินที่จะได้รับ '
-                        '${formatMoney(flow.payoutAmount)} บาท',
+                        // The payout is a *quote*, not a settled figure — it
+                        // holds only if the transfer completes by the stated
+                        // date, in business hours. Saying so here is the
+                        // source's wording and it matters: the customer is
+                        // about to stop looking at the app.
+                        'ยอดวงเงินที่จะได้รับ '
+                        '${formatMoney(flow.receivableAmount)} บาท '
+                        'เป็นยอดคำนวณ เมื่อท่านทำรายการ'
+                        '${_deadline(flow).isEmpty ? '' : '\n'
+                            'ภายในวันที่ ${_deadline(flow)} เท่านั้น'} '
+                        '(เวลาทำการ)',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.notoSansThai(
-                          fontSize: 16,
+                          fontSize: 15,
+                          height: 1.5,
                           fontWeight: FontWeight.w600,
                           color: LoanRegisterStyles.required,
                         ),
@@ -118,7 +139,49 @@ class TopupSuccessPage extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 32),
+                    // Tracking the request is the more useful of the two
+                    // actions right after filing, so it leads.
+                    if (!_isLead)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SizedBox(
+                          height: 56,
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _canTrack
+                                ? () => context.push(
+                                      Uri(
+                                        path: AppRoutes.topupStatus,
+                                        queryParameters: {
+                                          'dbName':
+                                              flow?.contract?.dbName ?? '',
+                                          'transNo': transNo,
+                                        },
+                                      ).toString(),
+                                    )
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: LoanRegisterStyles.primary,
+                              disabledBackgroundColor: LoanRegisterStyles
+                                  .primary
+                                  .withValues(alpha: 0.4),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'ดูสถานะการขอเพิ่มวงเงิน',
+                              style: GoogleFonts.notoSansThai(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     SizedBox(
                       height: 56,
                       width: double.infinity,
@@ -136,7 +199,9 @@ class TopupSuccessPage extends StatelessWidget {
                           context.go(AppRoutes.home);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: LoanRegisterStyles.primary,
+                          backgroundColor: _isLead
+                              ? LoanRegisterStyles.primary
+                              : LoanRegisterStyles.primarySoft,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -147,7 +212,9 @@ class TopupSuccessPage extends StatelessWidget {
                           style: GoogleFonts.notoSansThai(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: _isLead
+                                ? Colors.white
+                                : LoanRegisterStyles.primary,
                           ),
                         ),
                       ),

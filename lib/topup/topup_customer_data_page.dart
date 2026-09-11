@@ -308,7 +308,7 @@ class _ConfirmAccountSheet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('ยืนยันบัญชีรับเงิน',
+            Text('ยืนยันข้อมูล',
                 style: LoanRegisterStyles.appBarTitleStyle()
                     .copyWith(fontSize: 18)),
             const SizedBox(height: 14),
@@ -339,7 +339,7 @@ class _ConfirmAccountSheet extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        'ย้อนกลับ',
+                        'ตรวจสอบอีกครั้ง',
                         style: GoogleFonts.notoSansThai(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,

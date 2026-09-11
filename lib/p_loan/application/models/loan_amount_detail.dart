@@ -84,8 +84,12 @@ class LoanAmountDetail {
   /// Stamp duty, deducted from the payout.
   final int feeAmount;
   final int balanceReceivable;
-  final int collectionFee;
-  final int penaltyFee;
+  /// ⚠ **Decimal on the wire**, and it matters: `/payment/interest` is billed
+  /// for an exact outstanding figure, so truncating `38.00` or `2987.84` to an
+  /// int both misstates the amount and changes the JSON type the server is
+  /// given.
+  final double collectionFee;
+  final double penaltyFee;
   final double overdueAmount;
   final String overdueFrom;
   final String overdueTo;
@@ -95,7 +99,9 @@ class LoanAmountDetail {
   final String interestPaidFlag;
 
   /// `yield` on the wire — accrued interest (renamed: Dart reserved word).
-  final int interestYield;
+  ///
+  /// ⚠ **Decimal**, for the same reason as [collectionFee].
+  final double interestYield;
   final int topupSpecials;
 
   bool get isOk => code == '200';
@@ -175,13 +181,13 @@ class LoanAmountDetail {
         topupActual: asInt(json['topup_actual']),
         feeAmount: asInt(json['fee_amount']),
         balanceReceivable: asInt(json['balance_receivable']),
-        collectionFee: asInt(json['collection_fee']),
-        penaltyFee: asInt(json['penalty_fee']),
+        collectionFee: asDouble(json['collection_fee']),
+        penaltyFee: asDouble(json['penalty_fee']),
         overdueAmount: asDouble(json['overdue_amount']),
         overdueFrom: asString(json['overdue_from']),
         overdueTo: asString(json['overdue_to']),
         interestPaidFlag: asString(json['interest_paid_flag']),
-        interestYield: asInt(json['yield']),
+        interestYield: asDouble(json['yield']),
         topupSpecials: asInt(json['topup_specials']),
       );
 
