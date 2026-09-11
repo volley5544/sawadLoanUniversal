@@ -131,8 +131,9 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 188 tests (models, payloads, headers, NDID terms +
-                           # common messages + transaction_ref, the /ploan
+flutter test               # 222 tests (models, payloads, headers, NDID terms +
+                           # common messages + transaction_ref + the per-gateway
+                           # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard) — green
 flutter build web --release --pwa-strategy=none
 ```

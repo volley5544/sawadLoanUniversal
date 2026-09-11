@@ -16,18 +16,18 @@ scaffolding still exists, but the **web build is what ships**.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
 > whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
-> bearer-authenticated JSON call on the mobile API base — so the **P-Loan Extra
-> is no longer blocked** (the old `httpMultipart`/Basic-credential/`:8082`
-> requirements are gone); one live submit is still needed to confirm it end to
-> end. A **new P-Loan** remains blocked on a document endpoint for a contractless
-> loan.
+> bearer-authenticated call on the mobile API base, `multipart/form-data` since
+> 2026-08-07 — so the **P-Loan Extra is no longer blocked** (the old
+> `httpMultipart`/Basic-credential/`:8082` requirements are gone), and a **live
+> submit succeeded 2026-08-17**. A **new P-Loan** remains blocked on a document
+> endpoint for a contractless loan.
 
 ## Build & run
 
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 180 tests
+flutter test                                  # 222 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -364,6 +364,99 @@ tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
                                 ran it no longer exists — CI owns uat now)
 ```
 
+## Recent changes — 2026-09-10
+
+### NDID moved to the production gateway, and the key now travels with it
+
+The uat Firestore config was pointed at `https://ndid.srisawadpower.com`, then
+back to `uat.ndid.srisawadpower.com` the same day once it was clear the shipped
+app cannot reach prod (see below). Both moves were one-field config edits — and
+that is the point of the change that went with them.
+
+**Each gateway accepts only its own `X-API-Key`.** Verified against
+`GET /request-types`: the prod key is **401** on uat, the non-prod key is **401**
+on prod. That is a trap, because the gateway comes from `api_url.ndid_url_base`
+(editable with no rebuild) while the key is compiled in — so editing that one
+field left the key behind and 401'd every NDID call until someone shipped a
+matching build.
+
+`ndidApiKeyFor(base)` picks the key off the **resolved host**, so `ndid_url_base`
+is sufficient on its own in both directions and the rollback above cost nothing.
+`NdidApi._request` resolves the base **once** and builds both the URL and the
+header from that value, so a key cannot be paired with a different gateway than
+the URL it is sent to. `--dart-define=NDID_API_KEY` still pins one key for every
+gateway.
+
+⚠ **Prefix matching in the host's allowlist is `startsWith`**, and
+`https://ndid.srisawadpower.com/` is **not** covered by the `uat.` entry — they
+are different hosts. The prod entry is committed in the srisawad app
+(`78076c5`, branch `pentest_resolved`) but only a new app build carries it, so
+in-app NDID cannot reach prod until then. That is why uat is the active gateway.
+
+### `POST /rp/verify-with-data` — the verification now requests customer data
+
+`createVerifyRequest` sends `data_request_list` + a fixed `callback_url`
+alongside the old body. The returned data is **backend-only**: it lands on the
+gateway's own callback and `NdidVerifyStatus` reads none of it.
+
+**Which AS is resolved, not hardcoded**, for three reasons:
+
+- a bank's **IdP node id and AS node id are different values** — the 13 IdPs and
+  14 AS nodes on prod share no id at all. What they share is
+  `(industry_code, company_code)` inside `node_name`, which matched **13 of 13**
+  on prod and **16 of 16** on uat;
+- the **sample curl's `as_id_list` value is not on the prod gateway** — it turned
+  out to be uat's `Mock Auto 1`. Baking it in would have been the hardcoded
+  `'Authen Only'` `request_type` mistake of 2026-07-31 in a new costume;
+- it is **what the customer consented to**: they picked that bank to
+  authenticate with, and the Request Message names it as the data source.
+
+A failed lookup **degrades to plain `POST /rp/verify`** with no AS clause — the
+customer is there to prove identity and the payload is backend-only, so a
+gateway hiccup must not fail the identity step. Each fall-back leaves a
+`Diagnostics` breadcrumb, because otherwise "why did this go out without data?"
+is unanswerable from a device.
+
+This also restores the standard's **AS clause** to the Request Message
+(guideline §6.2.1 [28]), dropped on 2026-08-28 on the grounds that mode 2
+requested no AS data. It renders only when data really is requested, so the
+message keeps describing exactly the parties in the request.
+
+### NDID issue 2 is closed — verified end to end
+
+A live run on uat `WEB_VERSION` 82 settled both open questions from **one**
+KBank consent screen photographed beside our own waiting screen. Both quoted
+**`312461174`**. What the bank rendered:
+
+> ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของบริษัท ศรีสวัสดิ์ พาวเวอร์ 2014
+> จำกัด และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย (Transaction Ref:312461174)
+
+Four things fall out of it: the RP name is ours; the **AS clause is present and
+names the bank the customer picked** (so `findAsForIdp` is correct on a real
+device, not just in tests); the reference is 9 digits of digits only — legal
+under p.38, at the maximum length; and KBank's 13:30 stamp with a 14:30 deadline
+matches the `request_timeout` of 3600 s.
+
+The AS payload also reached the backend on `callback_url`, confirmed by the user
+— which is the only way it *can* be confirmed, since nothing client-side reads
+it.
+
+⚠ **One fix came out of that screenshot:** the gateway writes
+`(Transaction Ref:N)` with **no space** after the colon, which is how p.38's own
+template writes it. `requestMessage` had a space. That branch only runs for a
+gateway composing no clause of its own (SIT/DAP), but the two paths should be
+indistinguishable to a customer.
+
+### Also
+
+- **`GET /user/detail` and friends** — no change this session, but note the
+  bearer now resolves per request from the host's `getAuthToken` handler
+  (pulled in from `b00ceea`). ⚠ **The host does not register that handler yet**,
+  so it falls back to the launch token and the hour-long-flow 401 remains until
+  an app build ships.
+
+222 tests (was 188), analyzer still at its 39-info baseline.
+
 ## Recent changes — 2026-09-01
 
 Verification and tooling, not new behaviour: finding 3 was checked against the
@@ -406,6 +499,11 @@ Two things the check surfaced, both recorded in CLAUDE.md → **Outstanding**:
   A device runbook covering the rest was written for the retest.
 
 ### The step-6 payload preview works on uat, and copies
+
+> ⚠ **Superseded.** This button was **removed on 2026-09-07** (`2e7d3d9`). The
+> entry is kept as the record of why it existed; what remains for inspecting a
+> real submit is the failure report on a *failed* one. The mapper is unchanged,
+> so rebuilding it is `PLoanContractSubmission.fromFlow(flow)` plus a print.
 
 The **ดู Payload** button was gated on `PLoanApi.isMocked` — backwards for the
 thing it is useful for, since mock mode previews the fixtures, i.e. the one
