@@ -1012,8 +1012,8 @@ since the 2026-07-31 retarget), is filed.
 
 - **Base URL** = `api_url['api_url_base']` from the Firestore config document
   (`application/public_config`) via `SrisawadApi.baseUrl()` — so on uat it lands
-  on `https://dev.swpfin.com:7076`, the same host every other mobile-API call
-  uses. There is no separate host/port define any more.
+  on `https://srisawad-qa.ecorpgroup.com`, the same host every other mobile-API
+  call uses. There is no separate host/port define any more.
 - **Auth** = the customer's own Firebase **bearer token** (the `?token=` launch
   param, `PLoanFlow.authToken`). **No service credential ships in the bundle.**
 - **Header** `x-srisawad: x1` from `SrisawadApi.headers` like every other
@@ -1435,7 +1435,10 @@ flutter build web ... --dart-define=P_LOAN_MOCK=true
 
 ### Live API behaviour worth knowing
 
-Verified against `https://dev.swpfin.com:7076`:
+Verified against the uat mobile API (`https://dev.swpfin.com:7076` at the time;
+the uat config has since moved to `https://srisawad-qa.ecorpgroup.com` — see
+**Runtime config from Firestore**). The behaviours below are the API's, not a
+particular host's:
 
 - **Business hours.** `GET /topup/detail` answers `code: "503"` with
   `"50301:ท่านสามารถขอสินเชื่อได้ในเวลา 07:00 ถึง 20:30 เท่านั้น"` outside
@@ -1456,9 +1459,26 @@ On startup `main.dart` fires an **un-awaited** `_loadRuntimeConfig()` that reads
 the Firestore document **`application/public_config`** (path overridable with
 `--dart-define=APP_CONFIG_PATH=collection/doc`) from the project in
 `AppEnvironment.current.firebaseProjectId`, and publishes it on
-`AppState.appConfig`. Verified working on uat: it resolves
-`api_url.api_url_base` = `https://dev.swpfin.com:7076` and (since 2026-07-31)
-`api_url.ndid_url_base` = `https://uat.ndid.srisawadpower.com`.
+`AppState.appConfig`. Verified working on uat.
+
+⚠ **Read the document rather than trusting a value written down here.** Both
+endpoints are editable in Firestore with no rebuild, and both have moved. As of
+2026-09-11 the uat document holds:
+
+| key | value |
+| --- | --- |
+| `api_url.api_url_base` | `https://srisawad-qa.ecorpgroup.com` |
+| `api_url.ndid_url_base` | `https://uat.ndid.srisawadpower.com` |
+| `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles |
+| `topup_product_icon_default` | fallback icon URL |
+
+⚠ **`api_url_base` no longer matches `AppEnvironment.uat.mobileApiBase`**
+(`https://dev.swpfin.com:7076`), which it did for most of this project's life.
+That divergence is a trap worth naming: the compile-time default is only the
+degrade-to value, so **what the app actually calls is the config's host**. A
+request reproduced by hand against `dev.swpfin.com:7076` is therefore not
+necessarily hitting the same gateway the app is — check the resolved endpoint
+`main.dart` logs at boot before concluding a payload is at fault.
 
 **Two endpoints now come from this document**, both by the same rule — config
 value first, compile-time define as the degrade-to:
@@ -1535,9 +1555,10 @@ data (an existing contract, its limit, its installment calculation).
 **Base URL resolution order** (`SrisawadApi.baseUrl()`):
 `api_url['api_url_base']` from the config → `api_url_prod`/`api_url_dev` for the
 active env → `AppEnvironment.current.mobileApiBase`. `api_url_base` is preferred
-because it is **per-project**: the uat Firebase project's copy holds the uat host
-(`https://dev.swpfin.com:7076`) and prod's holds prod, so it can't cross
-environments the way the absolute `api_url_prod` key would. Trailing slashes are
+because it is **per-project**: the uat Firebase project's copy holds the uat
+host (`https://srisawad-qa.ecorpgroup.com` as of 2026-09-11) and prod's holds
+prod, so it can't cross environments the way the absolute `api_url_prod` key
+would. Trailing slashes are
 stripped, so a value like `https://mobile-api.swpfin.com/` won't produce `//`.
 
 `NdidApi.baseUrl()` follows the same pattern against `ndid_url_base` — see
@@ -2029,7 +2050,9 @@ groups**. Base URL +
 (prod `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
 uat `https://dev.swpfin.com:7076` + `x-srisawad: x1` — the new uat gateway
 requires the header on **every** `api_url_base` call, changed 2026-08-04; it was
-empty before). Errors throw `UserApiException`. Models: `models/customer_detail.dart` (profile) and
+empty before). ⚠ Those base URLs are the **compile-time fallbacks**; the config
+document overrides them and uat's now points somewhere else entirely — see
+**Runtime config from Firestore**. Errors throw `UserApiException`. Models: `models/customer_detail.dart` (profile) and
 `models/customer_address.dart` (`AddressInfo` ×4 + `data_date`;
 `AddressInfo.oneLine` renders the display string used on step 1 — id_card →
 idCardAddress, current → currentAddress, other → workAddress).
@@ -2220,13 +2243,14 @@ needs the WebView to allow mixed content when the app is served over `https:`.
 only one of them is editable without an app release.** The host proxies NDID
 through `httpRequest` and refuses any URL outside its compiled-in
 `_kHttpRequestAllowedPrefixes`. So a Firestore edit can point this build at a
-gateway the app then rejects with `URL not allowed` — which is exactly the state
-uat is in right now, see **Outstanding** #22.
+gateway the app then rejects with `URL not allowed`. That is what happened on
+2026-09-10; see **Outstanding** #22.
 
-The uat document holds **`https://ndid.srisawadpower.com`** — the **production**
-NDID gateway — changed 2026-09-10 on request; it held
-`https://uat.ndid.srisawadpower.com` from 2026-07-31 until then. Both are a
-*different node* from the DAP dev gateway the define defaults to: they return
+The uat document holds **`https://uat.ndid.srisawadpower.com`** again as of
+2026-09-11 — the stopgap #22 itself describes, rolled back from the production
+gateway it briefly pointed at on 2026-09-10. This one **is** allowlisted in the
+shipped host, so in-app NDID works on uat without waiting for an app release.
+Both are a *different node* from the DAP dev gateway the define defaults to: they return
 **real banks** (ธนาคารเกียรตินาคินภัทร, เจ เวนเจอร์ส, …) with `logo_url`s, not the
 DAP node's `idp1/idp2/idp4`. Because it has **real identities**, the
 `kNdidTestThaiId` substitution was deleted on 2026-07-31 (see **NDID signing**) —
@@ -2800,14 +2824,16 @@ reason recorded.
     (`[12,24,36,48,60]`) live at the top of it.
 21. **A new P-Loan's ID-card expiry check uses the device clock**, since the
     server clock it should use rides on the contract. See `_isExpired`.
-22. **🚧 An app release is what stands between uat and a real NDID test — and
-    in-app NDID is unusable until then.** The uat config points NDID at
-    **`https://ndid.srisawadpower.com`** (the production gateway, set
-    2026-09-10 — it was `https://uat.ndid.srisawadpower.com` before), which the
-    host **must** allowlist because that gateway sends no
-    `access-control-allow-*` headers (re-verified 2026-09-10 on the prod host),
-    so the bridge is mandatory and a plain browser cannot substitute — outside
-    the host the bank-select page loads its **mock** grid, not the real API.
+22. **🟡 Unblocked on uat by the stopgap; prod still needs an app release.**
+    The uat config points NDID back at **`https://uat.ndid.srisawadpower.com`**
+    as of 2026-09-11 — the rollback described at the end of this item. That
+    host **is** allowlisted in the shipped app, so in-app NDID works on uat
+    today. What remains blocked is pointing uat (or prod) at
+    **`https://ndid.srisawadpower.com`**, the production gateway: the host must
+    allowlist it, that entry is committed but unreleased, and the gateway sends
+    no `access-control-allow-*` headers (re-verified 2026-09-10) so the bridge
+    is mandatory and a plain browser cannot substitute — outside the host the
+    bank-select page loads its **mock** grid, not the real API.
 
     `_kHttpRequestAllowedPrefixes` in the srisawad host's
     `loan_universal_web_widget.dart` now carries
@@ -2821,15 +2847,17 @@ reason recorded.
     `https://ndid.srisawadpower.com/` is **not** a prefix of
     `https://uat.ndid.srisawadpower.com/` — the uat entry never covered prod.
     A shipped app without the new entry fails every NDID call with
-    `{"status":0,"error":"URL not allowed: …"}`, which is the state today.
+    `{"status":0,"error":"URL not allowed: …"}` — which is what the
+    2026-09-11 rollback to the uat host avoids.
 
     The gateway is reachable and the key is right — `GET /request-types` on the
     prod host returns `200` with the four `dsign.*`/`easyconnext`/`idpconnext`
-    types (2026-09-10). What is missing is only the host build. A stopgap, if
-    testing can't wait: point `ndid_url_base` back at
-    `https://uat.ndid.srisawadpower.com`, which **is** allowlisted in the
-    shipped app — the key follows automatically now (see **NDID API client**),
-    so that rollback is a one-field Firestore edit with no rebuild.
+    types (2026-09-10). What is missing is only the host build. The stopgap —
+    point `ndid_url_base` back at `https://uat.ndid.srisawadpower.com`, which
+    **is** allowlisted in the shipped app, the key following automatically
+    (see **NDID API client**) — **was applied on 2026-09-11**. Moving to the
+    prod gateway again is a one-field Firestore edit, but only *after* the host
+    build ships.
 
 23. **A declined NDID agreement is logged only in the session.** ปฏิเสธ on
     `ndid_terms_page` calls `Diagnostics.log`, which is an in-memory breadcrumb
