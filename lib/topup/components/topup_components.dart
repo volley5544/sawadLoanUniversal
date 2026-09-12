@@ -332,7 +332,7 @@ class TopupPrimaryButton extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: LoanRegisterStyles.primary),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: child,
@@ -345,7 +345,7 @@ class TopupPrimaryButton extends StatelessWidget {
                     LoanRegisterStyles.primary.withValues(alpha: 0.5),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: child,
