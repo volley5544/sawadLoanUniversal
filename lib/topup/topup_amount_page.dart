@@ -500,6 +500,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                     '${formatWholeMoney(detail.minTopupAmount)} '
                     'ถึง ${formatWholeMoney(detail.maxTopupAmount)} บาท',
                     tone: TopupNoticeTone.warning,
+                    accent: TopupTheme.alert,
                   )
                 else if (!_flow.isAmountEditable)
                   TopupNotice(

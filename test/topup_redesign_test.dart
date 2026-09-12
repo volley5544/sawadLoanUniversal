@@ -62,6 +62,31 @@ void main() {
     });
   });
 
+  // TopupConditionsCard is a near-copy of TopupConditionsPanel — the _old card
+  // page still renders the original, so the redesign restyles rather than
+  // mutates. Duplicated wording can drift, so it is pinned here; when the _old
+  // pages are deleted the original goes with them and this becomes the only
+  // copy.
+  group('TopupConditionsCard wording', () {
+    test('both bullets are the manual\'s, verbatim', () {
+      expect(TopupConditionsCard.bullets, [
+        'จ่ายตรง -> เครดิตดี -> ได้วงเงินเพิ่ม',
+        'จ่ายช้า -> ขอปรับสัญญาที่สาขา -> รักษาเครดิต -> ปรับวงเงินเพิ่ม',
+      ]);
+    });
+
+    test('all three notes survive, with their asterisk levels', () {
+      expect(TopupConditionsCard.notes, hasLength(3));
+      expect(TopupConditionsCard.notes[0], startsWith('* '));
+      expect(TopupConditionsCard.notes[1], startsWith('** '));
+      expect(TopupConditionsCard.notes[2], startsWith('*** '));
+    });
+
+    test('the business hours are stated, since the API enforces them', () {
+      expect(TopupConditionsCard.notes.first, contains('07.00 - 20.30'));
+    });
+  });
+
   group('TopupDetail.canTopupCode — the Code : xxx line', () {
     TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
 

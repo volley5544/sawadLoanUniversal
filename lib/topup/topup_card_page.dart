@@ -272,17 +272,13 @@ class _TopupCardPageState extends State<TopupCardPage> {
       // nothing to show (pay on time, keep the credit record).
       return ListView(
         children: [
-          const TopupConditionsPanel(),
+          const TopupConditionsCard(),
           Padding(
             padding: const EdgeInsets.all(32),
             child: Text(
               'ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้',
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansThai(
-                fontSize: 15,
-                height: 1.6,
-                color: LoanRegisterStyles.label,
-              ),
+              style: TopupTheme.body(size: 15, color: LoanRegisterStyles.label),
             ),
           ),
         ],
@@ -303,6 +299,12 @@ class _TopupCardPageState extends State<TopupCardPage> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
+        // Above the cards, where it was before the redesign and where it was
+        // put back on request (2026-09-12). It briefly sat below them so the
+        // screen would open on the offer the way the render does; the panel is
+        // how a customer finds out *why* a card says what it says, which is
+        // worth more than leading with the number.
+        const TopupConditionsCard(),
         _header(contracts.length),
         if (contracts.length > 1)
           Center(
@@ -310,10 +312,8 @@ class _TopupCardPageState extends State<TopupCardPage> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 '« ปัดซ้าย-ขวา เพื่อดูสัญญาอื่น »',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 12.5,
-                  color: LoanRegisterStyles.primary,
-                ),
+                style: TopupTheme.body(
+                    size: 12.5, color: LoanRegisterStyles.primary),
               ),
             ),
           ),
@@ -347,13 +347,6 @@ class _TopupCardPageState extends State<TopupCardPage> {
             ),
           ),
         ),
-        // **Moved below the cards** by the 2026-09 redesign. The design opens
-        // on the card — that is the offer, and it is what the customer came
-        // for — but the conditions are documented content (manual §1.2) and
-        // deleting them to match a render would lose more than it tidies. So
-        // they keep their place on the screen, just not ahead of the offer.
-        const SizedBox(height: 8),
-        const TopupConditionsPanel(),
       ],
     );
   }
@@ -370,14 +363,7 @@ class _TopupCardPageState extends State<TopupCardPage> {
           LoanRegisterStyles.padding, 8, LoanRegisterStyles.padding, 4),
       child: Row(
         children: [
-          Text(
-            'สัญญาของคุณ',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: LoanRegisterStyles.value,
-            ),
-          ),
+          Text('สัญญาของคุณ', style: TopupTheme.heading()),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -387,11 +373,8 @@ class _TopupCardPageState extends State<TopupCardPage> {
             ),
             child: Text(
               '${_index + 1}/$total',
-              style: GoogleFonts.notoSansThai(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: LoanRegisterStyles.primary,
-              ),
+              style: TopupTheme.value(
+                  size: 12, color: LoanRegisterStyles.primary),
             ),
           ),
           const Spacer(),
@@ -841,11 +824,7 @@ class _SpecialOffersGrid extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'สิทธิพิเศษเฉพาะคุณ',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: LoanRegisterStyles.value,
-                ),
+                style: TopupTheme.value(size: 13),
               ),
             ],
           ),
@@ -855,12 +834,11 @@ class _SpecialOffersGrid extends StatelessWidget {
               const Icon(Icons.arrow_upward, size: 14, color: Color(0xFF0E8C86)),
               const SizedBox(width: 6),
               Text(
+                // Was a one-off teal. The redesign has exactly four text
+                // colours — navy, grey, orange, red — and a fifth on one
+                // caption read as a different kind of message than it is.
                 'ใช้เงินก้อนเดียวกับข้อเสนอด้านบน',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF0E8C86),
-                ),
+                style: TopupTheme.label(size: 10.5),
               ),
             ],
           ),
@@ -933,12 +911,7 @@ class _ProductTile extends StatelessWidget {
                 // Ellipsis is the last resort, not the expected outcome —
                 // the tile is sized for two lines.
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 11,
-                  height: 1.25,
-                  fontWeight: FontWeight.w600,
-                  color: LoanRegisterStyles.value,
-                ),
+                style: TopupTheme.value(size: 11),
               ),
             ),
           ],

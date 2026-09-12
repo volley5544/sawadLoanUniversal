@@ -1927,9 +1927,25 @@ response carries one, so **the wire name is unconfirmed**; point it at the real
 key when the API team names it. A `Code :` with nothing after it tells a branch
 less than no line at all.
 
-⚠ **The conditions panel moved below the cards**, not away. The design opens on
-the offer, but that panel is documented content (manual §1.2) and deleting it
-to match a render would lose more than it tidies.
+⚠ **The conditions panel stays at the top of the page.** It briefly sat below
+the cards so the screen would open on the offer the way the render does; that
+was reverted on request the same day (2026-09-12). It is how a customer finds
+out *why* a card says what it says, which is worth more than leading with the
+number.
+
+⚠ **Every text colour on these two screens comes from `TopupTheme`**, and there
+are exactly four: navy value, grey label, orange primary, red alert. A one-off
+teal caption on the product grid and the softer `LoanRegisterStyles.required`
+red were both folded in — a fifth colour on one caption read as a different
+kind of message than it was. `TopupNotice` gained an optional `accent` for
+this, so a redesigned screen can use the design's pure red **without**
+repainting the un-redesigned steps or the `_old` pair.
+
+⚠ **`TopupConditionsCard` is a near-copy of `TopupConditionsPanel`**, and
+deliberately so: the `_old` card page still renders the original, and the point
+of the `_old` pair is that editing the redesign cannot change them. The
+**wording is identical** and pinned by a test, since duplicated copy drifts.
+Delete the original along with the `_old` pages.
 
 **The amount screen** (PDF pp.5–7, 9–11): contract block (no status pill), the
 M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` + an orange

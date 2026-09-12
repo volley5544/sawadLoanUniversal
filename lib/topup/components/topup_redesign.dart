@@ -51,6 +51,23 @@ class TopupTheme {
         height: 1.45,
       );
 
+  /// A section heading — the orange labels the design leads its blocks with,
+  /// and the navy ones inside a card.
+  static TextStyle heading({double size = 15, Color? color}) =>
+      GoogleFonts.notoSansThai(
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        color: color ?? LoanRegisterStyles.value,
+      );
+
+  /// Running text — bullets, notes, anything that wraps.
+  static TextStyle body({double size = 13, Color? color}) =>
+      GoogleFonts.notoSansThai(
+        fontSize: size,
+        height: 1.5,
+        color: color ?? LoanRegisterStyles.value,
+      );
+
   static TextStyle value({
     double size = 15,
     FontWeight weight = FontWeight.w600,
@@ -324,6 +341,71 @@ class TopupContractHeader extends StatelessWidget {
             flex: 5,
             child: Align(alignment: Alignment.centerRight, child: value),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// **วิธีขอปรับวงเงินเพิ่ม** — the conditions panel, in the redesign's text
+/// treatment.
+///
+/// ⚠ **A near-copy of `TopupConditionsPanel`, deliberately.** That widget is
+/// still rendered by `topup_card_page_old.dart`, and the whole point of the
+/// `_old` pair is that editing the redesign cannot change what they show — so
+/// this restyles rather than mutates, and the copy lives here until the `_old`
+/// pages are deleted, at which point the original goes with them and this
+/// becomes the only one. The **wording is identical**; only the type and the
+/// red differ.
+class TopupConditionsCard extends StatelessWidget {
+  const TopupConditionsCard({super.key});
+
+  static const List<String> bullets = [
+    'จ่ายตรง -> เครดิตดี -> ได้วงเงินเพิ่ม',
+    'จ่ายช้า -> ขอปรับสัญญาที่สาขา -> รักษาเครดิต -> ปรับวงเงินเพิ่ม',
+  ];
+
+  static const List<String> notes = [
+    '* สามารถทำการขอเติมวงเงินได้เวลาทำการ 07.00 - 20.30 น.',
+    '** เงื่อนไขอาจมีการเปลี่ยนแปลงได้ โดยไม่ต้องแจ้งให้ทราบล่วงหน้า',
+    '*** บริษัทจะดำเนินการโอนเงินภายใน 30 นาที ในวันและเวลาทำการ '
+        '07.00 - 20.30 น.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          LoanRegisterStyles.padding, 10, LoanRegisterStyles.padding, 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: LoanRegisterStyles.primarySoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'วิธีขอปรับวงเงินเพิ่ม',
+            style: TopupTheme.heading(color: LoanRegisterStyles.primary),
+          ),
+          const SizedBox(height: 8),
+          for (final bullet in bullets)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('• $bullet',
+                  style: TopupTheme.body(color: LoanRegisterStyles.value)),
+            ),
+          const SizedBox(height: 4),
+          // `TopupTheme.alert`, not `LoanRegisterStyles.required`: the design's
+          // footnote red is pure, the app's is a softer material red, and these
+          // notes sit beside the card's own red footnote.
+          for (final note in notes)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(note,
+                  style: TopupTheme.body(size: 12.5, color: TopupTheme.alert)),
+            ),
         ],
       ),
     );

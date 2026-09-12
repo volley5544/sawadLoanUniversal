@@ -235,18 +235,30 @@ class TopupNotice extends StatelessWidget {
     super.key,
     this.icon = Icons.info_outline,
     this.tone = TopupNoticeTone.info,
+    this.accent,
   });
 
   final String message;
   final IconData icon;
   final TopupNoticeTone tone;
 
+  /// Overrides the tone's colour.
+  ///
+  /// Exists for the 2026-09 redesign, whose footnote red is pure where
+  /// [LoanRegisterStyles.required] is a softer material red — see
+  /// `TopupTheme.alert`. Passing it keeps a redesigned screen internally
+  /// consistent **without** repainting the screens that still use the tone
+  /// default: the un-redesigned steps, and the `_old` pair, which must render
+  /// exactly as they did.
+  final Color? accent;
+
   @override
   Widget build(BuildContext context) {
-    final color = switch (tone) {
-      TopupNoticeTone.info => LoanRegisterStyles.primary,
-      TopupNoticeTone.warning => LoanRegisterStyles.required,
-    };
+    final color = accent ??
+        switch (tone) {
+          TopupNoticeTone.info => LoanRegisterStyles.primary,
+          TopupNoticeTone.warning => LoanRegisterStyles.required,
+        };
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       padding: const EdgeInsets.all(12),
