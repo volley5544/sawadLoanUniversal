@@ -15,6 +15,7 @@ import '../services/srisawad_api.dart';
 import '../services/topup_api.dart';
 import '../services/user_api.dart';
 import 'components/topup_components.dart';
+import 'components/topup_redesign.dart';
 import 'models/topup_card_variant.dart';
 import 'models/topup_flow.dart';
 import 'models/topup_purpose.dart';
@@ -302,7 +303,6 @@ class _TopupCardPageState extends State<TopupCardPage> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
-        const TopupConditionsPanel(),
         _header(contracts.length),
         if (contracts.length > 1)
           Center(
@@ -347,6 +347,13 @@ class _TopupCardPageState extends State<TopupCardPage> {
             ),
           ),
         ),
+        // **Moved below the cards** by the 2026-09 redesign. The design opens
+        // on the card — that is the offer, and it is what the customer came
+        // for — but the conditions are documented content (manual §1.2) and
+        // deleting them to match a render would lose more than it tidies. So
+        // they keep their place on the screen, just not ahead of the offer.
+        const SizedBox(height: 8),
+        const TopupConditionsPanel(),
       ],
     );
   }
@@ -423,12 +430,19 @@ class _TopupCardPageState extends State<TopupCardPage> {
   }
 }
 
-/// One contract in the carousel: what it is, what it offers, and the single
-/// action available on it.
+
+/// One contract, in the **2026-09 redesign**
+/// (`etc/M35 + หน้าจอเติมเงิน_…pdf`, page 4 and the `can_topup = N` render).
 ///
-/// Three mutually exclusive states, decided in this order — a request already
-/// filed wins over eligibility, because the customer cannot raise a second one
-/// whatever `can_topup` says.
+/// Two layouts, and the ineligible one is not a variation of the other — it
+/// answers a different question. An eligible card leads with what the customer
+/// can get and ends in a button; an ineligible one leads with why they cannot
+/// get it here, names a branch and a phone number, and has no action at all.
+/// So they are separate builds rather than one build full of conditionals.
+///
+/// ⚠ **A request already in flight outranks both.** The customer cannot raise
+/// a second one whatever `can_topup` says, so that state is checked first and
+/// shows the status card.
 class _TopupContractCard extends StatelessWidget {
   const _TopupContractCard({
     super.key,
@@ -448,416 +462,341 @@ class _TopupContractCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detail = contract.topupDetail;
     final pending = !contract.hasNoRequestYet;
     final eligible = contract.isEligible;
-    final variant = TopupCardVariant.of(contract);
-
-    /// The special limit is granted on top of the default and is **not**
-    /// included in it, so the headline figure has to add the two.
-    final specials = contract.topupSpecialFlag ? detail.topupSpecials : 0;
-    final offered = detail.defaultTopupAmount + specials;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: LoanRegisterStyles.cardBorder),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // One of three headers — see TopupCardVariant.
-          if (variant == TopupCardVariant.ineligible)
-            const _IneligibleHeader()
-          else ...[
-            if (variant == TopupCardVariant.specialOffer)
-              _SpecialOfferHeader(specials: specials),
-            if (!pending) ...[
-              _MaxTransferBanner(amount: detail.defaultTransferAmount.round()),
-              const SizedBox(height: 12),
-            ],
-          ],
-          ContractSummaryCard(
-            loanTypeCode: contract.contractDetails.loanTypeCode,
-            loanTypeName: contract.loanTypeName.isEmpty
-                ? contract.contractDetails.loanTypeName
-                : contract.loanTypeName,
-            contractNo: contract.contractNo,
-            collateralInformation:
-                contract.contractDetails.collateralInformation,
-          ),
-          if (pending) ...[
-            TopupNotice(
-              'สัญญานี้มีคำขออยู่แล้ว (${contract.requestStatus})',
-              icon: Icons.hourglass_top,
-            ),
-            PLoanAmountRow(
-              label: 'ยอดที่ขอไว้',
-              value: '${formatWholeMoney(contract.requestTopupAmount)} บาท',
-              showDivider: false,
-            ),
-            const SizedBox(height: 8),
-            TopupPrimaryButton(label: 'ดูสถานะคำขอ', onPressed: onViewStatus),
-          ] else if (!eligible) ...[
-            TopupNotice(
-              detail.canTopupMsg.isNotEmpty
-                  ? detail.canTopupMsg
-                  : 'สัญญานี้ยังไม่เข้าเงื่อนไขการขอสินเชื่อเพิ่ม',
-              icon: Icons.info_outline,
-              tone: TopupNoticeTone.warning,
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            _creditSummary(contract, detail, offered, specials),
-            if (showsSpecialOffers(contract)) ...[
-              const SizedBox(height: 12),
-              _SpecialOffersGrid(
-                products:
-                    detail.products.where((p) => !p.isEmpty).toList(),
-                onSelect: onSelectProduct,
-              ),
-            ],
-            const SizedBox(height: 12),
-            TopupPrimaryButton(label: 'เติมวงเงิน', onPressed: onSelect),
-          ],
-        ],
-      ),
+      child: !eligible && !pending ? _ineligible() : _offer(pending),
     );
   }
 
-  /// The credit-summary block: the existing line, the appraisal, the new line,
-  /// what closing the old contract costs, and what actually lands in the
-  /// account.
-  ///
-  /// Every figure here is one the customer sees *before* committing, so they
-  /// all come straight off `/loan/list` rather than being recomputed.
-  Widget _creditSummary(
-    LoanContract contract,
-    TopupDetail detail,
-    int offered,
-    int specials,
-  ) {
-    final details = contract.contractDetails;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F7FC),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'วงเงินสินเชื่อ (สัญญา ${contract.contractNo})',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 12.5,
-              color: LoanRegisterStyles.label,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _summaryLine('วงเงินสินเชื่อเดิม', details.creditLimit),
-          _summaryLine(
-              'ราคาประเมินหลักทรัพย์ปัจจุบัน', details.currentLtvAmount),
-          Divider(height: 18, color: LoanRegisterStyles.divider),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+  // ── The ordinary card ────────────────────────────────────────────────
+
+  /// The blue band, the contract block, and the figures that explain the
+  /// payout. [pending] swaps the action for ดูสถานะคำขอ and withholds the
+  /// product grid — tapping a tile starts a request, which a contract already
+  /// mid-request cannot take.
+  Widget _offer(bool pending) {
+    final detail = contract.topupDetail;
+    final specials = TopupFlow.specialLimitOf(contract);
+
+    // The M35 วงเงินพิเศษ is granted **on top of** the ordinary limit and is
+    // not included in it, so the headline has to add the two. The card shows
+    // only the combined figure; the amount screen breaks it back out.
+    final offered = detail.defaultTopupAmount + specials;
+    final principal = contract.contractDetails.closingBalance;
+    final duty = detail.feeAmount;
+
+    // Computed rather than read from `default_transfer_amount`, which the API
+    // sends **without** the duty taken off (verified against the
+    // GetRecalTopupData sample: 88,500 − 86,217.08 = 2,282.92, no fee). Three
+    // rows and a total that disagrees with them is worse than either number
+    // alone, and this is the same formula TopupFlow.payoutAmount files as
+    // `transfer_amount`.
+    final payout = offered - principal - duty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _band(payout, hasSpecial: specials > 0),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(
-                  'วงเงินสินเชื่อปัจจุบัน',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: LoanRegisterStyles.value,
-                  ),
+              TopupContractHeader(
+                loanTypeCode: contract.contractDetails.loanTypeCode,
+                loanTypeName: contract.loanTypeName.isEmpty
+                    ? contract.contractDetails.loanTypeName
+                    : contract.loanTypeName,
+                contractNo: contract.contractNo,
+                collateralInformation:
+                    contract.contractDetails.collateralInformation,
+                status: TopupStatusPill(
+                  text: pending
+                      ? contract.requestStatus.isEmpty
+                          ? 'มีคำขออยู่ระหว่างดำเนินการ'
+                          : contract.requestStatus
+                      : 'ยังไม่ได้ทำรายการเติมวงเงิน',
+                  icon: pending ? Icons.schedule : null,
                 ),
               ),
-              Text(
-                formatMoney(offered),
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                  color: LoanRegisterStyles.value,
+              const SizedBox(height: 14),
+              const TopupDottedDivider(),
+              const SizedBox(height: 6),
+              if (pending) ...[
+                TopupFigureRow(
+                  label: 'ยอดที่ขอไว้',
+                  amount: contract.requestTopupAmount,
+                  emphasis: true,
+                  suffix: 'บาท',
                 ),
-              ),
-              Text(' บาท',
-                  style: GoogleFonts.notoSansThai(
-                      fontSize: 12, color: LoanRegisterStyles.label)),
-            ],
-          ),
-          if (specials > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'รวมวงเงินพิเศษเพิ่มเติม ${formatMoney(specials)} บาท',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 12.5,
-                  color: LoanRegisterStyles.required,
+                const SizedBox(height: 10),
+                TopupPrimaryButton(
+                    label: 'ดูสถานะคำขอ', onPressed: onViewStatus),
+              ] else ...[
+                TopupFigureRow(
+                  label: 'วงเงินสินเชื่อใหม่สูงสุด',
+                  amount: offered,
+                  emphasis: true,
+                  suffix: 'บาท',
                 ),
-              ),
-            ),
-          Divider(height: 18, color: LoanRegisterStyles.divider),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  // The date is when the contract data was fetched, not today
-                  // — it rides on the payload as `data_date`.
-                  'ยอดปิดบัญชี ณ วันที่ ${formatThaiDate(contract.dataDate)}',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 13,
-                    color: LoanRegisterStyles.value,
-                  ),
+                TopupFigureRow(
+                  label: 'เงินต้นที่ยังไม่ถึงกำหนดชำระ',
+                  amount: principal,
+                  deduction: true,
                 ),
-              ),
-              Text(
-                '-${formatMoney(detail.balanceReceivable)} บาท',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: LoanRegisterStyles.value,
+                TopupFigureRow(
+                  label: 'อากรแสตมป์สัญญาใหม่',
+                  amount: duty,
+                  deduction: true,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: LoanRegisterStyles.primarySoft,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined,
-                    size: 18, color: LoanRegisterStyles.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'เงินคงเหลือโอนเข้าบัญชี',
-                    style: GoogleFonts.notoSansThai(
-                      fontSize: 13,
-                      color: LoanRegisterStyles.value,
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 10),
+                _payoutStrip(payout),
+                const SizedBox(height: 6),
                 Text(
-                  '${formatMoney(detail.defaultTransferAmount)} บาท',
+                  '*เมื่อชำระยอดเพื่อเติมวงเงิน',
                   style: GoogleFonts.notoSansThai(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: LoanRegisterStyles.primary,
-                  ),
+                      fontSize: 11.5, color: TopupTheme.alert),
                 ),
+                if (showsSpecialOffers(contract)) ...[
+                  const SizedBox(height: 14),
+                  _SpecialOffersGrid(
+                    products:
+                        detail.products.where((p) => !p.isEmpty).toList(),
+                    onSelect: onSelectProduct,
+                  ),
+                ],
+                const SizedBox(height: 14),
+                TopupPrimaryButton(label: 'เติมวงเงิน', onPressed: onSelect),
               ],
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryLine(String label, num value) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 13,
-                  color: LoanRegisterStyles.value,
-                ),
-              ),
-            ),
-            Text(
-              formatMoney(value),
-              style: GoogleFonts.notoSansThai(
-                fontSize: 13.5,
-                color: LoanRegisterStyles.value,
-              ),
-            ),
-          ],
         ),
-      );
-}
-
-/// The blue band at the top of an eligible contract card.
-///
-/// `default_transfer_amount` is the API's own headline — what the customer
-/// would receive if they took the full line — so it is read, not recomputed.
-class _MaxTransferBanner extends StatelessWidget {
-  const _MaxTransferBanner({required this.amount});
-
-  final int amount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B3A6B),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'รับเงินโอนเข้าบัญชีสูงสุด',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text('สูงสุด ',
-                  style: GoogleFonts.notoSansThai(
-                      fontSize: 14, color: Colors.white70)),
-              Text(
-                formatWholeMoney(amount),
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-              Text(' บาท',
-                  style: GoogleFonts.notoSansThai(
-                      fontSize: 14, color: Colors.white70)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.check_circle_outline,
-                  size: 16, color: Colors.white70),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'เพียงเติมวงเงินเต็มจำนวน รับเงินสดใช้จ่ายได้เลย '
-                  'หลังปิดบัญชีเดิม',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: Colors.white70,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      ],
     );
   }
-}
 
-
-/// Header for a contract that cannot be topped up at all
-/// (`can_topup == 'N'`). No amount and no action — the customer is pointed at
-/// a branch, because nothing in this flow can change the answer.
-class _IneligibleHeader extends StatelessWidget {
-  const _IneligibleHeader();
-
-  @override
-  Widget build(BuildContext context) {
+  /// The blue header: what the customer walks away with, stated first.
+  ///
+  /// ⚠ It quotes the **same** figure as the เงินคงเหลือโอนเข้าบัญชีสูงสุด
+  /// strip further down, deliberately — the band is the promise and the rows
+  /// under it are the arithmetic behind it. If they ever diverge, one of them
+  /// is wrong.
+  Widget _band(num payout, {required bool hasSpecial}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F3F5),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      width: double.infinity,
+      color: TopupTheme.band,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, size: 20, color: LoanRegisterStyles.label),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome,
+                        size: 14, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ข้อเสนอพิเศษสำหรับคุณ',
+                      style: GoogleFonts.notoSansThai(
+                        fontSize: 12.5,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  'ยังไม่สามารถเติมวงเงินได้ในขณะนี้',
+                  'รับเงินโอนเข้าบัญชีสูงสุด',
                   style: GoogleFonts.notoSansThai(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: LoanRegisterStyles.value,
+                    fontSize: 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'ติดต่อสาขาเพื่อขอคำแนะนำ',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 12.5,
-                    color: LoanRegisterStyles.label,
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      'สูงสุด',
+                      style: GoogleFonts.notoSansThai(
+                          fontSize: 13, color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatTopupMoney(payout),
+                      style: GoogleFonts.notoSansThai(
+                        fontSize: 26,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'บาท',
+                      style: GoogleFonts.notoSansThai(
+                          fontSize: 13, color: Colors.white),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          // The wallet mark. `hasSpecial` deliberately changes nothing here:
+          // the design draws the same band for M35 and non-M35 (pages 10 and
+          // 11 differ only in the numbers), so the uplift is visible as a
+          // larger figure rather than as different furniture.
+          Icon(Icons.account_balance_wallet_outlined,
+              size: 44, color: Colors.white.withValues(alpha: 0.85)),
         ],
       ),
     );
   }
-}
 
-/// Header for a contract carrying add-on products — it leads with the offer
-/// rather than the limit.
-class _SpecialOfferHeader extends StatelessWidget {
-  const _SpecialOfferHeader({required this.specials});
-
-  /// Extra limit granted on top of the ordinary one. Shown only when there
-  /// actually is one; a contract can carry products without a special limit.
-  final int specials;
-
-  @override
-  Widget build(BuildContext context) {
+  /// The light-blue result strip.
+  Widget _payoutStrip(num payout) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E6),
+        color: TopupTheme.strip,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          Icon(Icons.auto_awesome_outlined,
-              size: 18, color: LoanRegisterStyles.primary),
-          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'ข้อเสนอพิเศษสำหรับคุณ',
-              style: GoogleFonts.notoSansThai(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: LoanRegisterStyles.primary,
-              ),
+              'เงินคงเหลือโอนเข้าบัญชีสูงสุด*',
+              style: TopupTheme.value(size: 13.5, weight: FontWeight.w700),
             ),
           ),
-          if (specials > 0)
-            Text(
-              '+${formatMoney(specials)} บาท',
-              style: GoogleFonts.notoSansThai(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: LoanRegisterStyles.required,
-              ),
-            ),
+          Text(
+            formatTopupMoney(payout),
+            style: TopupTheme.value(size: 17, weight: FontWeight.w800),
+          ),
+          const SizedBox(width: 5),
+          Text('บาท', style: TopupTheme.label(size: 12.5)),
         ],
       ),
     );
   }
+
+  // ── can_topup = N ────────────────────────────────────────────────────
+
+  /// The **cannot-do-this-in-the-app** card.
+  ///
+  /// It shows the existing credit line and nothing about a top-up: quoting an
+  /// offer above "you cannot take this offer here" is the one thing this
+  /// layout exists to avoid. There is no button, on purpose — the action is a
+  /// phone call.
+  Widget _ineligible() {
+    final code = contract.topupDetail.canTopupCode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: TopupTheme.warnBand,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: TopupTheme.alert, width: 1.6),
+                    ),
+                    child: const Icon(Icons.priority_high,
+                        size: 20, color: TopupTheme.alert),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
+                      'กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652',
+                      style: GoogleFonts.notoSansThai(
+                        fontSize: 13.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w700,
+                        color: LoanRegisterStyles.value,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // Hidden when the API sends no code — see
+              // TopupDetail.canTopupCode. A `Code :` with nothing after it
+              // tells the branch less than no line at all.
+              if (code.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Code : $code',
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.notoSansThai(
+                        fontSize: 12, color: LoanRegisterStyles.label),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TopupContractHeader(
+                loanTypeCode: contract.contractDetails.loanTypeCode,
+                loanTypeName: contract.loanTypeName.isEmpty
+                    ? contract.contractDetails.loanTypeName
+                    : contract.loanTypeName,
+                contractNo: contract.contractNo,
+                collateralInformation:
+                    contract.contractDetails.collateralInformation,
+                status: const TopupStatusPill(
+                  text: 'ไม่เข้าเงื่อนไข',
+                  icon: Icons.schedule,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const TopupDottedDivider(),
+              const SizedBox(height: 8),
+              Text(
+                'วงเงินสินเชื่อ (สัญญา ${contract.contractNo})',
+                style: TopupTheme.label(size: 12.5),
+              ),
+              TopupFigureRow(
+                label: 'วงเงินสินเชื่อเดิม',
+                amount: contract.contractDetails.creditLimit,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
+
 
 /// **สิทธิพิเศษเฉพาะคุณ** — the add-on products this contract's limit can be
 /// spent on, as a three-across grid of tiles.

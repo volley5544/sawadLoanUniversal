@@ -375,6 +375,7 @@ class TopupDetail {
     this.interestYield = 0,
     this.interestPaidFlag = '',
     this.canTopupMsg = '',
+    this.canTopupCode = '',
     this.maxTransferAmount = 0,
     this.products = const [],
     this.defaultTransferAmount = 0,
@@ -413,6 +414,18 @@ class TopupDetail {
 
   /// Why [canTopup] isn't `Y`; shown to the user in place of the limits.
   final String canTopupMsg;
+
+  /// The error code the redesigned card shows as `Code : xxx` on an
+  /// ineligible contract.
+  ///
+  /// ⚠ **The wire name is unconfirmed.** The design (2026-09-12) labels the
+  /// line *"Code : xxx = Error Code"* but no sample response carries one, so
+  /// this reads `can_topup_code` and falls back to `code` inside
+  /// `topup_detail`, and is **empty when neither exists** — in which case the
+  /// card draws no code line at all. Nothing is invented: an empty value means
+  /// the API did not send one, not that there is no reason. Point it at the
+  /// real key here when the API team names it.
+  final String canTopupCode;
   final int maxTransferAmount;
 
   /// Add-on products offered with the limit. Not used by this flow (the
@@ -437,6 +450,9 @@ class TopupDetail {
         interestYield: asDouble(json['yield']),
         interestPaidFlag: asString(json['interest_paid_flag']),
         canTopupMsg: asString(json['can_topup_msg']),
+        canTopupCode: asString(json['can_topup_code']).isNotEmpty
+            ? asString(json['can_topup_code'])
+            : asString(json['code']),
         maxTransferAmount: asInt(json['max_transfer_amount']),
         products: asMapList(json['products'])
             .map(LoanProduct.fromJson)
