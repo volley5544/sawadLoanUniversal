@@ -156,8 +156,14 @@ class TopupFigureRow extends StatelessWidget {
 
   final bool emphasis;
 
-  /// Renders the amount negative, which is how the design shows the two rows
-  /// that come off the new limit.
+  /// Renders the amount negative **and greys the whole row**, which is how the
+  /// design shows the two lines that come off the new limit.
+  ///
+  /// The value is muted along with its label on purpose (set 2026-09-12 from a
+  /// device check): these rows are working, not conclusions. Leaving the
+  /// figures in the value navy gave a deduction the same weight as the payout
+  /// under it, so the eye found three equal numbers instead of two small ones
+  /// explaining a large one. [valueColor] still overrides.
   final bool deduction;
 
   final String suffix;
@@ -197,7 +203,11 @@ class TopupFigureRow extends StatelessWidget {
                 ? TopupTheme.value(
                     size: 22, weight: FontWeight.w800, color: valueColor)
                 : TopupTheme.value(
-                    size: 13.5, weight: FontWeight.w600, color: valueColor),
+                    size: 13.5,
+                    weight: FontWeight.w600,
+                    color: valueColor ??
+                        (deduction ? LoanRegisterStyles.label : null),
+                  ),
           ),
           if (suffix.isNotEmpty) ...[
             const SizedBox(width: 6),

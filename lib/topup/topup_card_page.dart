@@ -673,7 +673,11 @@ class _TopupContractCard extends StatelessWidget {
             style: TopupTheme.value(size: 17, weight: FontWeight.w800),
           ),
           const SizedBox(width: 5),
-          Text('บาท', style: TopupTheme.label(size: 12.5)),
+          // The unit takes the **figure's** colour here, not the label grey it
+          // has elsewhere. This row is the card's conclusion and reads as one
+          // phrase; a grey บาท hanging off a navy number broke it in half.
+          Text('บาท', style: TopupTheme.value(size: 12.5,
+              weight: FontWeight.w600)),
         ],
       ),
     );
