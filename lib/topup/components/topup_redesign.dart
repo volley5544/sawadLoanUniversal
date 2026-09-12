@@ -143,6 +143,7 @@ class TopupFigureRow extends StatelessWidget {
     this.caption = '',
     this.emphasis = false,
     this.deduction = false,
+    this.mutedLabel = false,
     this.suffix = '',
     this.valueColor,
   });
@@ -155,6 +156,19 @@ class TopupFigureRow extends StatelessWidget {
   final String caption;
 
   final bool emphasis;
+
+  /// Greys an [emphasis] row's **label** while leaving its figure dark.
+  ///
+  /// Set on the card's วงเงินสินเชื่อใหม่สูงสุด row (2026-09-12, from a device
+  /// check): it heads the group whose other two rows are muted deductions, so
+  /// a value-navy label there made the group read as three separate
+  /// statements. The figure stays dark because it is still the number the two
+  /// rows below are subtracted from.
+  ///
+  /// Opt-in rather than the default for `emphasis`, because the amount
+  /// screen's เงินคงเหลือโอนเข้าบัญชี is also an emphasis row and *is* a
+  /// conclusion — it should keep the stronger label.
+  final bool mutedLabel;
 
   /// Renders the amount negative **and greys the whole row**, which is how the
   /// design shows the two lines that come off the new limit.
@@ -184,7 +198,11 @@ class TopupFigureRow extends StatelessWidget {
                 Text(
                   label,
                   style: emphasis
-                      ? TopupTheme.value(size: 15, weight: FontWeight.w700)
+                      ? TopupTheme.value(
+                          size: 15,
+                          weight: FontWeight.w700,
+                          color: mutedLabel ? LoanRegisterStyles.label : null,
+                        )
                       : TopupTheme.label(),
                 ),
                 if (caption.isNotEmpty)

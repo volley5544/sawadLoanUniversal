@@ -528,6 +528,7 @@ class _TopupContractCard extends StatelessWidget {
                   label: 'วงเงินสินเชื่อใหม่สูงสุด',
                   amount: offered,
                   emphasis: true,
+                  mutedLabel: true,
                   suffix: 'บาท',
                 ),
                 TopupFigureRow(
@@ -544,9 +545,13 @@ class _TopupContractCard extends StatelessWidget {
                 _payoutStrip(payout),
                 const SizedBox(height: 6),
                 Text(
+                  // Orange, not the alert red (set 2026-09-12 from a device
+                  // check). It qualifies the offer — *when* you get the money
+                  // — rather than warning about anything, and in red beside a
+                  // payout figure it read as a problem with the payout.
                   '*เมื่อชำระยอดเพื่อเติมวงเงิน',
-                  style: GoogleFonts.notoSansThai(
-                      fontSize: 11.5, color: TopupTheme.alert),
+                  style: TopupTheme.body(
+                      size: 11.5, color: LoanRegisterStyles.primary),
                 ),
                 if (showsSpecialOffers(contract)) ...[
                   const SizedBox(height: 14),
