@@ -3260,19 +3260,38 @@ reason recorded.
     already-guarded `PLoanApi`. A test asserts every one of them still has it —
     don't add a `/topup/*` write without one.
 
-33. **`POST /GetRecalTopupData` needs a home, like the lead fallback.** It is
-    plain HTTP on an IP, sends no CORS headers, 401s the preflight and
-    authenticates with a **shared `Basic` service account** — so from a web
-    build it is unreachable, and the credential that would make it reachable
-    must not ship in the bundle. Two ways out, in order of preference:
-    **move it behind the mobile API base** (HTTPS, `access-control-allow-origin:
-    *`, the customer's own bearer token — the way `POST /ploan` went in
-    2026-08-04), or **allowlist `http://34.142.213.42:8080/`** in the host's
-    `_kHttpRequestAllowedPrefixes` and supply `TOPUP_RECAL_API_AUTH`, which
-    costs an app release *and* puts the credential back in a readable bundle.
-    Until either, the ยอดที่ต้องชำระเพื่อเติมวงเงิน section is simply hidden —
-    the client returns `null` rather than failing the screen. See
-    **`POST /GetRecalTopupData`**.
+33. **`POST /GetRecalTopupData` is on a temporary test host.** `34.142.213.42:8080`
+    is what the API team stood up while the real endpoint is built; **the QA
+    endpoint follows**, and when it lands this all gets simpler. Today the test
+    host is plain HTTP on an IP, sends no CORS headers, 401s the preflight and
+    authenticates with a **shared `Basic` service account** — so a browser
+    cannot reach it, and the credential that would make it reachable must not
+    ship in the bundle.
+
+    **The host allowlist half is done** (2026-09-12, on request):
+    `http://34.142.213.42:8080/` is in `_kHttpRequestAllowedPrefixes` plus a
+    scoped Android cleartext exception, committed as `4ea8f79` on
+    `pentest_resolved` in the srisawad repo — **local only, the push needs
+    VPN** — and ⚠ still needs an app release to reach a device (same constraint
+    as #10). Both edits carry a removal checklist; the host repo's CLAUDE.md
+    has it under **Temporary top-up recalculation host**. **Delete them when
+    the QA API is ready** — that is the explicit instruction, not a nice-to-have.
+
+    **The credential half is deliberately not done.** `TOPUP_RECAL_API_AUTH`
+    ships empty, so even inside an allowlisted build the client makes no call
+    and the section stays hidden. Passing it at build time
+    (`--dart-define=TOPUP_RECAL_API_AUTH='Basic …'`) is what turns the section
+    on for a test; note that puts a shared service account into a readable web
+    bundle for as long as that build is deployed, which is why it is a
+    per-build choice rather than a default.
+
+    **The real fix is the QA endpoint being on the mobile API base** — HTTPS,
+    `access-control-allow-origin: *`, the customer's own bearer token, the way
+    `POST /ploan` went in 2026-08-04. That closes the credential question, the
+    CORS question and the cleartext question at once, and lets the host
+    allowlist shrink back. Until then the ยอดที่ต้องชำระเพื่อเติมวงเงิน section
+    is simply hidden — the client returns `null` rather than failing the
+    screen. See **`POST /GetRecalTopupData`**.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
