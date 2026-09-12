@@ -2083,6 +2083,34 @@ and everything after it as the surname.
 
 #### The interest-payment QR
 
+**The layout is the source's, deliberately** (rebuilt 2026-09-12 against
+`customer_topup/qr_payment_page/` and manual §2.3, replacing this app's usual
+card idiom). A payment screen is one the customer may have seen in the other
+app minutes earlier, and two different-looking QR pages for the same bill
+invites doubt about which is real. So the plate/amount row, the 2pt divider,
+the red payment-window note, the navy `คิวอาร์โค้ด` pill, the 250×250 QR block
+with `drawText: true`, the R1/R2 lines and the two 140×60 buttons all sit and
+read as they do there.
+
+⚠ **This is the one page that carries its own colours** (`_QrPalette`), not
+`LoanRegisterStyles`. They are the source theme's values and the difference is
+visible — its caption grey is darker (`#646464` vs `#9AA0A6`), its navy deeper
+(`#003063` vs `#1B3A6B`), its red pure (`#FF0000`). Matching the customer's
+memory of the screen beat matching the rest of this app; that trade does **not**
+generalise, so don't copy the pattern to another page.
+
+⚠ **The second button is คัดลอกข้อมูล, not the source's บันทึกรูปภาพ.** That one
+saves the QR through a native custom action this build has no equivalent for,
+and a web download inside the WebView is not reliably honoured — it would be a
+button that silently does nothing. Copying the payment payload always works and
+a screenshot covers the rest. Swap it back only alongside a host handler that
+actually saves.
+
+The amount is read off `/topup/detail` rather than the contract's own
+`topup_detail` (which is what the source uses): the detail call is re-read when
+the customer returns from paying, so it is the one that goes stale last.
+
+
 ⚠ **`topup_qr_payment_page`'s barcode payload is byte-for-byte the source's
 `genQRCodePayment`, trailing `.0` included.** It multiplies by 100 and calls
 `toString()` on a `double`, so ฿1,234 renders as `123400.0` rather than the
