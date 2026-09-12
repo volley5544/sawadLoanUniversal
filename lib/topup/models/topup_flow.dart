@@ -145,8 +145,7 @@ class TopupFlow {
     final detail = amountDetail;
     final contract = this.contract;
     if (detail == null || contract == null) return;
-    if (!contract.topupSpecialFlag) return;
-    final specials = contract.topupDetail.topupSpecials;
+    final specials = specialLimitOf(contract);
     if (specials <= 0) return;
     amountDetail = detail.copyWith(
       topupSpecials: specials,
@@ -154,6 +153,32 @@ class TopupFlow {
       maxTopupAmount: detail.maxTopupAmount + specials,
     );
   }
+
+  /// **The M35 วงเงินพิเศษ on [contract] — `topup_extra`.**
+  ///
+  /// The design calls this *วงเงินพิเศษเพิ่มเติม* and shows it as a `+5,000.00`
+  /// line above the blue วงเงินสินเชื่อใหม่สูงสุด bar, i.e. granted **on top
+  /// of** `default_topup_amount` rather than included in it. That is why both
+  /// the default and the ceiling are raised rather than just the default.
+  ///
+  /// ⚠ **It reads `topup_extra`, not `topup_specials`** (changed 2026-09-12 on
+  /// instruction: *"วงเงินพิเศษ M35 -> is topup_extra"*). `topup_specials` was
+  /// the source's pairing and is left alone on the model; nothing reads it for
+  /// this any more.
+  ///
+  /// ⚠ **`topup_special_flag` is no longer the gate** — a non-zero amount is.
+  /// The flag belonged to `topup_specials`, so requiring it would let a
+  /// contract carrying a real `topup_extra` show none of it, which hides money
+  /// the backend granted. Re-gating is one line here if the flag turns out to
+  /// mean something for this field too.
+  ///
+  /// ⚠ **The same field is a P-Loan Extra's entire request amount**
+  /// (`LoanAmountDetail.extraRequestAmount`). One number, two products: here
+  /// it raises a top-up's ceiling, there it *is* the loan. Nothing needs to
+  /// reconcile them — the card's PLD001 tile leaves this flow entirely — but
+  /// don't read one as evidence about the other.
+  static int specialLimitOf(LoanContract contract) =>
+      contract.topupDetail.topupExtra;
 
   /// The amount the calculator actually priced, which is what every downstream
   /// figure is derived from. Falls back to what was asked for.
@@ -168,7 +193,10 @@ class TopupFlow {
   int get feeAmount => plan?.feeAmount ?? amountDetail?.feeAmount ?? 0;
 
   /// Outstanding principal on the contract being replaced.
-  int get closingBalance => amountDetail?.contractDetails.closingBalance ?? 0;
+  ///
+  /// `double` since 2026-09-12 — see [ContractDetails.closingBalance].
+  double get closingBalance =>
+      amountDetail?.contractDetails.closingBalance ?? 0;
 
   /// Accrued interest, counted only when it has not already been settled.
   ///
@@ -186,7 +214,7 @@ class TopupFlow {
   ///
   /// This is the top-up formula and it is *not* `PLoanFlow.payoutAmount` — a
   /// top-up settles the old principal, a P-Loan Extra does not.
-  int get payoutAmount => calculatedAmount - closingBalance - feeAmount;
+  double get payoutAmount => calculatedAmount - closingBalance - feeAmount;
 
   /// Deduction **item 5** — the old contract's unpaid interest and collection
   /// fee together, which the customer must settle before the request can go

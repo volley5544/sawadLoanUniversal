@@ -164,20 +164,26 @@ void main() {
     });
   });
 
-  group('special limit', () {
-    test('applySpecialLimit raises both the default and the ceiling', () {
-      final contract = LoanContract.fromJson({
-        ...mockContracts().first.rawJson,
-        'topup_special_flag': true,
+  group('special limit — the M35 วงเงินพิเศษ', () {
+    /// [contract] with its `topup_detail` overridden by [topupDetail].
+    LoanContract withTopupDetail(Map<String, dynamic> topupDetail) {
+      final base = mockContracts().first;
+      return LoanContract.fromJson({
+        ...base.rawJson,
         'topup_detail': {
-          ...(mockContracts().first.rawJson['topup_detail']
-              as Map<String, dynamic>),
-          'topup_specials': 5000,
+          ...(base.rawJson['topup_detail'] as Map<String, dynamic>),
+          ...topupDetail,
         },
       });
-      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..contract = contract
-        ..amountDetail = mockAmountDetail('MOCK-M-6701001');
+    }
+
+    TopupFlow flowFor(LoanContract contract) =>
+        TopupFlow(hashThaiId: 'H', authToken: 'T')
+          ..contract = contract
+          ..amountDetail = mockAmountDetail('MOCK-M-6701001');
+
+    test('applySpecialLimit raises both the default and the ceiling', () {
+      final flow = flowFor(withTopupDetail({'topup_extra': 5000}));
       final before = flow.amountDetail!;
       flow.applySpecialLimit();
       final after = flow.amountDetail!;
@@ -187,10 +193,33 @@ void main() {
       expect(after.topupSpecials, 5000);
     });
 
-    test('does nothing when the contract carries no special flag', () {
-      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..contract = mockContracts().first
-        ..amountDetail = mockAmountDetail('MOCK-M-6701001');
+    // The field changed on 2026-09-12: M35 is `topup_extra`. `topup_specials`
+    // was the source's pairing and must not quietly keep working, or a
+    // contract carrying both would be uplifted by the wrong number.
+    test('topup_specials alone no longer uplifts anything', () {
+      final flow = flowFor(
+          withTopupDetail({'topup_extra': 0, 'topup_specials': 5000}));
+      final before = flow.amountDetail!.defaultTopupAmount;
+      flow.applySpecialLimit();
+      expect(flow.amountDetail!.defaultTopupAmount, before);
+    });
+
+    // `topup_special_flag` belonged to `topup_specials`. Requiring it would
+    // hide a real `topup_extra` the backend granted.
+    test('a missing topup_special_flag does not withhold topup_extra', () {
+      final contract = LoanContract.fromJson({
+        ...withTopupDetail({'topup_extra': 5000}).rawJson,
+        'topup_special_flag': false,
+      });
+      expect(contract.topupSpecialFlag, isFalse);
+      final flow = flowFor(contract);
+      final before = flow.amountDetail!.defaultTopupAmount;
+      flow.applySpecialLimit();
+      expect(flow.amountDetail!.defaultTopupAmount, before + 5000);
+    });
+
+    test('does nothing when there is no special limit', () {
+      final flow = flowFor(withTopupDetail({'topup_extra': 0}));
       final before = flow.amountDetail!.defaultTopupAmount;
       flow.applySpecialLimit();
       expect(flow.amountDetail!.defaultTopupAmount, before);

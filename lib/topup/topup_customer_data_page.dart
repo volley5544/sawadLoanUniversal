@@ -294,7 +294,7 @@ class _ConfirmAccountSheet extends StatelessWidget {
   final String bankCode;
   final String accountNo;
   final String logoBase64;
-  final int payoutAmount;
+  final double payoutAmount;
 
   @override
   Widget build(BuildContext context) {

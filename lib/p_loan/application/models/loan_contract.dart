@@ -194,7 +194,13 @@ class ContractDetails {
   });
 
   /// Outstanding principal, deducted from the new loan amount at payout.
-  final int closingBalance;
+  /// **`double`, not `int`** — the wire sends `86217.08` and the redesigned
+  /// card and amount screens both put this figure on screen to two decimals,
+  /// under a total that has to add up. Truncating it misstated the deduction
+  /// by up to a baht *and* changed `transfer_amount` on the submit body, the
+  /// same defect `yield`/`collection_fee`/`penalty_fee` carried until
+  /// 2026-09-11. Widened 2026-09-12 for the same reason.
+  final double closingBalance;
   final String comcode;
   final String branchCode;
   final String branchName;
@@ -229,7 +235,7 @@ class ContractDetails {
 
   factory ContractDetails.fromJson(Map<String, dynamic> json) =>
       ContractDetails(
-        closingBalance: asInt(json['closing_balance']),
+        closingBalance: asDouble(json['closing_balance']),
         comcode: asString(json['comcode']),
         branchCode: asString(json['branch_code']),
         branchName: asString(json['branch_name']),
