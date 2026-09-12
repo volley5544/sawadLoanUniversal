@@ -1927,6 +1927,21 @@ response carries one, so **the wire name is unconfirmed**; point it at the real
 key when the API team names it. A `Code :` with nothing after it tells a branch
 less than no line at all.
 
+⚠ **สิทธิพิเศษเฉพาะคุณ is hidden on the redesigned card** (2026-09-12, on
+request — *"for now"*). One switch,
+`_TopupCardPageState.showSpecialOffersSection`; the grid, its tiles, the
+config-driven icons and their taps are all still there and still tested. Flip
+it to `true` to restore.
+
+⚠ **That takes this build's P-Loan Extra entry point with it.** The `PLD001`
+tile is how the top-up card hands off to `/pLoan/resume`, so while the section
+is hidden that hand-off is unreachable *from this screen*. The product itself
+is still reachable — the srisawad app's home สิทธิพิเศษเฉพาะคุณ chip and the
+LandAndHouseWeb card both open `/pLoan/resume` directly — but if someone
+reports that P-Loan Extra "disappeared", this is why. The `_old` card still
+shows the grid, since the flag is on the redesigned page rather than in
+`showsSpecialOffers`.
+
 ⚠ **The conditions panel stays at the top of the page.** It briefly sat below
 the cards so the screen would open on the offer the way the render does; that
 was reverted on request the same day (2026-09-12). It is how a customer finds

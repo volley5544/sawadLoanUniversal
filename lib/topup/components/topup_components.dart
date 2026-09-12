@@ -48,7 +48,7 @@ AppBar topupAppBar(BuildContext context, String title, {VoidCallback? onBack}) =
       title: Text(
         title,
         style: LoanRegisterStyles.appBarTitleStyle()
-            .copyWith(color: LoanRegisterStyles.primary),
+            .copyWith(color: LoanRegisterStyles.value),
       ),
       actions: const [EnvVersionTag()],
     );
@@ -332,7 +332,7 @@ class TopupPrimaryButton extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: LoanRegisterStyles.primary),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
               child: child,
@@ -345,7 +345,7 @@ class TopupPrimaryButton extends StatelessWidget {
                     LoanRegisterStyles.primary.withValues(alpha: 0.5),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
               child: child,
@@ -568,7 +568,7 @@ class TopupConditionsPanel extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: LoanRegisterStyles.primarySoft,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

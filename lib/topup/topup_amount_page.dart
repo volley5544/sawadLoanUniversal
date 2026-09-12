@@ -403,7 +403,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
-      appBar: topupAppBar(context, 'ยอดสินเชื่อที่ต้องการ'),
+      appBar: topupAppBar(context, 'ข้อมูลยอดจัดสินเชื่อ'),
       body: Column(
         children: [
           const PLoanMockBanner(),

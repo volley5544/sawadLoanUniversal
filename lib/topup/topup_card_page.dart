@@ -156,6 +156,25 @@ class _TopupCardPageState extends State<TopupCardPage> {
     );
   }
 
+  /// **สิทธิพิเศษเฉพาะคุณ is hidden** (2026-09-12, on request — "for now").
+  ///
+  /// The grid, its tiles, the config-driven icons and the taps they fire are
+  /// all still here and still tested; this is the one switch. Flip it back to
+  /// `true` to restore the section — nothing else has to change.
+  ///
+  /// ⚠ **It takes this build's P-Loan Extra entry point with it.** The
+  /// `PLD001` tile is how the top-up card hands off to `/pLoan/resume`, so
+  /// while this is false that hand-off cannot be reached *from this screen*.
+  /// The product is not unreachable — the srisawad app's home
+  /// สิทธิพิเศษเฉพาะคุณ chip and the LandAndHouseWeb card both open
+  /// `/pLoan/resume` directly — but if someone reports that P-Loan Extra
+  /// "disappeared", this is why.
+  ///
+  /// Gated here rather than in [showsSpecialOffers], which
+  /// `topup_card_page_old.dart` also calls: the `_old` pair must keep
+  /// rendering exactly as it did.
+  static const bool showSpecialOffersSection = false;
+
   /// Product code the **P-Loan Extra** offer is published under.
   ///
   /// Matched literally on `product_code`, the same way the srisawad app's
@@ -527,7 +546,7 @@ class _TopupContractCard extends StatelessWidget {
                 TopupFigureRow(
                   label: 'วงเงินสินเชื่อใหม่สูงสุด',
                   amount: offered,
-                  emphasis: true,
+                  emphasis: false,
                   mutedLabel: true,
                   suffix: 'บาท',
                 ),
@@ -553,7 +572,8 @@ class _TopupContractCard extends StatelessWidget {
                   style: TopupTheme.body(
                       size: 11.5, color: LoanRegisterStyles.primary),
                 ),
-                if (showsSpecialOffers(contract)) ...[
+                if (_TopupCardPageState.showSpecialOffersSection &&
+                    showsSpecialOffers(contract)) ...[
                   const SizedBox(height: 14),
                   _SpecialOffersGrid(
                     products:
@@ -649,7 +669,7 @@ class _TopupContractCard extends StatelessWidget {
           // 11 differ only in the numbers), so the uplift is visible as a
           // larger figure rather than as different furniture.
           Icon(Icons.account_balance_wallet_outlined,
-              size: 44, color: Colors.white.withValues(alpha: 0.85)),
+              size: 70, color: Color(0xFFF7BF97).withValues(alpha: 0.85)),
         ],
       ),
     );

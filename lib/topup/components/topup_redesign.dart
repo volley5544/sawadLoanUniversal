@@ -199,7 +199,7 @@ class TopupFigureRow extends StatelessWidget {
                   label,
                   style: emphasis
                       ? TopupTheme.value(
-                          size: 13.5,
+                          size: 15,
                           weight: FontWeight.w700,
                           color: mutedLabel ? LoanRegisterStyles.label : null,
                         )
