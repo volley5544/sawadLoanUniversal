@@ -31,7 +31,9 @@ import '../p_loan/submit_form/p_loan_form_page.dart';
 import '../services/diagnostics.dart';
 import '../topup/models/topup_flow.dart';
 import '../topup/topup_amount_page.dart';
+import '../topup/topup_amount_page_old.dart';
 import '../topup/topup_card_page.dart';
+import '../topup/topup_card_page_old.dart';
 import '../topup/topup_conclusion_page.dart';
 import '../topup/topup_customer_data_page.dart';
 import '../topup/topup_installment_page.dart';
@@ -105,6 +107,12 @@ abstract final class AppRoutes {
   /// contract, and `fromHost` tells the first screen's back button to close the
   /// WebView rather than pop to a route that isn't there.
   static const String topupCard = '/topup';
+
+  /// ⚠ **The pre-redesign contract and amount screens** (2026-09-12), kept
+  /// routed so the old and new can be compared on a device. Delete both, these
+  /// two constants and their pages together once the redesign is signed off.
+  static const String topupCardOld = '/topup/old';
+  static const String topupAmountOld = '/topup/amount-old';
   static const String topupAmount = '/topup/amount';
   static const String topupInstallment = '/topup/installment';
   static const String topupPhotos = '/topup/photos';
@@ -252,6 +260,26 @@ final GoRouter appRouter = GoRouter(
           fromHost: q['fromHost'] == 'true',
         );
       },
+    ),
+    // ── pre-redesign screens, reference only ───────────────────────────
+    GoRoute(
+      path: AppRoutes.topupCardOld,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return TopupCardPageOld(
+          source: q['source'] ?? '',
+          referId: q['referId'] ?? '',
+          contractNo: q['contNo'] ?? '',
+          fromHost: q['fromHost'] == 'true',
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.topupAmountOld,
+      redirect: (context, state) =>
+          state.extra is TopupFlow ? null : AppRoutes.topupCardOld,
+      builder: (context, state) =>
+          TopupAmountPageOld(flow: state.extra as TopupFlow),
     ),
     GoRoute(
       path: AppRoutes.topupAmount,
