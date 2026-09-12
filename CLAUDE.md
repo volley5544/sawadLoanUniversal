@@ -1741,7 +1741,7 @@ Screens (`TopupStepIndicator` counts 1–7):
 
 | # | Page | Title | Calls |
 | --- | --- | --- | --- |
-| 1 | `topup_card_page` | สินเชื่อเพิ่ม | `/user/detail`, `/loan/list` |
+| 1 | `topup_card_page` | **เติมวงเงิน** | `/user/detail`, `/loan/list` |
 | 2 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
 | 3 | `topup_installment_page` | เลือกจำนวนงวด | — |
 | 4 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
@@ -1926,6 +1926,12 @@ and is **empty otherwise** — in which case the line is absent. No sample
 response carries one, so **the wire name is unconfirmed**; point it at the real
 key when the API team names it. A `Code :` with nothing after it tells a branch
 less than no line at all.
+
+⚠ **The card's title is เติมวงเงิน**, not สินเชื่อเพิ่ม (changed 2026-09-12).
+It matches the button the customer pressed to get here — the srisawad app's
+home **เติมวงเงินใหม่** tile — so the screen names the thing they asked for
+rather than the product family. The home menu card in *this* build still reads
+สินเชื่อเพิ่ม, and so does `/topup/old`.
 
 ⚠ **สิทธิพิเศษเฉพาะคุณ is hidden on the redesigned card** (2026-09-12, on
 request — *"for now"*). One switch,

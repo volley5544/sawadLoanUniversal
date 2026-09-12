@@ -261,7 +261,7 @@ class _TopupCardPageState extends State<TopupCardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: LoanRegisterStyles.background,
-      appBar: topupAppBar(context, 'สินเชื่อเพิ่ม', onBack: _back),
+      appBar: topupAppBar(context, 'เติมวงเงิน', onBack: _back),
       body: Column(
         children: [
           const PLoanMockBanner(),
