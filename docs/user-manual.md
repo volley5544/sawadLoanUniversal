@@ -57,6 +57,15 @@
 **EN** in the สิทธิพิเศษเฉพาะคุณ box on the contract card — goes straight into the application
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| การ์ดสินเชื่อ (ประเภท / ทะเบียน / ยอดครบกำหนด) | contract_details.loan_type_name · collateral_information · current_due_amount | GET /loan/list (แอปมือถือ) |
+| ปุ่ม เติมวงเงิน / วงเงินอเนกประสงค์ | เมนูของ native host app | เปิด web build นี้ใน WebView (flutter_inappwebview) |
+| โค้ดที่เกี่ยวข้อง | srisawad_mobile_app — คนละ repo | ไม่ได้อยู่ใน sawadLoanUniversal |
+
+
 > **TH** ปุ่มนี้จะปรากฏบนบัตรของสัญญาที่เข้าเงื่อนไขเท่านั้น หากสัญญายังไม่เข้าเงื่อนไข หรือมีคำขออยู่แล้ว ระบบจะแจ้งเหตุผลเมื่อกดเข้าไป  
 > **EN** The button appears only on a contract that qualifies. If the contract is not yet eligible, or already has a request open, the reason is shown when you continue.
 
@@ -70,7 +79,7 @@
 **EN** tap it in the สิทธิพิเศษเฉพาะคุณ box to start the application
 
 
-**คำที่พบบนหน้านี้ · Terms on this screen**
+**คำที่พบบนหน้านี้ · การเชื่อมโยงข้อมูล (model / API) · Terms on this screen · Data mapping (model / API)**
 
 | In app | ไทย | English |
 |---|---|---|
@@ -78,6 +87,20 @@
 | วงเงินอนุมัติใหม่ | วงเงินรวมที่อนุมัติให้สำหรับสัญญาใหม่ | the total limit approved for the new contract |
 | วงเงินเพิ่มพิเศษ | วงเงินส่วนเพิ่มที่ได้รับเป็นสิทธิพิเศษ นี่คือยอดที่วงเงินอเนกประสงค์จะจัดให้ | extra headroom granted as a special offer — this is the amount วงเงินอเนกประสงค์ finances |
 | เงินคงเหลือโอนเข้าบัญชี | จำนวนเงินที่จะโอนเข้าบัญชีจริง หากท่านเลือกเติมวงเงินแบบรับเงินสด | what reaches your bank account if you take the cash top-up instead |
+| ↓ การเชื่อมโยงข้อมูล / Data mapping | model / struct | API + JSON key |
+| สินเชื่อรถจักรยานยนต์ | contractDetails.loanTypeName | GET /loan/list $.contract_details.loan_type_name |
+| เลขที่สัญญา | GetLoanListAPIDataType.contractNo | $.contract_no |
+| ข้อมูลหลักประกัน | contractDetails.collateralInformation | $.contract_details.collateral_information |
+| ข้อมูลสถานะ | GetLoanListAPIDataType.requestStatus | $.request_status |
+| วงเงินสินเชื่อเดิม | contractDetails.creditLimit | $.contract_details.credit_limit |
+| ราคาประเมินปัจจุบัน | contractDetails.currentLtvAmount | $.contract_details.current_ltv_amount |
+| วงเงินอนุมัติใหม่ | topupDetail.defaultTopupAmount | $.topup_detail.default_topup_amount |
+| วงเงินเพิ่มพิเศษ | topupDetail.topupExtra | $.topup_detail.topup_extra |
+| รวมเป็นวงเงินใหม่ที่คุณขอรับได้เลยวันนี้ | defaultTopupAmount + topupExtra | คำนวณในหน้าจอ |
+| ยอดปิดบัญชี ณ วันที่ | topupDetail.balanceReceivable | $.topup_detail.balance_receivable (วันที่จาก $.data_date) |
+| เงินคงเหลือโอนเข้าบัญชี | topupDetail.defaultTransferAmount | $.topup_detail.default_transfer_amount |
+| ปุ่ม วงเงินอเนกประสงค์ | การ์ดของ LandAndHouseWeb | deep-link → /pLoan/resume |
+| หน้าจอ / Screen | LandAndHouseWeb: lib/customer_topup/topup_card_page/ | topup_card_page_widget.dart |
 
 
 > **TH** หน้านี้คือขั้นที่ 1 ของ 4 ขั้น เพราะเป็นหน้าที่แสดงวงเงินที่อนุมัติให้ท่านแล้ว เมื่อเข้าสู่ขั้นตอนถัดไป แถบขั้นตอนจะเริ่มนับจาก 2 ปุ่มย้อนกลับในหน้าจอถัดไปจะพาท่านกลับมาที่หน้านี้  
@@ -109,6 +132,18 @@
 **EN** becomes active once a term is selected; it stays pale until then
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ยอดจัดสินเชื่อใหม่ | PLoanFlow.requestedAmount | ตัวเลือกมาจาก POST /topup/calculator |
+| จำนวนงวด (36 / 24 / 18 / 12 งวด) | InstallmentOption.tenor | $.installments[].tenor |
+| ค่างวด / เดือน | InstallmentOption.regularPeriodAmt | $.installments[].regular_period_amt |
+| ค่าอากรแสตมป์ (ใช้คำนวณต่อ) | InstallmentPlan.feeAmount | $.fee_amount |
+| แถบขั้นตอน 1–4 | PLoanFlow.visitedSteps | สถานะในแอป ไม่มี API |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_installment_page.dart |
+
+
 > **TH** ภาพนี้บันทึกจากบิลด์รุ่นก่อน หัวข้อยอดเงินจึงเขียนว่า “ยอดจัดสินเชื่อใหม่” ปัจจุบันหน้าจอนี้เขียนว่า “ยอดจัดวงเงินอเนกประสงค์” ตำแหน่งและวิธีใช้เหมือนเดิม  
 > **EN** This image is from an earlier build, where the amount was headed ยอดจัดสินเชื่อใหม่. The current app reads ยอดจัดวงเงินอเนกประสงค์ in the same place; nothing else about the screen changed.
 
@@ -128,6 +163,19 @@
 **(3)** `ไม่ถูกต้อง / ยืนยัน`  
 **TH** กด “ยืนยัน” หากข้อมูลถูกต้องทั้งหมด หากไม่ถูกต้อง กด “ไม่ถูกต้อง” แล้วติดต่อสาขาเพื่อแก้ไขก่อนสมัคร  
 **EN** tap ยืนยัน if everything is right; if not, tap ไม่ถูกต้อง and have a branch correct it before applying
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ธนาคาร (ชื่อ / โลโก้) | PLoanFlow.bankCode | GET /loan/list $.contract_bank_brandname |
+| เลขที่บัญชี | PLoanFlow.bankAccountNo | $.contract_bank_account |
+| ชื่อ-สกุล | CustomerDetail.title + firstName + lastName | GET /user/detail $.title / $.first_name / $.last_name |
+| เบอร์โทรศัพท์ | CustomerDetail.phoneNumber | $.phone_number |
+| ที่อยู่ปัจจุบัน (ย่อ) | CustomerAddressBook.currentAddress | GET /profile/address/{hashThaiId} $.current_address |
+| ปุ่ม ไม่ถูกต้อง / ยืนยัน | ด่านตรวจใน PLoanFlow | ไม่มี API |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_customer_data_page.dart |
 
 
 > **TH** เลื่อนหน้าจอลงเพื่อดูที่อยู่ทั้งสี่รายการ ดูหน้าถัดไป  
@@ -151,6 +199,18 @@
 **EN** your workplace, or any other address on file
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ที่อยู่ปัจจุบัน | CustomerAddressBook.currentAddress | GET /profile/address/{hashThaiId} $.current_address |
+| ที่อยู่ตามทะเบียนบ้าน | CustomerAddressBook.registrationAddress | $.registration_address |
+| ที่อยู่ตามบัตรประชาชน | CustomerAddressBook.idCardAddress | $.id_card_address |
+| ที่ทำงาน/ที่อยู่อื่นๆ | CustomerAddressBook.otherAddress | $.other_address |
+| โครงสร้างของแต่ละที่อยู่ | AddressInfo.addressDetails / subDistrict / district / province / postalCode | $.address_details · $.address_sub_district · $.address_district · $.address_province · $.address_postal_code |
+| โมเดล / Model | lib/models/customer_address.dart | UserApi.fetchAddressBook() |
+
+
 > **TH** ที่อยู่ทั้งสี่รายการแก้ไขในแอปไม่ได้ หากรายการใดไม่ถูกต้อง กด “ไม่ถูกต้อง” ที่ด้านล่าง แล้วติดต่อสาขาเจ้าของบัญชีเพื่อแก้ไขก่อนสมัคร ช่องที่ไม่มีข้อมูลจะแสดงเป็นช่องว่าง ไม่ถือว่าผิดพลาด  
 > **EN** None of the four can be edited in the app. If one is wrong, tap ไม่ถูกต้อง at the bottom and have the branch that owns your account fix it before you apply. An address the branch has never recorded simply shows blank — that is not an error.
 
@@ -166,6 +226,16 @@
 **(2)** `ยืนยัน`  
 **TH** กดเพื่อไปยังหน้าสรุป หรือกด “ตรวจสอบอีกครั้ง” เพื่อกลับไปดูข้อมูล  
 **EN** continues to the summary; ตรวจสอบอีกครั้ง goes back to the details
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ธนาคารในแผ่นยืนยัน | PLoanFlow.bankCode | GET /loan/list $.contract_bank_brandname |
+| เลขที่บัญชีในแผ่นยืนยัน | PLoanFlow.bankAccountNo | $.contract_bank_account |
+| ปุ่ม ยืนยัน | ผูกบัญชีนี้กับคำขอ | ส่งไปพร้อม POST /ploan |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_customer_data_page.dart |
 
 
 ### 2.5 สรุปรายละเอียดของสัญญา (ขั้นที่ 4) / Contract summary (step 4)
@@ -185,15 +255,26 @@
 **EN** what is paid into your account: the amount financed minus the stamp duty
 
 
-**รายการยอดเงินบนหน้าสรุป · The figures on the summary**
+**รายการยอดเงินบนหน้าสรุป · การเชื่อมโยงข้อมูล (model / API) · The figures on the summary · Data mapping (model / API)**
 
 | In app | ไทย | English |
 |---|---|---|
+| ↓ การเชื่อมโยงข้อมูล / Data mapping | model / struct | API + JSON key |
 | ยอดจัดวงเงินอเนกประสงค์ | ยอดที่จัดให้ในสัญญาใหม่ เต็มจำนวน | the full amount financed under the new contract |
 | ค่าอากรแสตมป์ | ค่าอากรตามกฎหมาย คิดจากยอดที่ท่านขอจริง | the statutory duty, calculated on the amount you actually requested |
 | ค่างวด | ยอดที่ต้องชำระในแต่ละงวด | what you pay each month |
 | ชำระทุกวันที่ | วันที่ของทุกเดือนที่ต้องชำระค่างวด | the day of the month the payment falls due |
 | ยอดโอนเงินเข้าบัญชี | ยอดจัดวงเงินอเนกประสงค์ ลบ ค่าอากรแสตมป์ | the amount financed minus the stamp duty |
+| ยอดจัดวงเงินอเนกประสงค์ | PLoanFlow.requestedAmount | ส่งเป็น payload loan_amount |
+| ค่าอากรแสตมป์ | LoanAmountDetail.feeAmount | GET /topup/detail $.fee_amount |
+| ค่างวด | InstallmentOption.regularPeriodAmt | POST /topup/calculator $.installments[].regular_period_amt |
+| จำนวนงวด | InstallmentOption.tenor | $.installments[].tenor |
+| ดอกเบี้ย (ต่อเดือน) | LoanAmountDetail.interestRate | GET /topup/detail $.interest_rate |
+| เลขที่สัญญา | LoanAmountDetail.contractNo | $.contract_no |
+| ชำระทุกวันที่ | LoanAmountDetail.dueDay | $.due_day |
+| ยอดโอนเงินเข้าบัญชี | PLoanFlow.payoutAmount = requestedAmount − detail.feeAmount | ส่งเป็น payload transfer_amount |
+| ข้อมูลเลขที่บัญชี | PLoanFlow.bankAccountNo / bankCode | GET /loan/list |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_conclusion_page.dart |
 
 
 > **TH** หน้านี้ยาว ต้องเลื่อนลงไปทำอีกสามอย่างให้ครบก่อนจึงจะกดยืนยันได้ คือ ถ่ายรูปยืนยันตัวตน อ่านและยอมรับเอกสารสัญญา และลงนามด้วย NDID  
@@ -217,6 +298,17 @@
 **EN** below them are the three contract documents you must open and accept
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| บังคับถ่ายรูปภาพบัตรประชาชน | payload key customer_image_2 | POST /ploan (multipart file part) |
+| บังคับถ่ายรูปภาพตนเองคู่กับบัตรประชาชน | payload key customer_image_3 | POST /ploan (multipart file part) |
+| การตรวจเลขบัตรประชาชน | PLoanApi.validateThaiId() | POST /vision/thai-id-validate |
+| เอกสารประกอบสัญญา (หัวข้อ) | LoanDocuments | POST /pdf/loan |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_conclusion_page.dart |
+
+
 > **TH** ทั้งสองรูปเป็นข้อบังคับ กล้องจะเปิดจากในแอปศรีสวัสดิ์ พร้อมกรอบช่วยจัดตำแหน่ง ถ่ายในที่มีแสงพอ ให้เห็นตัวอักษรบนบัตรครบทุกบรรทัด  
 > **EN** Both photos are required. The camera opens from inside the ศรีสวัสดิ์ app with a framing guide. Shoot in good light and make sure every line of text on the card is readable.
 
@@ -236,6 +328,16 @@
 **(3)**  
 **TH** กดกากบาทเพื่อลบรูปและถ่ายใหม่  
 **EN** tap the cross to delete a photo and retake it
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| รูปบัตรประชาชนที่แนบแล้ว | payload key customer_image_2 | POST /ploan (multipart file part) |
+| รูปตนเองคู่บัตรที่แนบแล้ว | payload key customer_image_3 | POST /ploan (multipart file part) |
+| ผลตรวจเลขบัตรประชาชน | PLoanApi.validateThaiId() | POST /vision/thai-id-validate |
+| ปุ่มกากบาทลบรูป | ล้าง photo slot ใน PLoanFlow | ไม่มี API |
 
 
 > **TH** รูปในภาพตัวอย่างเป็นภาพสมมติที่สร้างขึ้นเพื่อทำคู่มือ ไม่ใช่บัตรจริงของผู้ใด หากระบบอ่านเลขบัตรไม่ได้ หรือเลขบัตรไม่ตรงกับเจ้าของสัญญา จะให้ถ่ายใหม่  
@@ -259,6 +361,18 @@
 **EN** the two consent boxes, a little further down
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ใบคำขอสินเชื่อใหม่ | LoanDocuments.request | POST /pdf/loan $.request |
+| ใบรับเงิน | LoanDocuments.receipt | $.receipt |
+| เอกสารสัญญา | LoanDocuments.agreement | $.agreement |
+| ไฟล์ที่ส่งตอนยืนยัน | topup_request_file / topup_receipt_file / topup_argeement_file | POST /ploan (multipart file parts) |
+| ลงนามเอกสารและยืนยันตัวตน NDID | NdidApi | GET /idp/list · POST /rp/verify |
+| ความยินยอม | marketing_consent / sensitive_consent | POST /ploan |
+
+
 > **TH** ต้องยอมรับเอกสารครบทั้งสามฉบับก่อน จึงจะกดลงนาม NDID ได้ หากกดก่อน ระบบจะแจ้งให้อ่านเอกสารให้ครบ — อ่านก่อน แล้วจึงลงนาม  
 > **EN** All three documents must be accepted before NDID signing will open. Tapping it early tells you what is still missing — read first, then sign.
 
@@ -278,6 +392,15 @@
 **(3)** `ยอมรับ`  
 **TH** กดเพื่อบันทึกการยอมรับ แล้วทำซ้ำกับเอกสารที่เหลือ  
 **EN** records your acceptance; repeat for the remaining documents
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| เนื้อหาเอกสารที่แสดง | LoanDocuments.request / receipt / agreement (base64 PDF) | POST /pdf/loan |
+| ปุ่ม ยอมรับ | ตั้งสถานะยอมรับใน PLoanFlow | ปลดล็อกปุ่มยืนยันในหน้าสรุป |
+| หน้าจอ / Screen | lib/p_loan/application/ | pdf_view.dart |
 
 
 > **TH** เอกสารอ่านได้ในแอปเท่านั้น ไม่มีปุ่มดาวน์โหลดและไม่มีปุ่มเปิดในแท็บใหม่ หากต้องการสำเนาเอกสารสัญญา ติดต่อสาขาเจ้าของบัญชี หรือโทร 1652  
@@ -301,11 +424,18 @@
 **EN** sends the verification request once one is selected
 
 
-**NDID · NDID**
+**NDID · การเชื่อมโยงข้อมูล (model / API) · NDID · Data mapping (model / API)**
 
 | In app | ไทย | English |
 |---|---|---|
 | NDID | บริการยืนยันตัวตนดิจิทัลผ่านธนาคารที่ท่านเป็นลูกค้า ใช้ลงนามเอกสารสัญญาแทนการเซ็นชื่อ | digital identity verification through a bank you already bank with, used here to sign the contract instead of a written signature |
+| ↓ การเชื่อมโยงข้อมูล / Data mapping | model / struct | API + JSON key |
+| รายชื่อผู้ให้บริการ (IdP) | NdidApi.listIdps() | GET {NDID_API_BASE}/idp/list |
+| ชื่อและโลโก้ธนาคารในรายการ | รายการ IdP ที่ตอบกลับมา | จาก /idp/list |
+| ประเภทคำขอ | NdidApi request types | GET /request-types |
+| ปุ่ม ถัดไป | NdidApi verify | POST /rp/verify |
+| ค่า base URL | --dart-define=NDID_API_BASE | ค่าเริ่มต้น https://dev.swpfin.com/dap |
+| หน้าจอ / Screen | lib/loan_register/ | ndid_bank_select_page.dart |
 
 
 > **TH** หากกลุ่มบนว่างเปล่า แปลว่าท่านยังไม่ได้ลงทะเบียน NDID กับที่ใดเลย ต้องไปลงทะเบียนกับธนาคารที่ท่านเป็นลูกค้าก่อน จึงจะทำขั้นตอนนี้ต่อได้ รายชื่อทั้งหมดดึงมาจากระบบ NDID จึงอาจต่างจากภาพนี้  
@@ -329,6 +459,17 @@
 **EN** cancels this verification request
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| สถานะการยืนยัน | NdidApi status poll | หลัง POST /rp/verify |
+| อ้างอิงคำขอ NDID | payload key ndid_reference_id | POST /ploan |
+| ปุ่ม ตรวจสอบสถานะ | เรียก poll สถานะซ้ำ | NDID status |
+| ปุ่ม ยกเลิก | ล้างสถานะ NDID ในเครื่อง | ไม่มี API |
+| หน้าจอ / Screen | lib/loan_register/ | ndid_verify_page.dart |
+
+
 > **TH** ขั้นตอนนี้ทำในแอปของธนาคารที่ท่านเลือก ไม่ใช่ในหน้าจอนี้ เปิดแอปธนาคาร ทำตามขั้นตอนของธนาคาร แล้วกลับมายังหน้านี้ หน้าจอจะตรวจผลให้ทันทีที่กลับมา หรือกด “ตรวจสอบสถานะ” ก็ได้ บรรทัด Transaction Ref คือเลขอ้างอิงของรายการยืนยันตัวตนครั้งนี้  
 > **EN** This step happens in your bank's own app, not on this screen. Open the bank app, follow its steps, then come back — the screen checks as soon as you return, and ตรวจสอบสถานะ checks on demand. The Transaction Ref line is this verification request's own reference.
 
@@ -346,6 +487,15 @@
 **EN** returns you to the summary screen
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ผลยืนยันตัวตน | NdidSubject (lib/models/ndid_subject.dart) | จากสถานะของ NDID |
+| อ้างอิงคำขอ NDID | ndid_reference_id | ส่งต่อไปกับ POST /ploan |
+| ปุ่ม ตกลง | กลับไปหน้าสรุป | ไม่มี API |
+
+
 > **TH** หากธนาคารปฏิเสธ หมดเวลา หรือท่านยกเลิก หน้านี้จะแจ้งข้อผิดพลาด และมีปุ่มให้ลองใหม่  
 > **EN** If the bank rejects it, the request times out, or you cancel, this screen reports the error and offers a retry.
 
@@ -361,6 +511,16 @@
 **(2)**  
 **TH** ข้อความสีแดงเหนือปุ่มบอกว่ายังขาดอะไร ในภาพนี้คือยังไม่ได้ถ่ายรูปบัตรประชาชน ทำสิ่งที่ขาดให้ครบ ข้อความจะหายไปและปุ่มจะกดได้  
 **EN** the red line above the button names what is still missing — here, the ID-card photo. Finish it and the line disappears and the button becomes tappable
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ยินยอมการตลาด | payload key marketing_consent | POST /ploan |
+| ยินยอมข้อมูลอ่อนไหว | payload key sensitive_consent | POST /ploan |
+| ข้อความบอกเหตุที่ปุ่มยังกดไม่ได้ | PLoanSubmission.unresolvedFields | p_loan_submission.dart |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_conclusion_page.dart |
 
 
 > **TH** การไม่ติ๊ก “ยินยอมการตลาด” เป็นคำตอบที่ระบบบันทึกจริง ไม่ใช่การข้าม ท่านจะไม่ถูกติดต่อเพื่อเสนอผลิตภัณฑ์  
@@ -384,6 +544,16 @@
 **EN** ยินยอมข้อมูลอ่อนไหว must be ticked
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| รายการที่ยังขาด | PLoanSubmission.unresolvedFields | ตรวจในเครื่องก่อนเปิดปุ่มยืนยัน |
+| ฟิลด์ข้อความที่จะส่ง | PLoanSubmission.fields | POST /ploan (multipart/form-data) |
+| ไฟล์ที่จะส่ง | PLoanSubmission.files (PLoanFilePart) | POST /ploan — 5 file parts |
+| พิกัดที่แนบไปกับคำขอ | payload latitude / longitude | POST /ploan |
+
+
 > **TH** เมื่อครบทุกข้อ ปุ่ม “ยืนยัน” ด้านล่างจะเปลี่ยนเป็นสีส้มเข้มและกดได้ ภาพนี้บันทึกจากบิลด์รุ่นก่อน จึงมีปุ่ม “ดาวน์โหลดเอกสาร” ใต้ช่อง NDID ปัจจุบันไม่มีปุ่มนั้นแล้ว — เอกสารอ่านได้ในแอปเท่านั้น  
 > **EN** Once everything is done the ยืนยัน button turns solid orange and becomes tappable. This image is from an earlier build, so it still shows a ดาวน์โหลดเอกสาร button under the NDID row; the current app does not have it — the documents are read in the app only.
 
@@ -401,6 +571,14 @@
 **EN** submits the request; nothing can be changed afterwards
 
 
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| คำรับรองของผู้กู้ | ข้อความคงที่ในหน้าจอ | ไม่มี API |
+| ปุ่ม ยืนยัน | PLoanContractApi submit | POST /ploan (bearer auth, multipart/form-data) |
+
+
 ### 2.16 ส่งคำขอเรียบร้อย / Request submitted
 
 ![Request submitted](screenshots/50-submitted.png)
@@ -416,6 +594,16 @@
 **(3)** `กลับสู่หน้าแรก`  
 **TH** กดเพื่อกลับไปยังแอปศรีสวัสดิ์  
 **EN** returns you to the ศรีสวัสดิ์ app
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ยอดเงินที่จะได้รับ | PLoanFlow.payoutAmount | ตรงกับ payload transfer_amount ที่ส่งไป |
+| เลขที่รายการ | PLoanSuccessPage.transNo | POST /ploan response body.trans_no |
+| ปุ่ม กลับสู่หน้าแรก | กลับไปที่ native host app | ไม่มี API |
+| หน้าจอ / Screen | lib/p_loan/application/ | p_loan_success_page.dart |
 
 
 > **TH** หลังส่งคำขอ สัญญานั้นจะขอสินเชื่อเพิ่มซ้ำอีกไม่ได้จนกว่าคำขอนี้จะเสร็จสิ้น ติดตามสถานะได้จากเมนู “ติดตามสถานะ” ในหน้าแรกของแอป  
@@ -461,6 +649,12 @@
 
 **TH** หากสัญญายังไม่เข้าเงื่อนไข ระบบจะแจ้งว่า “ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้ กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652” กรณีนี้ให้ติดต่อสาขาตามข้อความ ไม่ใช่ข้อผิดพลาดของแอป  
 **EN** A contract that does not qualify returns the server's message telling the customer to contact the branch that owns the account, or call 1652. Follow the message — it is not an app fault.
+
+
+### A7 · ยอดเงินหลายตัวยังเป็น int / Several money values are still int
+
+**TH** ระหว่างทำตารางการเชื่อมโยงข้อมูล พบว่า LoanAmountDetail ประกาศ defaultTopupAmount, installmentAmount, minAmountWithRate, maxTopupAmount, transferAmount และ osBalance เป็น int และ PLoanFlow.requestedAmount กับ payoutAmount ก็เป็น int ด้วย ขณะที่ /topup/detail ส่งค่าทศนิยม (สตางค์) มา ค่าที่แสดงและค่าที่ส่งไปใน loan_amount กับ transfer_amount จึงถูกตัดเศษ เป็นข้อสังเกตจากโค้ด ไม่ได้ทดสอบซ้ำในแอป repo LandAndHouseWeb แก้เป็น double แล้ว และ topup_data.dart ของแอปมือถือเป็น double อยู่แล้ว  
+**EN** While building the mapping tables I noticed LoanAmountDetail declares defaultTopupAmount, installmentAmount, minAmountWithRate, maxTopupAmount, transferAmount and osBalance as int, and PLoanFlow.requestedAmount / payoutAmount are int too — while /topup/detail returns decimals (satang). Displayed values and the loan_amount / transfer_amount actually submitted are therefore truncated. A code observation, not a re-test in the app. LandAndHouseWeb has already moved these to double, and the mobile app's topup_data.dart is double already.
 
 
 ---

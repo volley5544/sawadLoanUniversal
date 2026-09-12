@@ -10,8 +10,10 @@ import '../p_loan/application/models/loan_amount_detail.dart';
 import '../services/srisawad_api.dart';
 import '../services/topup_api.dart';
 import 'components/topup_components.dart';
+import 'components/topup_redesign.dart';
 import 'models/topup_flow.dart';
 import 'models/topup_lead_submission.dart';
+import 'models/topup_settlement.dart';
 
 /// **Step 3 — ยอดสินเชื่อที่ต้องการ.** The approved limit, the amount the
 /// customer asks for, and what they will actually receive.
@@ -44,6 +46,14 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
 
   bool _loading = true;
   bool _recalculating = false;
+
+  /// The **ยอดที่ต้องชำระเพื่อเติมวงเงิน** breakdown from
+  /// `POST /GetRecalTopupData`, re-read whenever the amount is re-priced.
+  ///
+  /// Null means *no section* — and every way of getting null renders the same
+  /// screen: an unconfigured build, an unreachable gateway, or a contract with
+  /// nothing outstanding. That is deliberate; see [TopupApi.recalculate].
+  TopupRecalculation? _recal;
   bool _submittingLead = false;
   String? _error;
 
@@ -114,6 +124,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
         _amountController.text = formatWholeMoney(seeded);
         _loading = false;
       });
+      await _loadSettlement();
     } on SrisawadApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -198,6 +209,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
           ..installment = null;
         _recalculating = false;
       });
+      await _loadSettlement();
       return true;
     } on SrisawadApiException catch (e) {
       if (!mounted) return false;
@@ -216,6 +228,54 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     }
   }
 
+  /// Re-reads the settlement breakdown for the amount now being requested.
+  ///
+  /// **Never throws and never blocks the screen.** The breakdown is priced per
+  /// `topup_amount`, so it is refreshed with every calculator run — but a
+  /// top-up is perfectly requestable without one, and the endpoint is not
+  /// reachable from a browser at all today (see `kTopupRecalApiBase`). So a
+  /// failure clears the section rather than failing the page.
+  ///
+  /// ⚠ The old breakdown is cleared *before* the call, not after: leaving the
+  /// previous amount's rows on screen while a new amount is priced would show
+  /// a settlement that does not belong to the figure above it.
+  Future<void> _loadSettlement() async {
+    final contract = _flow.contract;
+    if (contract == null) return;
+    if (mounted) setState(() => _recal = null);
+    final recal = await TopupApi.recalculate(
+      dbName: contract.dbName,
+      contractNo: contract.contractNo,
+      topupAmount: _flow.requestedAmount,
+    );
+    if (mounted) setState(() => _recal = recal);
+  }
+
+  /// Whether the **ยอดที่ต้องชำระเพื่อเติมวงเงิน** block is on screen.
+  ///
+  /// `settlement_items` alone decides it (instructed 2026-09-12) — see
+  /// [TopupRecalculation.hasSettlement].
+  bool get _showsSettlement => _recal?.hasSettlement ?? false;
+
+  /// What the bottom bar does.
+  ///
+  /// [TopupFlow.outcome] stays the authority: it is what protects the
+  /// unpaid-interest and lead paths, and it works without the recalculation
+  /// endpoint, which a web build cannot currently reach at all. The one thing
+  /// the breakdown adds is an **upgrade**: rows to settle mean there is
+  /// something to pay, so a contract that would otherwise advance gets the
+  /// design's ชำระเงิน / ปรับปรุงยอดชำระ pair instead of ถัดไป.
+  ///
+  /// It never downgrades. A lead contract stays a lead however the settlement
+  /// reads, and unpaid interest still blocks with no rows on screen.
+  TopupOutcome get _outcome {
+    final outcome = _flow.outcome;
+    if (outcome == TopupOutcome.topup && _showsSettlement) {
+      return TopupOutcome.payInterest;
+    }
+    return outcome;
+  }
+
   /// The primary button, which does one of three different things — see
   /// [TopupFlow.outcome].
   Future<void> _primaryAction() async {
@@ -225,7 +285,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       _amountFocus.unfocus();
       return;
     }
-    switch (_flow.outcome) {
+    switch (_outcome) {
       case TopupOutcome.payInterest:
         await _payInterest();
       case TopupOutcome.lead:
@@ -364,117 +424,358 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
 
     final detail = _flow.amountDetail!;
     final contract = _flow.contract!;
-    final inRange = _flow.isRequestedAmountAllowed;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-          LoanRegisterStyles.padding, 4, LoanRegisterStyles.padding, 24),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ContractSummaryCard(
-            loanTypeCode: contract.contractDetails.loanTypeCode,
-            loanTypeName: contract.contractDetails.loanTypeName,
-            contractNo: detail.contractNo,
-            collateralInformation: detail.contractDetails.collateralInformation,
-          ),
-          if (detail.topupSpecials > 0)
-            PLoanAmountRow(
-              label: 'วงเงินพิเศษเพิ่มเติม',
-              value: '${formatMoney(detail.topupSpecials)} บาท',
-              emphasis: true,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                LoanRegisterStyles.padding, 8, LoanRegisterStyles.padding, 14),
+            child: TopupContractHeader(
+              loanTypeCode: contract.contractDetails.loanTypeCode,
+              loanTypeName: contract.contractDetails.loanTypeName,
+              contractNo: detail.contractNo,
+              collateralInformation:
+                  detail.contractDetails.collateralInformation,
+              // No status pill here. The card already showed it, and by this
+              // screen the customer has acted on it.
             ),
-          PLoanAmountRow(
-            label: 'วงเงินสินเชื่อใหม่',
-            value: '${formatMoney(detail.defaultTopupAmount)} บาท',
           ),
-          PLoanAmountRow(
-            label: 'ยอดเงินต้นคงเหลือสัญญาเดิม',
-            value: '${formatMoney(detail.contractDetails.closingBalance)} บาท',
-          ),
-          const PLoanSectionHeader('วงเงินที่ต้องการกู้ใหม่'),
-          _amountField(),
-          if (_flow.isAmountEditable && !_flow.hasUnpaidInterest)
+          // ── M35 ───────────────────────────────────────────────────────
+          // The uplift is broken back out only here. The card shows one
+          // combined figure; this screen has to explain where it came from,
+          // because the customer is about to choose a number inside it.
+          if (detail.topupSpecials > 0)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'เลื่อนเพื่อปรับลดวงเงิน',
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 13,
-                  color: LoanRegisterStyles.primary,
-                ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: LoanRegisterStyles.padding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TopupFigureRow(
+                    label: 'ยอดจัดสินเชื่อเดิม',
+                    amount: detail.defaultTopupAmount - detail.topupSpecials,
+                    emphasis: true,
+                    suffix: 'บาท',
+                  ),
+                  _specialLimitRow(detail.topupSpecials),
+                ],
               ),
             ),
-          if (_flow.hasUnpaidInterest)
-            TopupNotice(
-              'สัญญานี้มีดอกเบี้ยค้างชำระ ${formatMoney(detail.interestYield)} บาท '
-              'กรุณาชำระก่อนทำรายการขอสินเชื่อเพิ่ม',
-              icon: Icons.payments_outlined,
-              tone: TopupNoticeTone.warning,
-            )
-          else if (!inRange)
-            TopupNotice(
-              'กรุณาระบุยอดระหว่าง ${formatWholeMoney(detail.minTopupAmount)} '
-              'ถึง ${formatWholeMoney(detail.maxTopupAmount)} บาท',
-              tone: TopupNoticeTone.warning,
-            )
-          else if (!_flow.isAmountEditable)
-            TopupNotice(
-              'ยอดนี้กำหนดตามวัตถุประสงค์ที่เลือกไว้ '
-              '(${_flow.purpose?.productName ?? ''})',
+          const SizedBox(height: 6),
+          _newLimitBar(detail.defaultTopupAmount),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                LoanRegisterStyles.padding, 14, LoanRegisterStyles.padding, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _conditionsNote(),
+                const SizedBox(height: 14),
+                Text(
+                  'วงเงินสินเชื่อที่ต้องการกู้ใหม่',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _amountField(),
+                if (_flow.isAmountEditable && !_flow.hasUnpaidInterest) ...[
+                  Text(
+                    'เลื่อนเพื่อปรับลดวงเงิน',
+                    style: GoogleFonts.notoSansThai(
+                      fontSize: 12.5,
+                      color: LoanRegisterStyles.primary,
+                    ),
+                  ),
+                  _slider(detail),
+                ],
+                if (!_flow.isRequestedAmountAllowed)
+                  TopupNotice(
+                    'กรุณาระบุยอดระหว่าง '
+                    '${formatWholeMoney(detail.minTopupAmount)} '
+                    'ถึง ${formatWholeMoney(detail.maxTopupAmount)} บาท',
+                    tone: TopupNoticeTone.warning,
+                  )
+                else if (!_flow.isAmountEditable)
+                  TopupNotice(
+                    'ยอดนี้กำหนดตามวัตถุประสงค์ที่เลือกไว้ '
+                    '(${_flow.purpose?.productName ?? ''})',
+                  ),
+                const SizedBox(height: 6),
+                TopupFigureRow(
+                  label: 'หัก ยอดเงินต้นคงที่ยังไม่ถึงกำหนดชำระ',
+                  caption: '(เลขที่สัญญา ${detail.contractNo})',
+                  amount: _flow.closingBalance,
+                  deduction: true,
+                  suffix: 'บาท',
+                ),
+                TopupFigureRow(
+                  label: 'หัก อากรแสตมป์สัญญาใหม่',
+                  amount: _flow.feeAmount,
+                  deduction: true,
+                  suffix: 'บาท',
+                ),
+                const Divider(height: 20),
+                TopupFigureRow(
+                  label: 'เงินคงเหลือโอนเข้าบัญชี',
+                  amount: _flow.payoutAmount,
+                  emphasis: true,
+                  suffix: 'บาท',
+                ),
+              ],
             ),
-          if (_flow.isAmountEditable && !_flow.hasUnpaidInterest) _slider(detail),
-          const PLoanSectionHeader('รายการหัก'),
-          // The numbered list, 1 / 2 / 3 / (4) / 5 — see
-          // TopupFlow.deductionLines for why the sequence can skip 4.
-          for (final line in _flow.deductionLines) TopupDeductionRow(line),
-          PLoanAmountRow(
-            label: 'จำนวนเงินที่จะได้รับ',
-            value: '${formatMoney(_flow.receivableAmount)} บาท',
-            large: true,
-            emphasis: true,
-            showDivider: false,
           ),
+          if (_showsSettlement) _settlementBlock(_recal!),
           if (_flow.outcome == TopupOutcome.lead)
-            const TopupNotice(
-              'สัญญานี้ไม่สามารถทำรายการผ่านแอปพลิเคชันได้ '
-              'กดส่งข้อมูลเพื่อให้เจ้าหน้าที่ติดต่อกลับ',
-              icon: Icons.support_agent,
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: LoanRegisterStyles.padding),
+              child: const TopupNotice(
+                'สัญญานี้ไม่สามารถทำรายการผ่านแอปพลิเคชันได้ '
+                'กดส่งข้อมูลเพื่อให้เจ้าหน้าที่ติดต่อกลับ',
+                icon: Icons.support_agent,
+              ),
             ),
         ],
       ),
     );
   }
 
+  /// `+5,000.00` — the M35 วงเงินพิเศษ, drawn in the accent colour because it
+  /// is the only row on this screen that *adds*.
+  Widget _specialLimitRow(int specials) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Text(
+              'วงเงินพิเศษเพิ่มเติม',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 13,
+                color: LoanRegisterStyles.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            '+${formatTopupMoney(specials)}',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: LoanRegisterStyles.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('บาท', style: TopupTheme.label(size: 13)),
+        ],
+      ),
+    );
+  }
+
+  /// The blue **วงเงินสินเชื่อใหม่สูงสุด** bar — the ceiling the amount below
+  /// is chosen within, and the same blue as the card's band by design.
+  Widget _newLimitBar(int amount) {
+    return Container(
+      color: TopupTheme.band,
+      padding: const EdgeInsets.symmetric(
+          horizontal: LoanRegisterStyles.padding, vertical: 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Text(
+              'วงเงินสินเชื่อใหม่สูงสุด',
+              style: GoogleFonts.notoSansThai(
+                fontSize: 14.5,
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Text(
+            formatTopupMoney(amount),
+            style: GoogleFonts.notoSansThai(
+              fontSize: 19,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('บาท',
+              style: GoogleFonts.notoSansThai(
+                  fontSize: 13, color: Colors.white)),
+        ],
+      ),
+    );
+  }
+
+  /// The เงื่อนไข note. The rounding rule is stated because the field enforces
+  /// it silently — typing 96,050 and being handed 96,000 back is otherwise
+  /// indistinguishable from the app losing the input.
+  Widget _conditionsNote() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'เงื่อนไข',
+          style: GoogleFonts.notoSansThai(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: LoanRegisterStyles.primary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'คุณสามารถแก้ไขยอดขอสินเชื่อใหม่ได้ '
+          '(ระบบจะปัดเป็นจำนวนเต็มร้อยเท่านั้น)',
+          style: TopupTheme.label(size: 12.5),
+        ),
+      ],
+    );
+  }
+
+  /// **ยอดที่ต้องชำระเพื่อเติมวงเงิน** — the server's breakdown, rendered
+  /// exactly as sent.
+  ///
+  /// Every row is `settlement_items`' own Thai `description` in `seq` order,
+  /// numbered by position; the client names nothing. The total is
+  /// `settlement_total_amount` **as sent**, never re-added from the rows —
+  /// this is a bill, and a client that disagrees with the server about it is
+  /// worse than one that cannot explain it.
+  Widget _settlementBlock(TopupRecalculation recal) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          LoanRegisterStyles.padding, 18, LoanRegisterStyles.padding, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: LoanRegisterStyles.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'ยอดที่ต้องชำระเพื่อเติมวงเงิน',
+            style: TopupTheme.value(size: 15.5, weight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '*กรุณาชำระเงินก่อนดำเนินการ',
+            style: GoogleFonts.notoSansThai(
+                fontSize: 11.5, color: TopupTheme.alert),
+          ),
+          const SizedBox(height: 10),
+          Text('รายละเอียด', style: TopupTheme.label(size: 13)),
+          const SizedBox(height: 4),
+          for (var i = 0; i < recal.settlementItems.length; i++)
+            _settlementRow(i + 1, recal.settlementItems[i]),
+          const Divider(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text('รวมยอดที่ต้องชำระ',
+                    style:
+                        TopupTheme.value(size: 14.5, weight: FontWeight.w700)),
+              ),
+              Text(
+                formatTopupMoney(recal.settlementTotalAmount),
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: LoanRegisterStyles.primary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text('บาท', style: TopupTheme.label(size: 12.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
+            style: GoogleFonts.notoSansThai(
+                fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settlementRow(int number, TopupSettlementItem item) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Text('$number.', style: TopupTheme.label(size: 13)),
+          ),
+          // The server's own wording, shown verbatim — the client has no
+          // mapping table and must not grow one.
+          Expanded(child: Text(item.description,
+              style: TopupTheme.label(size: 13))),
+          const SizedBox(width: 8),
+          Text(formatTopupMoney(item.amount),
+              style: TopupTheme.value(size: 13.5, weight: FontWeight.w600)),
+          const SizedBox(width: 5),
+          Text('บาท', style: TopupTheme.label(size: 12)),
+        ],
+      ),
+    );
+  }
+
+  /// The requested amount, as the design draws it: a large plain figure with
+  /// `บาท` pushed to the right margin, no box.
+  ///
+  /// It is still a real text field — the customer may type — but the chrome is
+  /// gone because on this screen the number *is* the content. A read-only flow
+  /// (a purpose-priced request) greys the value rather than showing a disabled
+  /// input, which would look broken next to a slider that is also absent.
   Widget _amountField() {
     final editable = _flow.isAmountEditable;
-    return TextField(
-      controller: _amountController,
-      focusNode: _amountFocus,
-      readOnly: !editable,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      textAlign: TextAlign.right,
-      style: GoogleFonts.notoSansThai(
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-        color: LoanRegisterStyles.value,
-      ),
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: editable ? Colors.white : LoanRegisterStyles.background,
-        suffixText: 'บาท',
-        suffixStyle: GoogleFonts.notoSansThai(
-          fontSize: 14,
-          color: LoanRegisterStyles.label,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _amountController,
+            focusNode: _amountFocus,
+            readOnly: !editable,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: GoogleFonts.notoSansThai(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: editable
+                  ? LoanRegisterStyles.value
+                  : LoanRegisterStyles.label,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 6),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            onSubmitted: (_) => _amountFocus.unfocus(),
+          ),
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: LoanRegisterStyles.cardBorder),
-        ),
-      ),
-      onSubmitted: (_) => _amountFocus.unfocus(),
+        const SizedBox(width: 8),
+        Text('บาท', style: TopupTheme.label(size: 14)),
+      ],
     );
   }
 
@@ -506,12 +807,8 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(formatWholeMoney(min),
-                style: GoogleFonts.notoSansThai(
-                    fontSize: 12, color: LoanRegisterStyles.label)),
-            Text(formatWholeMoney(max),
-                style: GoogleFonts.notoSansThai(
-                    fontSize: 12, color: LoanRegisterStyles.label)),
+            Text(formatTopupMoney(min), style: TopupTheme.label(size: 11.5)),
+            Text(formatTopupMoney(max), style: TopupTheme.label(size: 11.5)),
           ],
         ),
       ],
@@ -535,11 +832,15 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   Widget? _bottomBar() {
     final busy = _recalculating || _submittingLead;
     final editing = _amountFocus.hasFocus;
+    final outcome = _outcome;
 
-    // Unpaid interest: the customer pays, then refreshes. Two buttons, as in
-    // the source — ปรับปรุงยอดชำระ is the only way back from a payment the
-    // app cannot observe.
-    if (_flow.outcome == TopupOutcome.payInterest) {
+    // Two buttons whenever there is something to settle first — the design's
+    // pair, and the only way back from a payment this app cannot observe.
+    // ปรับปรุงยอดชำระ re-reads /topup/detail as well as the calculator,
+    // because settling changes interest_paid_flag and the whole screen with
+    // it; the QR screen deliberately refreshes nothing itself, so that two
+    // screens cannot disagree about whether the money is still owed.
+    if (outcome == TopupOutcome.payInterest) {
       return Container(
         padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
         decoration: BoxDecoration(
@@ -569,16 +870,18 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       );
     }
 
-    final ready = switch (_flow.outcome) {
+    final ready = switch (outcome) {
       TopupOutcome.payInterest => true,
       TopupOutcome.lead => true,
       TopupOutcome.topup =>
         _flow.isRequestedAmountAllowed && (editing || _flow.plan != null),
     };
     return PLoanBottomButton(
-      label: editing && _flow.outcome == TopupOutcome.topup
+      label: editing && outcome == TopupOutcome.topup
           ? 'ยืนยันยอดเงิน'
-          : _flow.primaryActionLabel,
+          : outcome == TopupOutcome.topup
+              ? 'ถัดไป'
+              : _flow.primaryActionLabel,
       busy: busy,
       onPressed: ready && !busy ? _primaryAction : null,
     );

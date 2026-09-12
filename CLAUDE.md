@@ -1849,6 +1849,115 @@ silently does nothing is worse than no button. The payment payload can be
 copied instead, and a screenshot works. Add it back only alongside a host
 handler that actually saves.
 
+#### The 2026-09 redesign (card + amount screens)
+
+**The card and amount screens were rebuilt to a BA design** on 2026-09-12,
+from `etc/M35 + หน้าจอเติมเงิน_ปิดปรับผ่านแอพมือถือ_หลั.pdf` (git-ignored).
+The rest of the flow — installments, photos, customer data, conclusion,
+success, status, QR — is untouched.
+
+**The pre-redesign screens are preserved**, routed at **`/topup/old`** and
+**`/topup/amount-old`** (`topup_card_page_old.dart` /
+`topup_amount_page_old.dart`), each carrying a banner saying it is superseded.
+They share **nothing** with the redesign — not even a helper — so editing the
+new screens cannot change what they render. ⚠ Delete the pair together once
+the redesign is signed off; they are a comparison aid, not a fallback.
+
+Shared pieces live in **`components/topup_redesign.dart`**: `TopupTheme`,
+`formatTopupMoney`, `TopupFigureRow`, `TopupDottedDivider`, `TopupStatusPill`
+and `TopupContractHeader`.
+
+⚠ **This page family carries its own palette** (`TopupTheme`), like the QR
+screen and for a related reason: the design is the BA's, handed over as
+renders, and its band blue is not `LoanRegisterStyles.value`. Matching the
+approved renders beat matching the rest of the app; **that trade does not
+generalise** — don't copy the pattern onto another screen.
+
+⚠ **`formatTopupMoney` always renders two decimals**, where the old screens
+round to whole baht in places. It has to: both screens show a subtotal, two
+deductions and a result, and rows that round independently stop adding up. A
+reader who sums three rows and gets a different total has found a bug in the
+app, not in their arithmetic.
+
+**Two model changes were prerequisites**, both with effects beyond the UI:
+
+- **`closing_balance` is a `double`.** Parsed as `int` it truncated `86217.08`
+  to `86217` — the same defect `yield`/`collection_fee`/`penalty_fee` carried
+  until 2026-09-11, with the same two effects: a figure misstated on screen and
+  a changed `transfer_amount` on the submit body. `TopupFlow.closingBalance`
+  and `payoutAmount` widened with it.
+- **M35 is `topup_extra`**, not `topup_specials` (instructed: *"วงเงินพิเศษ M35
+  -> is topup_extra"*), via `TopupFlow.specialLimitOf`. ⚠ **`topup_special_flag`
+  is no longer the gate** — a non-zero amount is; that flag belonged to
+  `topup_specials`, so requiring it would hide money the backend granted.
+  ⚠ **The same field is a P-Loan Extra's entire request amount**
+  (`LoanAmountDetail.extraRequestAmount`): one number, two products. Nothing
+  needs to reconcile them — the card's PLD001 tile leaves this flow — but don't
+  read one as evidence about the other. Three tests pin the field, the dropped
+  gate, and that `topup_specials` alone no longer uplifts anything.
+
+**The card** (PDF p.4): a blue ✨ ข้อเสนอพิเศษสำหรับคุณ band leading with the
+payout, the contract block with a `ข้อมูลสถานะ` pill, a dotted rule, then
+วงเงินสินเชื่อใหม่สูงสุด, เงินต้นที่ยังไม่ถึงกำหนดชำระ (−), อากรแสตมป์สัญญาใหม่
+(−), the light-blue **เงินคงเหลือโอนเข้าบัญชีสูงสุด\*** strip, the red
+`*เมื่อชำระยอดเพื่อเติมวงเงิน` note and the orange **เติมวงเงิน** button.
+
+⚠ **The payout is computed, not read from `default_transfer_amount`.** That
+field arrives **without the duty taken off** — verified against the
+`GetRecalTopupData` sample: `88,500 − 86,217.08 = 2,282.92`, no fee. Three rows
+above a total that disagrees with them is worse than either number alone, and
+the computed value is the same formula `TopupFlow.payoutAmount` files as
+`transfer_amount`. The band and the strip quote the **same** figure on purpose:
+the band is the promise, the rows are the arithmetic behind it.
+
+⚠ **The M35 uplift is visible as a bigger number, not different furniture.**
+The card shows only the combined limit (PDF pp.10/11 differ solely in the
+figures); the amount screen breaks it back out.
+
+**The `can_topup = N` card is a separate build, not a variation** — it answers
+a different question. Peach header, red warning glyph, *ขออภัย รายการนี้ยังไม่
+สามารถทำผ่านแอปได้ / กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652*, the
+`⏱ ไม่เข้าเงื่อนไข` pill, and **วงเงินสินเชื่อเดิม** — the existing line, never
+an offer above a refusal of it. **No button**: the action is a phone call.
+
+⚠ **`Code : xxx` renders only when the API sends a code.**
+`TopupDetail.canTopupCode` reads `can_topup_code`, falls back to a bare `code`,
+and is **empty otherwise** — in which case the line is absent. No sample
+response carries one, so **the wire name is unconfirmed**; point it at the real
+key when the API team names it. A `Code :` with nothing after it tells a branch
+less than no line at all.
+
+⚠ **The conditions panel moved below the cards**, not away. The design opens on
+the offer, but that panel is documented content (manual §1.2) and deleting it
+to match a render would lose more than it tidies.
+
+**The amount screen** (PDF pp.5–7, 9–11): contract block (no status pill), the
+M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` + an orange
+`วงเงินพิเศษเพิ่มเติม +5,000.00` — the only row on the screen that *adds*), the
+blue **วงเงินสินเชื่อใหม่สูงสุด** bar, the orange **เงื่อนไข** note, the big
+borderless amount field, the **เลื่อนเพื่อปรับลดวงเงิน** slider, the two หัก
+rows and **เงินคงเหลือโอนเข้าบัญชี**.
+
+⚠ **The เงื่อนไข note states the rounding rule** because the field enforces it
+silently: typing `96,050` and being handed `96,000` back is otherwise
+indistinguishable from the app losing the input.
+
+**`ยอดที่ต้องชำระเพื่อเติมวงเงิน` is the server's breakdown**, from
+`POST /GetRecalTopupData` — see that section. It is re-read on every calculator
+run (it is priced per `topup_amount`), and the previous rows are cleared
+**before** the call, never after: leaving the old amount's settlement under a
+new figure would explain the wrong number.
+
+⚠ **`TopupFlow.outcome` is still the authority for the buttons**, and the
+breadth of that matters. It is what protects the unpaid-interest and lead
+paths, and it works with **no** recalculation endpoint — which is the current
+state, since a web build cannot reach one. The breakdown only ever
+**upgrades**: rows to settle mean there is something to pay, so a contract that
+would otherwise show **ถัดไป** gets the design's **ชำระเงิน** /
+**ปรับปรุงยอดชำระ** pair instead. It never downgrades — a lead contract stays a
+lead however the settlement reads, and unpaid interest still blocks with no
+rows on screen.
+
 #### The contract card has three headers
 
 `TopupCardVariant.of(contract)`, in this order — a contract that is *both*
