@@ -199,7 +199,7 @@ class TopupFigureRow extends StatelessWidget {
                   label,
                   style: emphasis
                       ? TopupTheme.value(
-                          size: 15,
+                          size: 13.5,
                           weight: FontWeight.w700,
                           color: mutedLabel ? LoanRegisterStyles.label : null,
                         )
@@ -231,11 +231,71 @@ class TopupFigureRow extends StatelessWidget {
             const SizedBox(width: 6),
             Padding(
               padding: EdgeInsets.only(top: emphasis ? 8 : 0),
-              child: Text(suffix, style: TopupTheme.label(size: 13)),
+              child: Text(suffix, style: TopupTheme.value(size: 13)),
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// A figure **stacked under its label**: caption line, then the amount large
+/// and left-aligned with its unit pushed to the right margin.
+///
+/// This is the amount screen's house style for anything the customer is meant
+/// to read as a *quantity* rather than as a line in a table — the requested
+/// amount, and the two figures the M35 limit is built from. [TopupFigureRow]
+/// stays the label-left/value-right form, which is right for the deduction
+/// list where the labels are long and the figures are being compared down a
+/// column.
+///
+/// Set from the BA's screenshot on 2026-09-12: these had been table rows, so a
+/// long Thai label squeezed the figure it was introducing, and they read as
+/// entries in a list rather than as the arithmetic behind the blue bar.
+class TopupStackedFigure extends StatelessWidget {
+  const TopupStackedFigure({
+    super.key,
+    required this.label,
+    required this.value,
+    this.unit = 'บาท',
+    this.valueColor,
+  });
+
+  final String label;
+
+  /// Pre-formatted, so a caller can prefix a sign — `+5,000.00`.
+  final String value;
+
+  final String unit;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TopupTheme.label(size: 14)),
+        const SizedBox(height: 2),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                style: TopupTheme.value(
+                    size: 26, weight: FontWeight.w800, color: valueColor),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Dark, not the label grey — it belongs to the figure beside it,
+            // and the screenshot draws the two as one phrase.
+            Text(unit,
+                style: TopupTheme.value(size: 16, weight: FontWeight.w700)),
+          ],
+        ),
+      ],
     );
   }
 }

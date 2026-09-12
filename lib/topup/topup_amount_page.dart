@@ -454,13 +454,23 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TopupFigureRow(
+                  TopupStackedFigure(
                     label: 'ยอดจัดสินเชื่อเดิม',
-                    amount: detail.defaultTopupAmount - detail.topupSpecials,
-                    emphasis: true,
-                    suffix: 'บาท',
+                    value: formatTopupMoney(
+                        detail.defaultTopupAmount - detail.topupSpecials),
                   ),
-                  _specialLimitRow(detail.topupSpecials),
+                  const SizedBox(height: 10),
+                  TopupStackedFigure(
+                    label: 'วงเงินพิเศษเพิ่มเติม',
+                    // The one figure on the screen that adds, so it carries an
+                    // explicit `+`. It stays in the value colour rather than
+                    // the accent orange it had: the screenshot draws this pair
+                    // as two readings of the same kind, and colouring one of
+                    // them made the uplift look like a separate offer instead
+                    // of a term of the sum above the bar.
+                    value: '+${formatTopupMoney(detail.topupSpecials)}',
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
@@ -482,7 +492,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                     color: LoanRegisterStyles.primary,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 _amountField(),
                 if (_flow.isAmountEditable && !_flow.hasUnpaidInterest) ...[
                   Text(
@@ -542,40 +552,6 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                 icon: Icons.support_agent,
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  /// `+5,000.00` — the M35 วงเงินพิเศษ, drawn in the accent colour because it
-  /// is the only row on this screen that *adds*.
-  Widget _specialLimitRow(int specials) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Expanded(
-            child: Text(
-              'วงเงินพิเศษเพิ่มเติม',
-              style: GoogleFonts.notoSansThai(
-                fontSize: 13,
-                color: LoanRegisterStyles.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Text(
-            '+${formatTopupMoney(specials)}',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: LoanRegisterStyles.primary,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text('บาท', style: TopupTheme.label(size: 13)),
         ],
       ),
     );
@@ -775,7 +751,8 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
           ),
         ),
         const SizedBox(width: 8),
-        Text('บาท', style: TopupTheme.label(size: 14)),
+        Text('บาท',
+            style: TopupTheme.value(size: 16, weight: FontWeight.w700)),
       ],
     );
   }

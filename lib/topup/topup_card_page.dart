@@ -489,7 +489,7 @@ class _TopupContractCard extends StatelessWidget {
       children: [
         _band(payout, hasSpecial: specials > 0),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          padding: const EdgeInsets.fromLTRB(8, 16, 8, 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

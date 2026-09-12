@@ -1948,11 +1948,27 @@ of the `_old` pair is that editing the redesign cannot change them. The
 Delete the original along with the `_old` pages.
 
 **The amount screen** (PDF pp.5–7, 9–11): contract block (no status pill), the
-M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` + an orange
-`วงเงินพิเศษเพิ่มเติม +5,000.00` — the only row on the screen that *adds*), the
-blue **วงเงินสินเชื่อใหม่สูงสุด** bar, the orange **เงื่อนไข** note, the big
+M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` + `วงเงินพิเศษเพิ่มเติม
++5,000.00` — the only figure on the screen that *adds*), the blue
+**วงเงินสินเชื่อใหม่สูงสุด** bar, the orange **เงื่อนไข** note, the big
 borderless amount field, the **เลื่อนเพื่อปรับลดวงเงิน** slider, the two หัก
 rows and **เงินคงเหลือโอนเข้าบัญชี**.
+
+⚠ **Two figure layouts, and which one a figure gets is meaningful.**
+`TopupStackedFigure` puts the label on its own line with the amount large
+underneath and its unit at the right margin; `TopupFigureRow` is the
+label-left/value-right table row. Stacked is for anything read as a
+*quantity* — the requested amount and the two figures the M35 limit is built
+from. The row form is for the deduction list, where labels are long and the
+figures are compared down a column. Set from the BA's screenshot on
+2026-09-12: as table rows the M35 pair had long Thai labels squeezing the
+figures they introduced, and read as entries in a list rather than as the
+arithmetic behind the blue bar.
+
+⚠ **`+5,000.00` is not orange.** It was, briefly. The screenshot draws the M35
+pair as two readings of the same kind, and colouring one of them made the
+uplift look like a separate offer rather than a term of the sum above the bar.
+The `+` is what marks it.
 
 ⚠ **The เงื่อนไข note states the rounding rule** because the field enforces it
 silently: typing `96,050` and being handed `96,000` back is otherwise
