@@ -138,7 +138,7 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 330 tests (models, payloads, headers, NDID terms +
+flutter test               # 347 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard, the top-up flow's
@@ -1926,6 +1926,22 @@ and is **empty otherwise** — in which case the line is absent. No sample
 response carries one, so **the wire name is unconfirmed**; point it at the real
 key when the API team names it. A `Code :` with nothing after it tells a branch
 less than no line at all.
+
+⚠ **The redesign's own colour rules, all set from device checks on
+2026-09-12** — each looked fine in a render and wrong on a phone:
+
+| Element | Treatment | Why |
+| --- | --- | --- |
+| the two deduction rows (`TopupFigureRow(deduction: true)`) | label **and figure** in label grey | in value navy a deduction carried the same weight as the payout under it, so the eye found three equal numbers instead of two small ones explaining a large one |
+| `วงเงินสินเชื่อใหม่สูงสุด` | label grey via `mutedLabel`, figure stays dark | it heads the group whose other rows are muted; opt-in, because the amount screen's `เงินคงเหลือโอนเข้าบัญชี` is also an emphasis row and *is* a conclusion |
+| `บาท` in the payout strip and on every stacked figure | the **figure's** colour, not label grey | the unit belongs to the number beside it; a grey unit broke the phrase in half |
+| `*เมื่อชำระยอดเพื่อเติมวงเงิน` | orange, not alert red | it qualifies *when* the money arrives rather than warning about anything, and in red beside a payout it read as a problem with the payout |
+| the band's ✨ | `#F7BF97` | the one mark on the blue with no warmth |
+
+`TopupPrimaryButton`'s corner radius also went 4 → 12. ⚠ That button is shared,
+so it is **the one change that reaches the `_old` pair** — nothing they *say*
+changed, but "they render exactly as they did" is now approximate rather than
+literal.
 
 ⚠ **The card's title is เติมวงเงิน**, not สินเชื่อเพิ่ม (changed 2026-09-12).
 It matches the button the customer pressed to get here — the srisawad app's

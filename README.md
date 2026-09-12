@@ -8,11 +8,14 @@ a separate **native Flutter app** via
 native host opens this web build in a WebView). The Android/iOS/desktop
 scaffolding still exists, but the **web build is what ships**.
 
-> **Two features at different stages.** The 5-step wizard is **UI-only** — no
+> **Three features at different stages.** The 5-step wizard is **UI-only** — no
 > backend submit; its screens render from mock data plus a customer profile the
 > native host provides. The **P-Loan application flow**
 > (`lib/p_loan/application/`) is **live end to end** against the srisawad mobile
-> API, with no mock fallback. UI text/data is Thai; code comments are English.
+> API, with no mock fallback. The **top-up flow** (`lib/topup/`, added
+> 2026-09-11) is live too and is a **different product** from the P-Loan Extra,
+> despite how alike they look — see *Recent changes — 2026-09-11 → 2026-09-12*
+> before editing either. UI text/data is Thai; code comments are English.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
 > whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
@@ -352,6 +355,16 @@ lib/
     ndid_terms_content.dart     its wording, generated from the Pages document
     models/loan_register_form.dart   in-memory wizard model (+ mock data)
     components/                  shared field rows, styles, step indicator, etc.
+  topup/                        the top-up flow — a DIFFERENT product from the
+                                P-Loan Extra (it closes the old contract out
+                                and reissues it larger). Separate page set.
+    topup_card_page.dart        step 1, redesigned 2026-09-12
+    topup_amount_page.dart      step 2, redesigned 2026-09-12
+    topup_card_page_old.dart    the pre-redesign pair, kept at /topup/old and
+    topup_amount_page_old.dart  /topup/amount-old — delete both once signed off
+    models/topup_flow.dart      mutable flow state (go_router extra)
+    models/topup_settlement.dart   POST /GetRecalTopupData
+    components/topup_redesign.dart shared pieces of the redesign
   p_loan/
     submit_form/                standalone P-Loan form (regmast_ploan.php API)
     application/                6-step P-Loan application flow (mobile API)
@@ -360,9 +373,71 @@ lib/
                                 top-up card; rebuilds the flow, opens step 3
 firestore.rules                 deny-by-default + one client-readable document
 tools/firestore-import/         seeds appConfig from a console-export dump
-tools/deploy-uat.sh             manual deploy to uat (the Stop hook that
-                                ran it no longer exists — CI owns uat now)
+tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
+                                that changes source) and CI (on a push to
+                                `uat`) run a deploy, so whichever finishes
+                                last wins — see CLAUDE.md
 ```
+
+## Recent changes — 2026-09-11 → 2026-09-12
+
+### The top-up flow was added, then its first two screens were redesigned
+
+`lib/topup/` is a **6-step wizard**, ported from LandAndHouseWeb's
+`lib/customer_topup/` on 2026-09-11. Home menu → **สินเชื่อเพิ่ม**, or `/topup`;
+the srisawad app's QA-only home **เติมวงเงินใหม่** tile opens the same route.
+
+⚠ **A top-up is not a P-Loan Extra**, and that is the thing to get straight
+before editing either. A top-up **closes the existing contract out and reissues
+it larger**, so the old principal comes off the payout, `min/max_topup_amount`
+apply, and it files with `POST /topup`. A P-Loan Extra only *references* the
+contract and files with `POST /ploan`. They share models and services but have
+**separate page sets** on purpose, so adding the top-up touched no P-Loan
+screen.
+
+On **2026-09-12** the BA redesigned the first two screens
+(`etc/M35 + หน้าจอเติมเงิน_…pdf`). The pre-redesign versions are preserved at
+**`/topup/old`** and **`/topup/amount-old`** — delete the pair once the
+redesign is signed off.
+
+- **The card** leads with a blue ข้อเสนอพิเศษสำหรับคุณ band quoting the payout,
+  then the contract block, then the three figures that explain the band. The
+  `can_topup = N` card is a **separate build**, not a variation: it shows why
+  this cannot be done in the app, which branch to call, and the existing credit
+  line — never an offer above a refusal of it — and has no button.
+- **The amount screen** gained the M35 `topup_extra` uplift as its own pair of
+  figures, and the **ยอดที่ต้องชำระเพื่อเติมวงเงิน** block.
+- **สิทธิพิเศษเฉพาะคุณ is currently hidden** behind one switch, which also
+  hides this build's P-Loan Extra hand-off from that screen.
+
+### `POST /GetRecalTopupData` — the settlement breakdown
+
+The ยอดที่ต้องชำระเพื่อเติมวงเงิน rows come from the backend. Each carries its
+own Thai `description`, rendered verbatim in `seq` order; **empty
+`settlement_items` hides the whole block**. The total is displayed as sent,
+never re-added from the rows — it is a bill.
+
+⚠ **It is not callable from a browser** (verified 2026-09-12): plain HTTP on an
+IP, no CORS on a `200`, and a `401` on the preflight. It works only inside the
+host, through the `httpRequest` bridge, and only once
+`http://34.142.213.42:8080/` is allowlisted there — committed in the srisawad
+repo, **not yet released**. Its credential is a shared `Basic` service account
+that deliberately **does not ship**: `TOPUP_RECAL_API_AUTH` defaults to empty
+and a test pins it. So `TopupApi.recalculate` returns `null` rather than
+throwing, and an unconfigured build, an unreachable gateway and a contract with
+nothing outstanding all render the same screen. That host is **temporary** —
+remove the allowlist entry when the QA endpoint lands.
+
+### Two decimal/field corrections with effects beyond the UI
+
+- **`closing_balance` is a `double`.** As an `int` it truncated `86217.08` to
+  `86217` — the same defect `yield`/`collection_fee`/`penalty_fee` carried,
+  with the same two effects: a figure misstated on screen and a changed
+  `transfer_amount` on the submit body.
+- **The M35 special limit is `topup_extra`**, not `topup_specials`, and
+  `topup_special_flag` is no longer the gate — a non-zero amount is. That flag
+  belonged to the old field, so requiring it would hide money the backend
+  granted.
 
 ## Recent changes — 2026-09-10
 
