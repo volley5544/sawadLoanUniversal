@@ -2035,6 +2035,19 @@ model does not know about. `rawJson` exists for that and nothing else.
 `pdpa_flg` goes out **empty**: a lead never reaches step 7, so claiming a
 consent there would record one that was never given.
 
+⚠ **The amount screen reloads when the QR screen pops** (fixed 2026-09-12).
+Popping does not re-run `initState`, so without an explicit reload the screen
+kept the `/topup/detail` it fetched *before* the payment — `interest_paid_flag`
+still `'Y'` — and went on asking for money the customer had just paid. The push
+to the QR screen is awaited and `_load()` follows it, so every way back (its
+ปรับปรุงยอดชำระ, its back arrow, a system back) refreshes.
+
+Re-reading `/topup/detail` is the **only** way this app learns a payment
+landed: it never sees the bank transaction. That is also why the QR screen's
+ปรับปรุงยอดชำระ refreshes nothing itself and simply pops — two screens
+refreshing independently could disagree about whether the interest is still
+owed.
+
 #### `POST /payment/interest` — the 500 was the host, not the body
 
 ⚠ **Resolved 2026-09-11: `https://dev.swpfin.com:7076` had been retired.** The

@@ -824,6 +824,44 @@ void main() {
     });
   });
 
+  group('paying the outstanding interest refreshes the amount screen', () {
+    test('the flow flips out of the pay-first state once the flag clears', () {
+      // What the reload has to achieve: /topup/detail is the only thing that
+      // tells this app a payment it cannot observe has landed.
+      final unpaid = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {'interest_paid_flag': 'Y'},
+      );
+      expect(unpaid.outcome, TopupOutcome.payInterest);
+      expect(unpaid.isAmountEditable, isFalse);
+
+      final paid = _flowFor(
+        'MOCK-C-6701002',
+        detailOverrides: {'interest_paid_flag': 'N'},
+      );
+      expect(paid.outcome, TopupOutcome.topup);
+      expect(paid.isAmountEditable, isTrue);
+      expect(paid.overdueDeduction, 0);
+    });
+
+    test('the amount screen reloads when the QR screen pops', () {
+      // Popping does not re-run initState, so without an explicit reload the
+      // screen keeps the detail it fetched *before* the payment and goes on
+      // asking for money already paid. Asserted on the source because it is a
+      // navigation contract between two files that a refactor could quietly
+      // drop.
+      final amount =
+          File('lib/topup/topup_amount_page.dart').readAsStringSync();
+      final at = amount.indexOf('await context.push(AppRoutes.topupQrPayment');
+      expect(at, greaterThan(-1),
+          reason: 'the push to the QR screen must be awaited');
+      // …and the reload has to follow it, before the next statement block.
+      final after = amount.substring(at, at + 400);
+      expect(after, contains('_load()'),
+          reason: 'the amount screen must reload after the QR screen pops');
+    });
+  });
+
   group('security posture', () {
     test('no lead-service credential ships in the bundle', () {
       // The source hardcoded an x-api-key and a bearer for the lead endpoint.

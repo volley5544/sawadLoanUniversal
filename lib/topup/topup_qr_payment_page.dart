@@ -235,9 +235,12 @@ class TopupQrPaymentPage extends StatelessWidget {
               child: TopupPrimaryButton(
                 label: 'ปรับปรุงยอดชำระ',
                 outlined: true,
-                // Popping back to the amount screen re-runs its load, which
-                // re-reads `/topup/detail` — the only way the app finds out a
-                // payment it cannot observe has landed.
+                // Pops back to the amount screen, which **reloads on return**
+                // — re-reading `/topup/detail` is the only way the app finds
+                // out a payment it cannot observe has landed. See
+                // `_payInterest` there; this button does not refresh anything
+                // itself, and must not, or the two screens could disagree
+                // about whether the interest is still owed.
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go(AppRoutes.home),

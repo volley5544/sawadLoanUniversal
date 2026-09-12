@@ -284,7 +284,16 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       );
       if (!mounted) return;
       setState(() => _submittingLead = false);
-      context.push(AppRoutes.topupQrPayment, extra: _flow);
+      // Awaited, and the screen reloads whichever way the customer comes back
+      // — the QR screen's ปรับปรุงยอดชำระ, its back arrow, or a system back.
+      //
+      // ⚠ Without this the screen keeps the `/topup/detail` it loaded *before*
+      // the payment, so `interest_paid_flag` is still 'Y' and it goes on
+      // asking for money that has been paid. Popping does not re-run
+      // `initState`, so nothing else would refetch it.
+      await context.push(AppRoutes.topupQrPayment, extra: _flow);
+      if (!mounted) return;
+      await _load();
     } on SrisawadApiException catch (e) {
       if (!mounted) return;
       setState(() => _submittingLead = false);
