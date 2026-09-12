@@ -231,6 +231,57 @@ const String kNdidAsId = String.fromEnvironment('NDID_AS_ID');
 /// than naming a source it cannot confirm.
 const String kNdidAsName = String.fromEnvironment('NDID_AS_NAME');
 
+/// Base URL of **`POST /GetRecalTopupData`** — the recalculation behind the
+/// top-up amount screen's ยอดที่ต้องชำระเพื่อเติมวงเงิน block.
+///
+/// ⚠ **Not reachable from a browser as supplied** (verified 2026-09-12). The
+/// sample points at `http://34.142.213.42:8080`, which fails twice over from
+/// this HTTPS build:
+///
+///   1. **Plain HTTP on an IP** — blocked as mixed content before it is sent.
+///   2. **No CORS.** A `200` carries no `access-control-allow-*` header, and
+///      the `OPTIONS` preflight answers `401` because a browser never sends
+///      `Authorization` on a preflight. Exactly what made the retired
+///      `<:8082>/SavePloanContract` need the native bridge.
+///
+/// So the call only works **inside the host**, through its `httpRequest`
+/// bridge — and only once `http://34.142.213.42:8080/` is added to
+/// `_kHttpRequestAllowedPrefixes` in the srisawad app, which costs an app
+/// release. Until then the amount screen simply shows no settlement block
+/// (see [kTopupRecalApiAuth]).
+///
+/// Resolving from the runtime config first (`api_url['recal_topup_url_base']`)
+/// is what lets the endpoint be moved behind the mobile API base — HTTPS,
+/// `access-control-allow-origin: *`, bearer auth — without a rebuild. That is
+/// the fix worth asking for.
+const String kTopupRecalApiBase = String.fromEnvironment(
+  'TOPUP_RECAL_API_BASE',
+  defaultValue: 'http://34.142.213.42:8080',
+);
+
+/// The `Authorization` header value for [kTopupRecalApiBase], e.g.
+/// `Basic <base64>`.
+///
+/// ⚠ **Empty by default, and it must stay that way.** The supplied curl
+/// carries a **shared service account** (`Basic …`, a `…prod` user), and
+/// baking one into a web bundle is the high-severity pentest finding this repo
+/// closed on 2026-08-04 by deleting `kPLoanSaveApiAuth` — anyone who opens the
+/// app can read it. Same rule as [kTopupLeadApiAuth].
+///
+/// Unset, [kTopupRecalConfigured] is false, no call is made, and the
+/// ยอดที่ต้องชำระเพื่อเติมวงเงิน section is **hidden** — which is the same
+/// thing an empty `settlement_items` does, so the screen has one behaviour
+/// rather than two. `test/topup_recalculation_test.dart` pins that nothing
+/// ships.
+///
+/// The real fix is for this call to move behind the mobile API and
+/// authenticate with the customer's own bearer token, the way `POST /ploan`
+/// does — see Outstanding #33.
+const String kTopupRecalApiAuth = String.fromEnvironment('TOPUP_RECAL_API_AUTH');
+
+/// Whether a build can call `POST /GetRecalTopupData` at all.
+bool get kTopupRecalConfigured => kTopupRecalApiAuth.isNotEmpty;
+
 /// Firestore path of the runtime-config document read at startup
 /// (`services/app_config_api.dart`). Overridable so the config can be moved to
 /// a document with narrower security rules without a code change:

@@ -9,8 +9,10 @@ import '../p_loan/application/models/loan_amount_detail.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../p_loan/application/models/loan_documents.dart';
 import '../p_loan/application/models/p_loan_mock.dart';
+import '../topup/models/topup_settlement.dart';
 import '../topup/models/topup_status.dart';
 import 'api_transport.dart';
+import 'diagnostics.dart';
 import 'app_config_api.dart';
 import 'p_loan_api.dart';
 import 'srisawad_api.dart';
@@ -190,6 +192,92 @@ class TopupApi {
       );
     }
     return json;
+  }
+
+  /// Base URL of `POST /GetRecalTopupData`, resolved like every other
+  /// endpoint: `api_url['recal_topup_url_base']` from the Firestore config
+  /// first, [kTopupRecalApiBase] as the degrade-to value.
+  static Future<String> recalBaseUrl() async {
+    final config = await AppConfigApi.ensureLoaded();
+    return config.urlFor('recal_topup_url_base') ?? kTopupRecalApiBase;
+  }
+
+  /// `POST /GetRecalTopupData` — re-prices [topupAmount] and returns the
+  /// **ยอดที่ต้องชำระเพื่อเติมวงเงิน** breakdown the amount screen shows.
+  ///
+  /// The response is a superset of `GET /topup/detail`; only the parts that
+  /// call cannot supply are modelled — see [TopupRecalculation].
+  ///
+  /// **Returns `null` when the section cannot be shown**, rather than
+  /// throwing, and that is the whole error policy of this call. The section is
+  /// driven entirely by `settlement_items`: no rows means no section, so a
+  /// build with no credential ([kTopupRecalConfigured]), a gateway that cannot
+  /// be reached from a browser (see [kTopupRecalApiBase]) and a contract with
+  /// nothing outstanding all render **the same screen**. A top-up amount is
+  /// still perfectly requestable without a settlement block, so a failure here
+  /// must not take the page down with it. Every null leaves a
+  /// [Diagnostics] breadcrumb, because otherwise "why is the section missing?"
+  /// is unanswerable from a device.
+  ///
+  /// ⚠ It takes **no `token`**, unlike every other method here: this endpoint
+  /// is off the mobile API base and authenticates with its own shared
+  /// credential, not the customer's bearer. When it moves behind the mobile
+  /// API (Outstanding #33) that becomes a `required String token` like the
+  /// rest, and [kTopupRecalApiAuth] goes away.
+  static Future<TopupRecalculation?> recalculate({
+    required String dbName,
+    required String contractNo,
+    required num topupAmount,
+  }) async {
+    if (kPLoanUseMockData) return _mock(mockRecalculation(topupAmount));
+    if (!kTopupRecalConfigured) {
+      Diagnostics.log('topup recal not configured — settlement hidden');
+      return null;
+    }
+    final base = await recalBaseUrl();
+    try {
+      final res = await sendApiRequest(
+        'POST',
+        Uri.parse('$base/GetRecalTopupData'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': kTopupRecalApiAuth,
+        },
+        body: jsonEncode({
+          'contract_no': contractNo,
+          'db_name': dbName,
+          // The sample sends this as a number, not a string.
+          'topup_amount': topupAmount,
+        }),
+      );
+      final json = SrisawadApi.decode(res.body);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        Diagnostics.log('topup recal HTTP ${res.statusCode}');
+        return null;
+      }
+      // Wrapped in `results`, like /user/detail rather than /topup/detail.
+      final results = (json is Map<String, dynamic>) ? json['results'] : null;
+      if (results is! Map<String, dynamic>) {
+        Diagnostics.log('topup recal: unexpected body');
+        return null;
+      }
+      final recal = TopupRecalculation.fromJson(results);
+      if (!recal.isOk) {
+        Diagnostics.log('topup recal ${recal.code} ${recal.message}');
+        return null;
+      }
+      if (!recal.itemsSumMatchesTotal) {
+        // Not corrected — the server's total is what the customer owes — but
+        // the screen is then showing a breakdown that does not explain the
+        // figure under it, which is worth being able to see from a device.
+        Diagnostics.log('topup settlement rows do not sum to '
+            '${recal.settlementTotalAmount}');
+      }
+      return recal;
+    } on ApiTransportException catch (e) {
+      Diagnostics.log('topup recal transport: ${e.message}');
+      return null;
+    }
   }
 
   /// Base URL of the lead service, resolved like every other endpoint:

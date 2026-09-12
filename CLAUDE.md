@@ -138,7 +138,7 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 271 tests (models, payloads, headers, NDID terms +
+flutter test               # 330 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard, the top-up flow's
@@ -2005,6 +2005,75 @@ its iOS equivalent) rather than the camera handler. That path is already
 exercised by `p_loan/submit_form`'s attachment groups, so it is not new ground
 — but it is the first thing to check if the button does nothing on a device.
 
+#### `POST /GetRecalTopupData` — the settlement breakdown
+
+**ยอดที่ต้องชำระเพื่อเติมวงเงิน on the redesigned amount screen comes from the
+backend**, not from `/topup/detail` (added 2026-09-12; sample in the
+git-ignored `etc/new_topup_api.txt`). It re-prices a chosen `topup_amount` and
+returns a superset of `/topup/detail` plus the parts that call has no fields
+for: `settlement_items[]`, `settlement_total_amount`,
+`overdue_principal_amount`, `topup_discount_amount`,
+`payoff_before_settlement_amount`, `overdue_day` / `overdueFrom` / `overdueTo`
+(⚠ the last two are **camelCase** where everything around them is snake_case),
+`campaign_code` and `campaign_fees`.
+
+**The rows are the server's, and only they decide whether the section exists**
+(instructed 2026-09-12). Each `settlement_items` entry carries its own Thai
+`description`, rendered verbatim in `seq` order; the client maps nothing, names
+nothing and totals nothing. **Empty `settlement_items` hides the whole
+block** — heading, rows, total and the two buttons under it —
+`TopupRecalculation.hasSettlement`.
+
+That matters twice over. The design's six rows (ดอกเบี้ยสัญญาปัจจุบัน,
+ดอกเบี้ยค้างชำระยกมา, ค่าติดตามทวงถาม, ค่าเบี้ยปรับ, เงินต้นค้างชำระ, ส่วนลด) do
+not all exist as fields on `/topup/detail`, and guessing which of them `yield`
+meant would have put a wrong figure on a bill; the sample returns **three**
+items, not six, so the length is variable. And `settlement_total_amount` is
+displayed **as sent** rather than summed from the rows — the customer is being
+told what to pay, and a client that re-adds them can disagree with the server.
+`itemsSumMatchesTotal` exists to leave a breadcrumb when they differ, never to
+override the total. A test pins that a total with no rows still hides the
+section: the rows decide, not the total.
+
+⚠ **It is not callable from a browser, and that is why the client never
+throws.** Verified 2026-09-12 against the sample host
+`http://34.142.213.42:8080`:
+
+| | |
+| --- | --- |
+| `POST` with the sample's `Basic` header | **200** with the full body — so the earlier 401s were auth, not the payload |
+| any response | **no `access-control-allow-*` header** |
+| `OPTIONS` preflight | **401** — a browser never sends `Authorization` on a preflight, so it can't get past it |
+| the URL itself | plain **HTTP on an IP** — mixed content from this HTTPS build |
+
+So it works only **inside the host**, through its `httpRequest` bridge, and
+only once `http://34.142.213.42:8080/` is added to
+`_kHttpRequestAllowedPrefixes` in the srisawad app — an app release, exactly
+like the retired `<:8082>/SavePloanContract`. `POST /GetRecalTopupData` is
+**not** on the mobile API base (it 404s there).
+
+`TopupApi.recalculate` therefore returns **`TopupRecalculation?` and returns
+`null` on every failure** instead of throwing. An unconfigured build, an
+unreachable gateway and a contract with nothing outstanding then render the
+*same* screen — the section is simply absent — which is what the rule above
+already says. A top-up amount is perfectly requestable without a settlement
+block, so a failure here must not take the page down with it. Every null leaves
+a `Diagnostics.log` breadcrumb, readable from the `(UAT ver…)` tag, because
+otherwise "why is the section missing?" is unanswerable from a device.
+
+⚠ **The sample's credential does not ship.** It is a shared `Basic` service
+account (a `…prod` user), and baking one into a web bundle is the
+high-severity pentest finding this repo closed on 2026-08-04 by deleting
+`kPLoanSaveApiAuth`. `kTopupRecalApiAuth` is a `--dart-define`
+(`TOPUP_RECAL_API_AUTH`) defaulting to **empty**, pinned by
+`test/topup_recalculation_test.dart`, and unset the call is skipped entirely.
+Same rule, same shape as the lead fallback below. The real fix is for this call
+to move behind the mobile API with the customer's own bearer token — see
+Outstanding #33. The base URL follows the usual order:
+`api_url['recal_topup_url_base']` from the Firestore config, then
+`kTopupRecalApiBase` (`TOPUP_RECAL_API_BASE`) as the degrade-to value, so
+moving the endpoint is a config edit rather than a rebuild.
+
 #### The lead fallback (`TopupApi.saveLead`)
 
 `POST {lead base}/ssw_service_api/api/leads/lh-save` — filed instead of a
@@ -3190,6 +3259,20 @@ reason recorded.
     three are `TopupApi`'s own implementations rather than delegates to the
     already-guarded `PLoanApi`. A test asserts every one of them still has it —
     don't add a `/topup/*` write without one.
+
+33. **`POST /GetRecalTopupData` needs a home, like the lead fallback.** It is
+    plain HTTP on an IP, sends no CORS headers, 401s the preflight and
+    authenticates with a **shared `Basic` service account** — so from a web
+    build it is unreachable, and the credential that would make it reachable
+    must not ship in the bundle. Two ways out, in order of preference:
+    **move it behind the mobile API base** (HTTPS, `access-control-allow-origin:
+    *`, the customer's own bearer token — the way `POST /ploan` went in
+    2026-08-04), or **allowlist `http://34.142.213.42:8080/`** in the host's
+    `_kHttpRequestAllowedPrefixes` and supply `TOPUP_RECAL_API_AUTH`, which
+    costs an app release *and* puts the credential back in a readable bundle.
+    Until either, the ยอดที่ต้องชำระเพื่อเติมวงเงิน section is simply hidden —
+    the client returns `null` rather than failing the screen. See
+    **`POST /GetRecalTopupData`**.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
