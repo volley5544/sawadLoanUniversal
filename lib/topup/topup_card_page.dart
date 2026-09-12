@@ -612,7 +612,7 @@ class _TopupContractCard extends StatelessWidget {
                 Row(
                   children: [
                     const Icon(Icons.auto_awesome,
-                        size: 14, color: Colors.white),
+                        size: 14, color: Color(0xFFF7BF97)),
                     const SizedBox(width: 6),
                     Text(
                       'ข้อเสนอพิเศษสำหรับคุณ',
