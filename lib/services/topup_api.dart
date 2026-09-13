@@ -241,8 +241,10 @@ class TopupApi {
       return _recalFailed(
         'topup recal not configured — settlement hidden',
         detail: 'TOPUP_RECAL_API_AUTH is empty in this build, so no request '
-            'is made. dart2js folds the call out entirely — grep the bundle '
-            'for GetRecalTopupData to confirm.',
+            'is made and dart2js folds the call out entirely. To confirm from '
+            'outside, grep the deployed main.dart.js for the endpoint HOST '
+            '(the IP or domain in kTopupRecalApiBase) — not for the path, '
+            'which this very sentence would match.',
       );
     }
     final base = await recalBaseUrl();
