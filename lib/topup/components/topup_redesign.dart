@@ -186,6 +186,10 @@ class TopupFigureRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = formatTopupMoney(deduction ? -amount.abs() : amount);
+    // The figure's own colour, which the `บาท` suffix then borrows — see where
+    // it is used below.
+    final figureColor =
+        valueColor ?? (deduction && !emphasis ? LoanRegisterStyles.label : null);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
@@ -219,19 +223,27 @@ class TopupFigureRow extends StatelessWidget {
             text,
             style: emphasis
                 ? TopupTheme.value(
-                    size: 22, weight: FontWeight.w800, color: valueColor)
+                    size: 22, weight: FontWeight.w800, color: figureColor)
                 : TopupTheme.value(
                     size: 13.5,
                     weight: FontWeight.w600,
-                    color: valueColor ??
-                        (deduction ? LoanRegisterStyles.label : null),
+                    color: figureColor,
                   ),
           ),
           if (suffix.isNotEmpty) ...[
             const SizedBox(width: 6),
             Padding(
               padding: EdgeInsets.only(top: emphasis ? 8 : 0),
-              child: Text(suffix, style: TopupTheme.value(size: 13)),
+              // `บาท` takes the **figure's** colour, not label grey — the unit
+              // belongs to the number beside it, and a grey unit under a dark
+              // figure breaks the phrase in half (set 2026-09-12 from a device
+              // check). Following [figureColor] rather than restating navy is
+              // what makes that rule hold on a *muted* row too: a deduction's
+              // figure is label grey, so its unit is now grey with it, where
+              // it used to stay navy and leave the row half-lit. Changed
+              // 2026-09-13 on request.
+              child: Text(suffix,
+                  style: TopupTheme.value(size: 13, color: figureColor)),
             ),
           ],
         ],
