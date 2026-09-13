@@ -2454,6 +2454,29 @@ back to package:http (works only for CORS-enabled endpoints — the mobile API
 sends `access-control-allow-origin: *`, the NDID gateway does not). Network
 failures throw `ApiTransportException`.
 
+**Timeouts are per-helper defaults, and no client overrides them except NDID:**
+`sendApiRequest` **60 s**, `sendMultipartApiRequest` **60 s**,
+`sendMultipartGroupsApiRequest` **120 s** (five file parts on `/ploan`),
+`NdidApi._timeout` **30 s** passed explicitly. So raising the first one moves
+every mobile-API call at once.
+
+⚠ **Inside the host there is a *second* timeout, in the other repo, and it used
+to be the shorter one.** The host's `httpRequest` handler
+(`loan_universal_web_widget.dart`) runs its own `http` call with its own limit —
+**30 s until 2026-09-13**, now 60 s to match. While it was shorter it was always
+the one that fired, and because the bridge reports a failure as
+`{status: 0, error}` rather than throwing, it arrived here through the
+`unreachable:` branch, not the `timeout:` one. P-Loan step 2 rendered it as:
+
+> `mobile API unreachable: TimeoutException after 0:00:30.000000: Future not completed`
+
+Two things make that hard to chase: the gateway was reachable (the wording is
+the bridge's generic error path), and **`0:00:30` matches no timeout in this
+repo** — grepping here for it finds nothing. A duration in a bridge error that
+doesn't correspond to anything in `api_transport.dart` is the tell that it came
+from the host. ⚠ The fix ships in an **app release**, not a web deploy (same
+constraint as Outstanding #10).
+
 ### NDID API client (`lib/services/ndid_api.dart`)
 
 `NdidApi` — static `http` client for the **NDID local-node API** (the
