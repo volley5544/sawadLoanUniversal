@@ -838,7 +838,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
             Expanded(
               child: TopupPrimaryButton(
                 label: 'ปรับปรุงยอดชำระ',
-                outlined: true,
+                tonal: true,
                 busy: _recalculating,
                 onPressed: busy ? null : _refreshFigures,
               ),

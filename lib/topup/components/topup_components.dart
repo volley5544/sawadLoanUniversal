@@ -297,6 +297,7 @@ class TopupPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.busy = false,
     this.outlined = false,
+    this.tonal = false,
   });
 
   final String label;
@@ -305,6 +306,21 @@ class TopupPrimaryButton extends StatelessWidget {
 
   /// Secondary styling — an orange outline instead of a filled button.
   final bool outlined;
+
+  /// Secondary styling — a pale-blue fill with a navy label
+  /// ([_tonalFill] / [LoanRegisterStyles.value]), for a button that sits beside
+  /// the orange primary and must not compete with it. Added 2026-09-13 on
+  /// request for ปรับปรุงยอดชำระ, which the QR screen draws the same way.
+  ///
+  /// Deliberately a **third** variant rather than a change to [outlined]: that
+  /// one is what `topup_amount_page_old.dart` renders, and the `_old` pair
+  /// exists so the redesign can be compared against what it replaced. Editing
+  /// it in place would quietly move the thing being compared to.
+  ///
+  /// Wins over [outlined] if both are set.
+  final bool tonal;
+
+  static const Color _tonalFill = Color(0xFFE6F4FF);
 
   @override
   Widget build(BuildContext context) {
@@ -320,9 +336,31 @@ class TopupPrimaryButton extends StatelessWidget {
             style: GoogleFonts.notoSansThai(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: outlined ? LoanRegisterStyles.primary : Colors.white,
+              color: tonal
+                  ? LoanRegisterStyles.value
+                  : outlined
+                      ? LoanRegisterStyles.primary
+                      : Colors.white,
             ),
           );
+    if (tonal) {
+      return SizedBox(
+        height: 50,
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: enabled ? onPressed : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _tonalFill,
+            disabledBackgroundColor: _tonalFill.withValues(alpha: 0.5),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: child,
+        ),
+      );
+    }
     return SizedBox(
       height: 50,
       width: double.infinity,

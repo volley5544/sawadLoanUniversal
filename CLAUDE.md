@@ -1943,6 +1943,14 @@ so it is **the one change that reaches the `_old` pair** — nothing they *say*
 changed, but "they render exactly as they did" is now approximate rather than
 literal.
 
+**ปรับปรุงยอดชำระ is `tonal`, a third variant** (2026-09-13, on request): a pale
+blue `#E6F4FF` fill with a `LoanRegisterStyles.value` label, beside the orange
+ชำระเงิน. ⚠ It is a **new flag** rather than a restyled `outlined` precisely
+because of the line above — `outlined` is what `topup_amount_page_old.dart`
+renders, and editing it in place would move the thing the `_old` pair exists to
+be compared against. The same two colours are on the QR screen's copy of this
+button, since the two screens hand back and forth.
+
 ⚠ **The card's title is เติมวงเงิน**, not สินเชื่อเพิ่ม (changed 2026-09-12).
 It matches the button the customer pressed to get here — the srisawad app's
 home **เติมวงเงินใหม่** tile — so the screen names the thing they asked for
@@ -2341,8 +2349,21 @@ read as they do there.
 
 ⚠ **The two buttons are swapped relative to the source** (2026-09-13, on
 request): **คัดลอกข้อมูล** sits left and **ปรับปรุงยอดชำระ** right, where the
-source puts its blue ปรับปรุงยอดชำระ first. Each keeps its own colour, so the
-orange one is now the left-hand button.
+source puts its blue ปรับปรุงยอดชำระ first. The orange one is therefore the
+left-hand button.
+
+⚠ **ปรับปรุงยอดชำระ is pale blue with a navy label** (`_QrPalette.softBlue`
+`#E6F4FF` + `LoanRegisterStyles.value`), changed 2026-09-13 on request from the
+source theme's solid `accent2` `#1D71B8` with white text. Two consequences:
+
+- it is **the one colour on this page that is not the source's** — everything
+  else in `_QrPalette` is quoted from the other app (see the palette note
+  below), and this pair is not;
+- the **amount screen's copy of this button matches it** (`TopupPrimaryButton`'s
+  `tonal` variant, same two colours). The two screens hand back and forth, so
+  one control that changes appearance across the hop would read as two.
+
+`_QrButton` gained a `labelColor` for it; white on a pale fill is unreadable.
 
 ⚠ **This is the one page that carries its own colours** (`_QrPalette`), not
 `LoanRegisterStyles`. They are the source theme's values and the difference is

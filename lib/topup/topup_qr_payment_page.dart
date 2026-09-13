@@ -212,7 +212,8 @@ class TopupQrPaymentPage extends StatelessWidget {
               ),
               _QrButton(
                 label: 'ปรับปรุงยอดชำระ',
-                color: _QrPalette.blue,
+                color: _QrPalette.softBlue,
+                labelColor: LoanRegisterStyles.value,
                 // Pops back to the amount screen, which **reloads on return**
                 // — re-reading `/topup/detail` is the only way the app finds
                 // out a payment it cannot observe has landed. See
@@ -247,8 +248,12 @@ abstract final class _QrPalette {
   /// `LoanRegisterStyles.required`.
   static const Color error = Color(0xFFFF0000);
 
-  /// `accent2` — the ปรับปรุงยอดชำระ button.
-  static const Color blue = Color(0xFF1D71B8);
+  /// The ปรับปรุงยอดชำระ button: a pale blue fill with a navy label, where the
+  /// source theme's `accent2` was a solid `#1D71B8` with white text. Set
+  /// 2026-09-13 on request, and the same pair as the amount screen's copy of
+  /// this button so the two read as one control across the hop. It is the one
+  /// colour on this page that is **not** the source's — see the class doc.
+  static const Color softBlue = Color(0xFFE6F4FF);
 
   /// `primary` — the คัดลอกข้อมูล button.
   static const Color orange = Color(0xFFDB771A);
@@ -306,11 +311,16 @@ class _QrButton extends StatelessWidget {
     required this.label,
     required this.color,
     required this.onTap,
+    this.labelColor,
   });
 
   final String label;
   final Color color;
   final VoidCallback onTap;
+
+  /// Overrides the white label — needed once a button carries a pale fill,
+  /// where white text would be unreadable.
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -332,7 +342,7 @@ class _QrButton extends StatelessWidget {
             style: GoogleFonts.notoSansThai(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: labelColor ?? Colors.white,
             ),
           ),
         ),
