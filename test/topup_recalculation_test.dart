@@ -42,6 +42,39 @@ Map<String, dynamic> _sample() => {
       'campaign_code': '',
     };
 
+/// A **real** `results` payload, MLOAN / `1สM681102002NF63C`, captured
+/// 2026-09-13. Kept verbatim apart from the sub-objects this model does not
+/// read: one settlement row rather than the sample's three, which is the case
+/// that matters — the section must appear for a single row.
+Map<String, dynamic> _mloanResponse() => {
+      'code': '200',
+      'message': 'success',
+      'db_name': 'MLOAN',
+      'contract_no': '1สM681102002NF63C',
+      'default_topup_amount': 38900,
+      'min_topup_amount': 16400,
+      'max_topup_amount': 38900,
+      'max_transfer_amount': 0,
+      'closing_balance': 16124,
+      'fee_amount': 20,
+      'topup_extra': 0,
+      'overdue_day': 0,
+      'overdue_principal_amount': 0.00,
+      'topup_discount_amount': 0.00,
+      'payoff_before_settlement_amount': 22776.00,
+      'default_transfer_amount': 22776.00,
+      'settlement_items': [
+        {
+          'seq': 1,
+          'field_name': 'yield',
+          'description': 'ดอกเบี้ย',
+          'amount': 11.00,
+        },
+      ],
+      'settlement_total_amount': 11.00,
+      'campaign_code': '',
+    };
+
 void main() {
   group('TopupRecalculation.fromJson', () {
     test('reads the sample body', () {
@@ -92,6 +125,21 @@ void main() {
         ..['settlement_items'] = <dynamic>[]
         ..['settlement_total_amount'] = 2642.21;
       expect(TopupRecalculation.fromJson(json).hasSettlement, isFalse);
+    });
+
+    test('a single row is enough — the real MLOAN response, 2026-09-13', () {
+      // Captured by hand against the test host while chasing "the section
+      // never appears on uat". It does not: that build makes no call at all
+      // (see the group below). This pins that the moment one is made, this
+      // exact body renders — one row, not the sample's three, and a total of
+      // 11.00 where the design's mock-ups all show four figures.
+      final r = TopupRecalculation.fromJson(_mloanResponse());
+      expect(r.isOk, isTrue);
+      expect(r.hasSettlement, isTrue);
+      expect(r.settlementItems, hasLength(1));
+      expect(r.settlementItems.single.description, 'ดอกเบี้ย');
+      expect(r.settlementTotalAmount, 11.00);
+      expect(r.itemsSumMatchesTotal, isTrue);
     });
   });
 
