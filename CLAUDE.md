@@ -2339,6 +2339,11 @@ the red payment-window note, the navy `คิวอาร์โค้ด` pill, 
 with `drawText: true`, the R1/R2 lines and the two 140×60 buttons all sit and
 read as they do there.
 
+⚠ **The two buttons are swapped relative to the source** (2026-09-13, on
+request): **คัดลอกข้อมูล** sits left and **ปรับปรุงยอดชำระ** right, where the
+source puts its blue ปรับปรุงยอดชำระ first. Each keeps its own colour, so the
+orange one is now the left-hand button.
+
 ⚠ **This is the one page that carries its own colours** (`_QrPalette`), not
 `LoanRegisterStyles`. They are the source theme's values and the difference is
 visible — its caption grey is darker (`#646464` vs `#9AA0A6`), its navy deeper
@@ -2346,7 +2351,7 @@ visible — its caption grey is darker (`#646464` vs `#9AA0A6`), its navy deeper
 memory of the screen beat matching the rest of this app; that trade does **not**
 generalise, so don't copy the pattern to another page.
 
-⚠ **The second button is คัดลอกข้อมูล, not the source's บันทึกรูปภาพ.** That one
+⚠ **คัดลอกข้อมูล replaces the source's บันทึกรูปภาพ.** That one
 saves the QR through a native custom action this build has no equivalent for,
 and a web download inside the WebView is not reliably honoured — it would be a
 button that silently does nothing. Copying the payment payload always works and

@@ -192,22 +192,9 @@ class TopupQrPaymentPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _QrButton(
-                label: 'ปรับปรุงยอดชำระ',
-                color: _QrPalette.blue,
-                // Pops back to the amount screen, which **reloads on return**
-                // — re-reading `/topup/detail` is the only way the app finds
-                // out a payment it cannot observe has landed. See
-                // `_payInterest` there; this button refreshes nothing itself,
-                // and must not, or the two screens could disagree about
-                // whether the interest is still owed.
-                onTap: () => context.canPop()
-                    ? context.pop()
-                    : context.go(AppRoutes.home),
-              ),
-              _QrButton(
                 label: 'คัดลอกข้อมูล',
                 color: _QrPalette.orange,
-                // ⚠ The source's second button is **บันทึกรูปภาพ**, which saves
+                // ⚠ This replaces the source's **บันทึกรูปภาพ**, which saves
                 // the QR through a native custom action this build has no
                 // equivalent for — and a web download inside the WebView is
                 // not reliably honoured, so it would be a button that silently
@@ -222,6 +209,19 @@ class TopupQrPaymentPage extends StatelessWidget {
                     );
                   }
                 },
+              ),
+              _QrButton(
+                label: 'ปรับปรุงยอดชำระ',
+                color: _QrPalette.blue,
+                // Pops back to the amount screen, which **reloads on return**
+                // — re-reading `/topup/detail` is the only way the app finds
+                // out a payment it cannot observe has landed. See
+                // `_payInterest` there; this button refreshes nothing itself,
+                // and must not, or the two screens could disagree about
+                // whether the interest is still owed.
+                onTap: () => context.canPop()
+                    ? context.pop()
+                    : context.go(AppRoutes.home),
               ),
             ],
           ),
@@ -250,7 +250,7 @@ abstract final class _QrPalette {
   /// `accent2` — the ปรับปรุงยอดชำระ button.
   static const Color blue = Color(0xFF1D71B8);
 
-  /// `primary` — the second button.
+  /// `primary` — the คัดลอกข้อมูล button.
   static const Color orange = Color(0xFFDB771A);
 }
 
