@@ -511,12 +511,16 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                     'ถึง ${formatWholeMoney(detail.maxTopupAmount)} บาท',
                     tone: TopupNoticeTone.warning,
                     accent: TopupTheme.alert,
-                  )
-                else if (!_flow.isAmountEditable)
-                  TopupNotice(
-                    'ยอดนี้กำหนดตามวัตถุประสงค์ที่เลือกไว้ '
-                    '(${_flow.purpose?.productName ?? ''})',
                   ),
+                // ⚠ A `ยอดนี้กำหนดตามวัตถุประสงค์ที่เลือกไว้ (<product>)` notice
+                // used to sit here when the amount was fixed. Removed
+                // 2026-09-13 on request. It only ever had a product name to
+                // quote when the customer arrived via a สิทธิพิเศษเฉพาะคุณ
+                // tile, and that section is hidden on the redesigned card — so
+                // in practice it rendered with empty parentheses, explaining
+                // the locked field by naming nothing. `_old` keeps it, being a
+                // comparison aid. The field's own `readOnly` is what states the
+                // rule now.
                 const SizedBox(height: 6),
                 TopupFigureRow(
                   label: 'หัก ยอดเงินต้นคงที่ยังไม่ถึงกำหนดชำระ',
