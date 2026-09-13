@@ -224,47 +224,73 @@ class TopupApi {
   /// credential, not the customer's bearer. When it moves behind the mobile
   /// API (Outstanding #33) that becomes a `required String token` like the
   /// rest, and [kTopupRecalApiAuth] goes away.
+  ///
+  /// Each null also fills [lastRecalFailure] with the full reason, which the
+  /// amount screen offers behind a **non-prod** notice. Returning null and
+  /// saying nothing is right for a customer and useless for a tester: "the
+  /// section never appears" has at least five causes that look identical from
+  /// the screen, and chasing the wrong one cost most of 2026-09-13.
   static Future<TopupRecalculation?> recalculate({
     required String dbName,
     required String contractNo,
     required num topupAmount,
   }) async {
+    lastRecalFailure = null;
     if (kPLoanUseMockData) return _mock(mockRecalculation(topupAmount));
     if (!kTopupRecalConfigured) {
-      Diagnostics.log('topup recal not configured — settlement hidden');
-      return null;
+      return _recalFailed(
+        'topup recal not configured — settlement hidden',
+        detail: 'TOPUP_RECAL_API_AUTH is empty in this build, so no request '
+            'is made. dart2js folds the call out entirely — grep the bundle '
+            'for GetRecalTopupData to confirm.',
+      );
     }
     final base = await recalBaseUrl();
+    final url = Uri.parse('$base/GetRecalTopupData');
+    final body = jsonEncode({
+      'contract_no': contractNo,
+      'db_name': dbName,
+      // The sample sends this as a number, not a string.
+      'topup_amount': topupAmount,
+    });
     try {
       final res = await sendApiRequest(
         'POST',
-        Uri.parse('$base/GetRecalTopupData'),
+        url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': kTopupRecalApiAuth,
         },
-        body: jsonEncode({
-          'contract_no': contractNo,
-          'db_name': dbName,
-          // The sample sends this as a number, not a string.
-          'topup_amount': topupAmount,
-        }),
+        body: body,
       );
       final json = SrisawadApi.decode(res.body);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        Diagnostics.log('topup recal HTTP ${res.statusCode}');
-        return null;
+        return _recalFailed(
+          'topup recal HTTP ${res.statusCode}',
+          detail: 'POST $url\nsent: $body\nHTTP ${res.statusCode}\n\n'
+              '${res.body}',
+        );
       }
       // Wrapped in `results`, like /user/detail rather than /topup/detail.
       final results = (json is Map<String, dynamic>) ? json['results'] : null;
       if (results is! Map<String, dynamic>) {
-        Diagnostics.log('topup recal: unexpected body');
-        return null;
+        return _recalFailed(
+          'topup recal: unexpected body',
+          detail: 'POST $url\nsent: $body\n\nno `results` object in:\n'
+              '${res.body}',
+        );
       }
       final recal = TopupRecalculation.fromJson(results);
       if (!recal.isOk) {
-        Diagnostics.log('topup recal ${recal.code} ${recal.message}');
-        return null;
+        // The commonest one in practice, and it is **not** a transport
+        // problem: `400 topup_amount out of range` means the screen asked for
+        // more than this endpoint allows — see the amount-screen note about
+        // the M35 uplift, which the two endpoints disagree about.
+        return _recalFailed(
+          'topup recal ${recal.code} ${recal.message}',
+          detail: 'POST $url\nsent: $body\n\n'
+              'results.code ${recal.code}: ${recal.message}\n\n${res.body}',
+        );
       }
       if (!recal.itemsSumMatchesTotal) {
         // Not corrected — the server's total is what the customer owes — but
@@ -275,9 +301,34 @@ class TopupApi {
       }
       return recal;
     } on ApiTransportException catch (e) {
-      Diagnostics.log('topup recal transport: ${e.message}');
-      return null;
+      return _recalFailed(
+        'topup recal transport: ${e.message}',
+        detail: 'POST $url\nsent: $body\n\ntransport error: ${e.message}\n\n'
+            'Inside the app this is usually `URL not allowed` — the host\'s '
+            '_kHttpRequestAllowedPrefixes ships in the app build. In a plain '
+            'browser it is mixed content or CORS: this endpoint is http on an '
+            'IP and sends no access-control-allow-* header, so a browser '
+            'cannot reach it at all.',
+      );
     }
+  }
+
+  /// The reason the last [recalculate] returned null, or null after a success.
+  ///
+  /// Read by the amount screen's **non-prod** diagnostics notice. Deliberately
+  /// static rather than carried on a result object: every caller wants the
+  /// same "why is the section missing?" answer, and the call is only ever made
+  /// from one screen at a time.
+  static String? lastRecalFailure;
+
+  /// Records [summary] as a breadcrumb, keeps [detail] for the on-screen
+  /// report, and returns null — the value every failure path here answers
+  /// with.
+  static TopupRecalculation? _recalFailed(String summary,
+      {required String detail}) {
+    Diagnostics.log(summary);
+    lastRecalFailure = '$summary\n\n$detail';
+    return null;
   }
 
   /// Base URL of the lead service, resolved like every other endpoint:

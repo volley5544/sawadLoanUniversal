@@ -243,6 +243,21 @@ rather than a local counter, so a CI deploy in between can't make it go
 backwards. The stamp is only written after a successful deploy, so a failure
 retries on the next turn. Both stamp files are git-ignored.
 
+⚠ **The hook had been failing at the last step, silently to anyone not reading
+its output** (found 2026-09-13). `/usr/local/bin/firebase` is an **x86_64**
+binary and answers `Bad CPU type in executable` on this Apple Silicon machine,
+so every run since the machine changed built fine and then died on deploy —
+which is the real reason CI had been shipping every uat build, and why the live
+`WEB_VERSION`s are all run numbers. The script now falls back to
+`npx -y firebase-tools@13`, which is pure Node and reads the same
+`firebase login` credentials from `~/.config/configstore`. Fixing the global
+install (`npm i -g firebase-tools`) would also do it.
+
+It also passes **`--dart-define=TOPUP_RECAL_API_AUTH`**, read from the
+git-ignored `etc/deploy-secrets.txt` (or the environment). An absent file is
+the normal state and simply builds without it — see Outstanding #33 for what
+that credential is and why it must come back out.
+
 **Still manual:** bumping `sawad_loan_universal_version_uat` in the host's
 appConfig to match. Until that is raised, the host's stale-cache auto-reload
 won't fire for the new build.
@@ -275,7 +290,7 @@ node tools/firestore-import/import-config.mjs             # write to the uat ali
   before writing, replaces by default (`--merge` to keep unlisted fields), and
   reads back to verify. Unknown `(type)` markers are a hard error, never a
   guess.
-- `etc/*.txt` and `etc/backup/` are **git-ignored** — the dumps contain live
+- **All of `etc/` is git-ignored** (widened 2026-09-13) — the dumps contain live
   `agent_web_api_token*` values.
 - **`application/config` is the private one.** It holds the
   `agent_web_api_token*` values, and `firestore.rules` grants no client any
@@ -1853,7 +1868,10 @@ until a host build carrying it reaches the device.
 #### The 2026-09 redesign (card + amount screens)
 
 **The card and amount screens were rebuilt to a BA design** on 2026-09-12,
-from `etc/M35 + หน้าจอเติมเงิน_ปิดปรับผ่านแอพมือถือ_หลั.pdf` (git-ignored).
+from `etc/M35 + หน้าจอเติมเงิน_ปิดปรับผ่านแอพมือถือ_หลั.pdf` (git-ignored
+**since 2026-09-13** — ⚠ the old `/etc/*.txt` rule did not cover it, so that
+PDF and three tester screenshots are in the remote's history; see the
+`.gitignore` comment).
 The rest of the flow — installments, photos, customer data, conclusion,
 success, status, QR — is untouched.
 
@@ -3541,13 +3559,40 @@ reason recorded.
     has it under **Temporary top-up recalculation host**. **Delete them when
     the QA API is ready** — that is the explicit instruction, not a nice-to-have.
 
-    **The credential half is deliberately not done.** `TOPUP_RECAL_API_AUTH`
-    ships empty, so even inside an allowlisted build the client makes no call
-    and the section stays hidden. Passing it at build time
-    (`--dart-define=TOPUP_RECAL_API_AUTH='Basic …'`) is what turns the section
-    on for a test; note that puts a shared service account into a readable web
-    bundle for as long as that build is deployed, which is why it is a
-    per-build choice rather than a default.
+    ⚠ **The credential now ships on uat** (2026-09-13, on request — it had been
+    deliberately withheld). `kTopupRecalApiAuth` still **defaults to empty** and
+    a test pins that, so nothing changed about the source; what changed is that
+    the uat *builds* pass it:
+
+    | Path | Where the value comes from | State |
+    | --- | --- | --- |
+    | `tools/deploy-uat.sh` | `etc/deploy-secrets.txt` (git-ignored) | **done** |
+    | `.github/workflows/deploy-uat.yml` | a `TOPUP_RECAL_API_AUTH` repo secret | **not applied** |
+
+    ⚠ **CI still builds without it, so the next push to `uat` puts the section
+    back into the dark** at a higher version number than the hook's. The
+    workflow edit could not be pushed — GitHub refuses a token without
+    `workflow` scope — so it needs doing by hand, alongside creating the
+    secret:
+
+    ```yaml
+    run: flutter build web --release --pwa-strategy=none --dart-define=ENV=uat --dart-define=WEB_VERSION=${{ github.run_number }} --dart-define=TOPUP_RECAL_API_AUTH="$TOPUP_RECAL_API_AUTH"
+    env:
+      TOPUP_RECAL_API_AUTH: ${{ secrets.TOPUP_RECAL_API_AUTH }}
+    ```
+
+    ⚠ **This is a shared `…prod` service account readable by anyone who opens
+    the uat site** — `--dart-define` values sit in `main.dart.js` in clear.
+    That is the finding deleting `kPLoanSaveApiAuth` closed on 2026-08-04,
+    reopened knowingly and only on uat. **Rotate it and delete
+    `etc/deploy-secrets.txt` when the QA endpoint lands.** Never add it to a
+    prod build.
+
+    How to tell whether a given deploy carries it, without the source: grep the
+    live bundle for **`GetRecalTopupData`**. Absent means the const folded and
+    the call was compiled out entirely — that is what "the section never shows"
+    looked like on ver 121/122, and it reads identically to a failing call from
+    the screen. Present since **ver 123**.
 
     **The real fix is the QA endpoint being on the mobile API base** — HTTPS,
     `access-control-allow-origin: *`, the customer's own bearer token, the way

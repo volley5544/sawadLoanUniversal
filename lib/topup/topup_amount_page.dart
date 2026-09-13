@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../config/app_environment.dart';
 import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
@@ -545,7 +546,10 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
               ],
             ),
           ),
-          if (_showsSettlement) _settlementBlock(_recal!),
+          if (_showsSettlement)
+            _settlementBlock(_recal!)
+          else
+            _settlementDebugNotice(),
           if (_flow.outcome == TopupOutcome.lead)
             Padding(
               padding: const EdgeInsets.symmetric(
@@ -621,6 +625,85 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
           style: TopupTheme.label(size: 12.5),
         ),
       ],
+    );
+  }
+
+  /// A **non-prod** stand-in for the settlement block, shown whenever there
+  /// are no rows and [TopupApi.lastRecalFailure] says why.
+  ///
+  /// The customer-facing rule is unchanged: no rows, no section. But "no
+  /// section" has at least five causes that look identical from the screen —
+  /// no credential in the build, the host's allowlist refusing the URL, a
+  /// browser blocking mixed content, the server refusing the amount, or a
+  /// contract with genuinely nothing to settle — and on 2026-09-13 telling
+  /// them apart took a day and a grep of the deployed bundle. This turns that
+  /// into one tap.
+  ///
+  /// Hidden on prod along with [EnvVersionTag] and the diagnostics sheet: it
+  /// names the endpoint and quotes the server verbatim.
+  Widget _settlementDebugNotice() {
+    final failure = TopupApi.lastRecalFailure;
+    if (failure == null || AppEnvironment.current.isProd) {
+      return const SizedBox.shrink();
+    }
+    final summary = failure.split('\n').first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          LoanRegisterStyles.padding, 14, LoanRegisterStyles.padding, 0),
+      child: InkWell(
+        onTap: () => _showSettlementFailure(failure),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF6E5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE8C89A)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, size: 16, color: Color(0xFF8A6D3B)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ไม่มีรายการที่ต้องชำระ (debug) — $summary',
+                  style: GoogleFonts.notoSansThai(
+                      fontSize: 11.5, color: const Color(0xFF8A6D3B)),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 16, color: Color(0xFF8A6D3B)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSettlementFailure(String failure) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('ยอดที่ต้องชำระเพื่อเติมวงเงิน',
+            style: TopupTheme.value(size: 15, weight: FontWeight.w700)),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            failure,
+            style: const TextStyle(fontSize: 11.5, height: 1.45),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: failure));
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            child: const Text('คัดลอก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
     );
   }
 

@@ -58,10 +58,14 @@ api_data/
 /.deploy-stamp-uat
 /.deploy-version-uat
 
-# Firestore config dumps + the backups the importer takes before writing.
-# These hold live API tokens (agent_web_api_token*) — do not commit.
-/etc/*.txt
-/etc/backup/
+# Working-copy scratch: Firestore config dumps (live agent_web_api_token*),
+# API samples with service credentials, BA design PDFs, and screenshots from
+# testers — which carry real contract numbers and balances.
+#
+# ⚠ The whole directory, not just *.txt. The narrower rule let the BA redesign
+# PDF and three device screenshots reach the remote in 2026-09-12/13 commits
+# while CLAUDE.md said they were ignored. Nothing in here belongs in git.
+/etc/
 
 # NDID node docs (Postman collection/environment + proxy spec). Same reason as
 # ndid_doc/ above: vendor material, and the environment file carries node keys.
