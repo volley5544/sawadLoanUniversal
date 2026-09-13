@@ -59,6 +59,14 @@ class NativeCameraBridge {
     );
   }
 
+  /// Always `null` off-web — there is no host to save through, which is the
+  /// same answer a plain browser gets. See `native_bridge.dart`.
+  static Future<bool?> saveImageToGallery(
+    Uint8List bytes, {
+    required String name,
+  }) async =>
+      null;
+
   /// No-op off-web (there is no WebView host to close).
   static Future<void> closeWebview() async {}
 

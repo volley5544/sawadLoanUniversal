@@ -183,6 +183,47 @@
 ///
 /// Do **not** set `Content-Type` from `headers` — `MultipartRequest` has to
 /// append its own boundary.
+///
+/// ## `saveImageToGallery` — writing a picture to the photo library
+///
+/// Added 2026-09-13 for the top-up QR screen's **บันทึกรูปภาพ**, which hands
+/// the customer the bill as an image they can open in their bank's app.
+///
+/// This genuinely needs the host. A web build's only affordance is an
+/// `<a download>`, which a WebView does not reliably honour, and which on the
+/// platforms where it does work saves to the downloads folder — not the
+/// gallery the customer will look in. The host already carries
+/// `image_gallery_saver_plus` and the photo-library permission.
+///
+/// Takes one JSON-string arg `{name, base64}` and **returns a bool**: `true`
+/// saved, `false` tried and failed (permission denied, write error).
+/// Returning nothing at all is how an old host build identifies itself, and
+/// the web tells those two apart — so return a real `false` on failure rather
+/// than `null`, or the customer is told to update an app that is current.
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'saveImageToGallery',
+///   callback: (args) async {
+///     try {
+///       final req = jsonDecode(args.first as String) as Map<String, dynamic>;
+///       final res = await ImageGallerySaverPlus.saveImage(
+///         base64Decode('${req['base64']}'),
+///         quality: 100,
+///         name: '${req['name']}',
+///       );
+///       return res is Map && (res['isSuccess'] == true);
+///     } catch (_) {
+///       return false; // NOT null — that means "no handler here"
+///     }
+///   },
+/// );
+/// ```
+///
+/// ⚠ iOS needs `NSPhotoLibraryAddUsageDescription` in `Info.plist`, and
+/// Android ≤ 32 needs `WRITE_EXTERNAL_STORAGE`. Without them the save fails at
+/// the OS, which reaches the customer as "บันทึกรูปภาพไม่สำเร็จ" with nothing
+/// to act on — check both before concluding the bridge is at fault.
 library;
 
 export 'native_bridge_stub.dart'

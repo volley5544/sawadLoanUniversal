@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,7 +11,10 @@ import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../router/app_router.dart';
+import '../services/diagnostics.dart';
+import '../services/native_bridge.dart';
 import 'components/topup_components.dart';
+import 'image_download.dart';
 import 'models/topup_flow.dart';
 
 /// **ชำระด้วย QR** — the dead end the amount screen sends a customer to when
@@ -35,10 +41,22 @@ import 'models/topup_flow.dart';
 /// caption grey is darker and its navy deeper than ours. Matching the customer's
 /// memory of the screen matters more here than matching the rest of this app,
 /// which is why this is the one page that carries its own colours.
-class TopupQrPaymentPage extends StatelessWidget {
+class TopupQrPaymentPage extends StatefulWidget {
   const TopupQrPaymentPage({super.key, required this.flow});
 
   final TopupFlow flow;
+
+  @override
+  State<TopupQrPaymentPage> createState() => _TopupQrPaymentPageState();
+}
+
+class _TopupQrPaymentPageState extends State<TopupQrPaymentPage> {
+  /// Wraps everything บันทึกรูปภาพ captures — see [_saveImage].
+  final GlobalKey _captureKey = GlobalKey();
+
+  bool _saving = false;
+
+  TopupFlow get flow => widget.flow;
 
   /// Total due: the accrued interest plus the collection and penalty fees,
   /// which is the figure `/payment/interest` was asked to bill.
@@ -88,9 +106,43 @@ class TopupQrPaymentPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: topupAppBar(context, 'ชำระด้วย QR'),
-      body: ListView(
+      // ⚠ A scroll view with an explicit child, **not** a `ListView` — see
+      // [_saveImage]. A lazy sliver never builds what is off-screen, so the
+      // saved image would have been cropped to whatever the customer happened
+      // to have scrolled to. Every child was already built eagerly here, so
+      // nothing about the layout changes.
+      body: SingleChildScrollView(
         padding: const EdgeInsets.only(top: 8, bottom: 30),
-        children: [
+        child: Column(
+          // `ListView` stretches its children; `Column` centres them. Without
+          // this the centred captions and the divider shrink to their own
+          // width.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RepaintBoundary(
+              key: _captureKey,
+              // The boundary paints only its own subtree, so without an opaque
+              // fill the saved PNG is transparent where the Scaffold's white
+              // shows through — which reads as black in most gallery viewers.
+              child: ColoredBox(
+                color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _captureContent(contract),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _buttonRow(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Everything บันทึกรูปภาพ captures: the contract card down to the bank
+  /// exclusions, i.e. the whole screen **except** the app bar and the buttons.
+  List<Widget> _captureContent(LoanContract? contract) => [
           if (contract != null)
             Padding(
               padding: const EdgeInsets.symmetric(
@@ -114,7 +166,11 @@ class TopupQrPaymentPage extends StatelessWidget {
                   value: contract == null ? '-' : _plate(contract),
                 ),
                 _StackedValue(
-                  label: 'จำนวนเงินค่างวด',
+                  // The source labels this จำนวนเงินค่างวด, which describes an
+                  // installment. This screen bills accrued interest plus fees
+                  // — not a งวด — so it says what the figure is. Changed
+                  // 2026-09-13 on request.
+                  label: 'ยอดที่ต้องชำระ',
                   value: formatMoney(_amountDue),
                 ),
               ],
@@ -187,48 +243,108 @@ class TopupQrPaymentPage extends StatelessWidget {
           const SizedBox(height: 10),
           const _Caption('สามารถสแกนชำระค่างวด ผ่านโมบายแอปได้ทุกธนาคาร'),
           const _Caption('ยกเว้นธนาคาร ธ.ก.ส. และ ออมสิน'),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _QrButton(
-                label: 'คัดลอกข้อมูล',
-                color: _QrPalette.orange,
-                // ⚠ This replaces the source's **บันทึกรูปภาพ**, which saves
-                // the QR through a native custom action this build has no
-                // equivalent for — and a web download inside the WebView is
-                // not reliably honoured, so it would be a button that silently
-                // does nothing. Copying the payment payload is the nearest
-                // thing that always works; a screenshot covers the rest. Swap
-                // this back only alongside a host handler that actually saves.
-                onTap: () async {
-                  await Clipboard.setData(ClipboardData(text: _payload));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('คัดลอกข้อมูลแล้ว')),
-                    );
-                  }
-                },
-              ),
-              _QrButton(
-                label: 'ปรับปรุงยอดชำระ',
-                color: _QrPalette.softBlue,
-                labelColor: LoanRegisterStyles.value,
-                // Pops back to the amount screen, which **reloads on return**
-                // — re-reading `/topup/detail` is the only way the app finds
-                // out a payment it cannot observe has landed. See
-                // `_payInterest` there; this button refreshes nothing itself,
-                // and must not, or the two screens could disagree about
-                // whether the interest is still owed.
-                onTap: () => context.canPop()
-                    ? context.pop()
-                    : context.go(AppRoutes.home),
-              ),
-            ],
+      ];
+
+  Widget _buttonRow(BuildContext context) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _QrButton(
+            label: 'บันทึกรูปภาพ',
+            color: _QrPalette.orange,
+            busy: _saving,
+            onTap: _saving ? null : _saveImage,
+          ),
+          _QrButton(
+            label: 'ปรับปรุงยอดชำระ',
+            color: _QrPalette.softBlue,
+            labelColor: LoanRegisterStyles.value,
+            // Pops back to the amount screen, which **reloads on return**
+            // — re-reading `/topup/detail` is the only way the app finds
+            // out a payment it cannot observe has landed. See
+            // `_payInterest` there; this button refreshes nothing itself,
+            // and must not, or the two screens could disagree about
+            // whether the interest is still owed.
+            onTap: () => context.canPop()
+                ? context.pop()
+                : context.go(AppRoutes.home),
           ),
         ],
-      ),
-    );
+      );
+
+  /// **บันทึกรูปภาพ** — renders [_captureKey]'s subtree to a PNG and saves it
+  /// to the device photo gallery.
+  ///
+  /// This is the source's button, restored 2026-09-13 on request. It was left
+  /// out of the 2026-09-12 rebuild because the source saves through a native
+  /// custom action this build had no equivalent for; the equivalent now exists
+  /// as the `saveImageToGallery` JS handler (contract in
+  /// `services/native_bridge.dart`). ⚠ That handler ships in the **app**, so
+  /// until a host build carrying it reaches a device this reports itself
+  /// unavailable rather than failing silently — which is the whole reason the
+  /// button was withheld before.
+  ///
+  /// What is captured is the boundary, not the screen: the app bar and these
+  /// buttons are outside it deliberately, and the scroll position does not
+  /// matter because the boundary's layer holds its whole subtree whether or not
+  /// it is on screen. That only holds while the body is not a lazy list — see
+  /// the note in [build].
+  Future<void> _saveImage() async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    // Read before the first await; the widget can be disposed during the save.
+    final ratio = MediaQuery.devicePixelRatioOf(context).clamp(2.0, 3.0);
+    String message;
+    try {
+      final boundary = _captureKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      final bytes = boundary == null ? null : await _renderPng(boundary, ratio);
+      if (bytes == null || bytes.isEmpty) {
+        message = 'บันทึกรูปภาพไม่สำเร็จ';
+      } else if (NativeCameraBridge.isSupported) {
+        final saved = await NativeCameraBridge.saveImageToGallery(
+          bytes,
+          name: 'QR-payment_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        message = switch (saved) {
+          true => 'บันทึกรูปภาพลงในคลังภาพแล้ว',
+          false => 'บันทึกรูปภาพไม่สำเร็จ กรุณาอนุญาตการเข้าถึงคลังภาพ',
+          // The host answered nothing at all, i.e. it predates the handler.
+          // Naming the app is the only actionable thing we can say.
+          null => 'เวอร์ชันแอปนี้ยังไม่รองรับการบันทึกรูปภาพ กรุณาอัปเดตแอป',
+        };
+      } else {
+        // Plain browser. The download says only that it *started* — the
+        // browser never reports back — so the wording claims no more.
+        message = downloadImageBytes(bytes, fileName: 'qr-payment.png')
+            ? 'กำลังดาวน์โหลดรูปภาพ'
+            : 'บันทึกรูปภาพไม่สำเร็จ';
+      }
+    } catch (e) {
+      Diagnostics.log('topup qr save image failed: $e');
+      message = 'บันทึกรูปภาพไม่สำเร็จ';
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Rasterises [boundary] to PNG bytes at [ratio].
+  ///
+  /// `pixelRatio` is clamped to 2–3 by the caller rather than taken raw: the
+  /// point of the image is that a bank app can scan the QR out of it, so the
+  /// capture must not be softer than the screen, and a 4x device would produce
+  /// a needlessly large file for a flat two-colour picture.
+  Future<Uint8List?> _renderPng(
+    RenderRepaintBoundary boundary,
+    double ratio,
+  ) async {
+    final image = await boundary.toImage(pixelRatio: ratio);
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
   }
 }
 
@@ -312,39 +428,59 @@ class _QrButton extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.labelColor,
+    this.busy = false,
   });
 
   final String label;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   /// Overrides the white label — needed once a button carries a pale fill,
   /// where white text would be unreadable.
   final Color? labelColor;
 
+  /// Swaps the label for a spinner. Capturing and saving the screen takes long
+  /// enough on a phone to look like nothing happened.
+  final bool busy;
+
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 140,
-        height: 60,
-        child: ElevatedButton(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansThai(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: labelColor ?? Colors.white,
-            ),
+  Widget build(BuildContext context) {
+    final foreground = labelColor ?? Colors.white;
+    return SizedBox(
+      width: 140,
+      height: 60,
+      child: ElevatedButton(
+        onPressed: busy ? null : onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          // Hold the fill while busy: a greyed-out button beside an unchanged
+          // one reads as "disabled", not "working".
+          disabledBackgroundColor: color,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
           ),
         ),
-      );
+        child: busy
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(foreground),
+                ),
+              )
+            : Text(
+                label,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: foreground,
+                ),
+              ),
+      ),
+    );
+  }
 }

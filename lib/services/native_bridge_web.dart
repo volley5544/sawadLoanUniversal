@@ -42,6 +42,17 @@ const String _kHttpMultipartHandlerName = 'httpMultipart';
 /// the Firebase SDK instead. See `native_bridge.dart`.
 const String _kGetAuthTokenHandlerName = 'getAuthToken';
 
+/// Name of the JavaScript handler the native host registers to write an image
+/// into the device photo gallery
+/// (`addJavaScriptHandler(handlerName: 'saveImageToGallery', ...)`).
+///
+/// A web build cannot do this itself: the only browser affordance is an
+/// `<a download>`, which a WebView does not reliably honour and which saves to
+/// the downloads folder rather than the gallery even when it works. The host
+/// has `image_gallery_saver_plus` and the photo-library permission, so it
+/// writes the file and tells us whether it landed. See `native_bridge.dart`.
+const String _kSaveImageToGalleryHandlerName = 'saveImageToGallery';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -252,6 +263,49 @@ class NativeCameraBridge {
     await host
         .callMethod<JSPromise>('callHandler'.toJS, _kCloseHandlerName.toJS)
         .toDart;
+  }
+
+  /// Asks the native host to write [bytes] into the device photo gallery under
+  /// [name], and resolves with whether it landed.
+  ///
+  /// `true` saved, `false` the host tried and failed (permission denied, write
+  /// error). **`null` means the host has no such handler** — an app build
+  /// predating it — which is a different finding from a failure and callers
+  /// should say so differently. Image bytes travel as base64, the same
+  /// encoding `openCamera` returns them in.
+  ///
+  /// Returns `null` in a plain browser too, rather than throwing: the one
+  /// caller has a real fallback there (a download), so this is not an error.
+  static Future<bool?> saveImageToGallery(
+    Uint8List bytes, {
+    required String name,
+  }) async {
+    final host = _host;
+    if (host == null) return null; // plain browser -> caller downloads instead
+
+    final arg = jsonEncode({'name': name, 'base64': base64Encode(bytes)});
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kSaveImageToGalleryHandlerName.toJS,
+          arg.toJS,
+        )
+        .toDart;
+
+    // An old host returns undefined for an unregistered handler; a current one
+    // answers with the bool. Anything else is treated as "not implemented"
+    // rather than guessed at.
+    if (result.isUndefinedOrNull) return null;
+    // `dartify` rather than an `is JSBoolean` test: a runtime check between JS
+    // interop types is not consistent across compilers (the analyzer says so),
+    // and dartify gives a plain Dart `bool` on every one.
+    final value = result.dartify();
+    if (value is bool) return value;
+    // Some hosts stringify their return value.
+    final text = value?.toString().toLowerCase();
+    if (text == 'true') return true;
+    if (text == 'false') return false;
+    return null;
   }
 
   /// Listens for a document photo the native host **pushes** after recovering a

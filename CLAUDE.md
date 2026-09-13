@@ -1835,19 +1835,20 @@ Sections present:
 | §1.3 | card | **สิทธิพิเศษเฉพาะคุณ** product grid, when the contract carries add-on products |
 | §1.3 | card | รับเงินโอนเข้าบัญชีสูงสุด band; credit summary — วงเงินสินเชื่อเดิม, ราคาประเมินหลักทรัพย์ปัจจุบัน, วงเงินสินเชื่อปัจจุบัน, ยอดปิดบัญชี ณ วันที่ (`data_date`), เงินคงเหลือโอนเข้าบัญชี |
 | §2.1/2.2 | amount | amount field + slider + min/max, the numbered deduction list (see above), จำนวนเงินที่จะได้รับ, ชำระเงิน / ปรับปรุงยอดชำระ |
-| §2.3 | QR | amount due, payment-window note, QR, R1/R2, bank exclusions, ปรับปรุงยอดชำระ |
+| §2.3 | QR | ยอดที่ต้องชำระ, payment-window note, QR, R1/R2, bank exclusions, บันทึกรูปภาพ + ปรับปรุงยอดชำระ |
 | §3.1 | installments | ยอดจัดสินเชื่อใหม่ + tenor list |
 | §3.2 | photos | ทะเบียนจังหวัด / วันหมดอายุทะเบียน / ยี่ห้อสินค้า / รุ่นสินค้า, then the required photos |
 | §4.1/4.2 | customer data | account, name, phone, four addresses, ไม่ถูกต้อง / ยืนยัน, confirm sheet |
 | §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents, PDPA |
 | §5.4 | success | payout + deadline caveat, ดูสถานะการขอเพิ่มวงเงิน, กลับสู่หน้าแรก |
 
-⚠ **`บันทึกรูปภาพ` (save the QR image) is deliberately left out.** The source
-saves it through a native custom action this build has no equivalent for, and a
-web `<a download>` inside the WebView is not reliably honoured — a button that
-silently does nothing is worse than no button. The payment payload can be
-copied instead, and a screenshot works. Add it back only alongside a host
-handler that actually saves.
+~~⚠ **`บันทึกรูปภาพ` (save the QR image) is deliberately left out.**~~
+**Built 2026-09-13** on the condition this note set — "add it back only
+alongside a host handler that actually saves" — which is now the srisawad
+host's `saveImageToGallery`. See **The interest-payment QR** for what the
+capture covers and why the page body had to stop being a `ListView`.
+⚠ The handler ships in the **app**, so the button reports itself unsupported
+until a host build carrying it reaches the device.
 
 #### The 2026-09 redesign (card + amount screens)
 
@@ -2348,9 +2349,10 @@ with `drawText: true`, the R1/R2 lines and the two 140×60 buttons all sit and
 read as they do there.
 
 ⚠ **The two buttons are swapped relative to the source** (2026-09-13, on
-request): **คัดลอกข้อมูล** sits left and **ปรับปรุงยอดชำระ** right, where the
+request): **บันทึกรูปภาพ** sits left and **ปรับปรุงยอดชำระ** right, where the
 source puts its blue ปรับปรุงยอดชำระ first. The orange one is therefore the
-left-hand button.
+left-hand button. (The left slot held คัดลอกข้อมูล for a few hours the same
+day; บันทึกรูปภาพ replaced it — see below.)
 
 ⚠ **ปรับปรุงยอดชำระ is pale blue with a navy label** (`_QrPalette.softBlue`
 `#E6F4FF` + `LoanRegisterStyles.value`), changed 2026-09-13 on request from the
@@ -2372,12 +2374,47 @@ visible — its caption grey is darker (`#646464` vs `#9AA0A6`), its navy deeper
 memory of the screen beat matching the rest of this app; that trade does **not**
 generalise, so don't copy the pattern to another page.
 
-⚠ **คัดลอกข้อมูล replaces the source's บันทึกรูปภาพ.** That one
-saves the QR through a native custom action this build has no equivalent for,
-and a web download inside the WebView is not reliably honoured — it would be a
-button that silently does nothing. Copying the payment payload always works and
-a screenshot covers the rest. Swap it back only alongside a host handler that
-actually saves.
+**บันทึกรูปภาพ is back, and the host handler it was waiting for now exists**
+(2026-09-13). The 2026-09-12 rebuild shipped **คัดลอกข้อมูล** in its place
+because the source saves through a native custom action this build had no
+equivalent for, and said to swap it back "only alongside a host handler that
+actually saves". That handler is **`saveImageToGallery`** — contract and a
+ready-to-paste snippet in `services/native_bridge.dart`, implementation in the
+srisawad host's `loan_universal_web_widget.dart`. คัดลอกข้อมูล is **gone**, not
+demoted: the payload it copied is drawn under the QR anyway (`drawText: true`),
+so the image carries it.
+
+⚠ **It needs an app release**, like every host edit (Outstanding #10). Until one
+lands, the bridge answers nothing and the button says
+`เวอร์ชันแอปนี้ยังไม่รองรับการบันทึกรูปภาพ กรุณาอัปเดตแอป`. That is the
+distinction the handler's bool exists for: **`null` = no handler, `false` =
+tried and failed** (a denied gallery permission). Collapsing the two would tell
+a customer with a current app to go and update it.
+
+**What is captured, and why the body is no longer a `ListView`.** A
+`RepaintBoundary` wraps the contract card down to the bank exclusions — the
+whole screen **except** the app bar and the buttons, as asked. `toImage` renders
+the boundary's own layer, which holds its entire subtree whether or not it is
+scrolled into view, so the scroll position does not crop the picture. ⚠ That
+only holds because the body is a `SingleChildScrollView` + `Column`: a lazy
+sliver never builds what is off-screen, so under the old `ListView` the saved
+image would have been cut off at whatever the customer had scrolled to. Nothing
+about the layout changed — every child was already built eagerly — but
+`crossAxisAlignment: .stretch` is load-bearing, since `Column` centres where
+`ListView` stretched.
+
+Two more details that look optional and are not: the boundary is wrapped in a
+white `ColoredBox`, because it paints only its own subtree and the Scaffold's
+white is outside it — a transparent PNG reads as **black** in most gallery
+viewers; and `pixelRatio` is clamped to 2–3, so the QR is never softer than the
+screen a bank app would otherwise scan off, without making a flat two-colour
+picture needlessly large.
+
+In a plain browser there is no host, so it falls back to a download
+(`topup/image_download.dart`, conditional import like `pdf_opener.dart`). ⚠ That
+path can only report that the download **started** — the browser never says
+whether a file was written — so its message is `กำลังดาวน์โหลดรูปภาพ` and not a
+claim of success.
 
 The amount is read off `/topup/detail` rather than the contract's own
 `topup_detail` (which is what the source uses): the detail call is re-read when
