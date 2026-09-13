@@ -247,7 +247,10 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     final recal = await TopupApi.recalculate(
       dbName: contract.dbName,
       contractNo: contract.contractNo,
-      topupAmount: _flow.requestedAmount,
+      // The contract's base limit, not what the customer asked for — see
+      // TopupFlow.settlementPricingAmount for why the requested figure is
+      // refused on a contract carrying an M35 uplift.
+      topupAmount: _flow.settlementPricingAmount,
     );
     if (mounted) setState(() => _recal = recal);
   }

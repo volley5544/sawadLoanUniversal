@@ -154,6 +154,36 @@ class TopupFlow {
     );
   }
 
+  /// The amount `POST /GetRecalTopupData` is asked to price the settlement at:
+  /// the contract's **own** default limit, before [applySpecialLimit] folds the
+  /// M35 uplift in.
+  ///
+  /// ⚠ **Deliberately not [requestedAmount]**, even though the settlement is
+  /// priced per `topup_amount` (instructed 2026-09-13). The two endpoints
+  /// disagree about this contract's ceiling: `/loan/list` grants
+  /// `topup_extra` 5,000 on top of 38,900, while `GetRecalTopupData` reports
+  /// `topup_extra` 0 and `max_topup_amount` 38,900 — so asking it to price the
+  /// 43,900 the screen offers is refused outright with
+  /// `400 topup_amount out of range`, and the customer sees no settlement at
+  /// all rather than a slightly differently-priced one.
+  ///
+  /// Subtracting [LoanAmountDetail.topupSpecials] rather than re-reading
+  /// `/topup/detail` is what makes this work **after** the uplift has been
+  /// applied — `amountDetail.defaultTopupAmount` is itself already raised by
+  /// then, so quoting it directly would change nothing.
+  ///
+  /// ⚠ The settlement shown is therefore priced for the base limit, not for
+  /// what the customer asked for. Acceptable only because these rows are
+  /// arrears on the **old** contract — interest, fees, penalties — which is
+  /// what the customer must clear either way. Revisit this if the breakdown
+  /// ever carries a figure that genuinely scales with the new loan.
+  int get settlementPricingAmount {
+    final detail = amountDetail;
+    if (detail == null) return requestedAmount;
+    final base = detail.defaultTopupAmount - detail.topupSpecials;
+    return base > 0 ? base : detail.defaultTopupAmount;
+  }
+
   /// **The M35 วงเงินพิเศษ on [contract] — `topup_extra`.**
   ///
   /// The design calls this *วงเงินพิเศษเพิ่มเติม* and shows it as a `+5,000.00`

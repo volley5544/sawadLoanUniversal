@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/config/app_environment.dart';
+import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
+import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 import 'package:sawad_loan_universal/topup/models/topup_settlement.dart';
 
 /// The supplied sample body (`etc/new_topup_api.txt`), trimmed to the fields
@@ -183,5 +185,37 @@ void main() {
   test('no recalculation credential ships in the bundle', () {
     expect(kTopupRecalApiAuth, isEmpty);
     expect(kTopupRecalConfigured, isFalse);
+  });
+
+  group('settlementPricingAmount — what the breakdown is priced at', () {
+    test('strips the M35 uplift, so the endpoint is not asked for more than '
+        'it allows', () {
+      // Exactly the MLOAN case: /topup/detail offers 38,900 and the contract
+      // grants topup_extra 5,000 on top, so the screen shows 43,900 — which
+      // GetRecalTopupData refuses with 400 topup_amount out of range.
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = const LoanAmountDetail(
+          code: '200',
+          defaultTopupAmount: 43900,
+          topupSpecials: 5000,
+        )
+        ..requestedAmount = 43900;
+      expect(flow.settlementPricingAmount, 38900);
+    });
+
+    test('no uplift → the default limit, unchanged', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = const LoanAmountDetail(
+          code: '200',
+          defaultTopupAmount: 88500,
+        )
+        ..requestedAmount = 70000;
+      expect(flow.settlementPricingAmount, 88500);
+    });
+
+    test('no detail yet → falls back to the requested amount', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')..requestedAmount = 12000;
+      expect(flow.settlementPricingAmount, 12000);
+    });
   });
 }
