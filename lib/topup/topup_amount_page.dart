@@ -773,94 +773,90 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   /// - **the figures are larger and heavier than the labels beside them**, so a
   ///   column of amounts scans without reading the Thai.
   ///
-  /// ⚠ The band needs the card's own padding gone — a `Container` padded on
-  /// all sides cannot hold a full-bleed child. So the padding moved onto each
-  /// section and the card takes `clipBehavior`, which is what keeps the band's
-  /// bottom corners following the 12px radius instead of squaring it off.
+  /// ⚠ **No card around it** (changed 2026-09-14 on request): a divider above
+  /// the heading separates it instead. That is what lets the grey band run
+  /// **edge to edge**, the same full-bleed idiom as the blue
+  /// วงเงินสินเชื่อใหม่สูงสุด bar further up this screen — boxed, the band could
+  /// only ever be as wide as the card's inside, which read as a panel within a
+  /// panel. Content keeps the page gutter; only the band ignores it.
   Widget _settlementBlock(TopupRecalculation recal) {
-    const gutter = EdgeInsets.symmetric(horizontal: 14);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          LoanRegisterStyles.padding, 18, LoanRegisterStyles.padding, 0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: LoanRegisterStyles.cardBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: gutter.copyWith(top: 14, bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'ยอดที่ต้องชำระเพื่อเติมวงเงิน',
-                  style: TopupTheme.value(size: 18, weight: FontWeight.w800),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '*กรุณาชำระเงินก่อนดำเนินการ',
-                  style: GoogleFonts.notoSansThai(
-                      fontSize: 12, color: TopupTheme.alert),
-                ),
-                const SizedBox(height: 12),
-                Text('รายละเอียด', style: TopupTheme.label(size: 13.5)),
-                const SizedBox(height: 2),
-                for (var i = 0; i < recal.settlementItems.length; i++)
-                  _settlementRow(i + 1, recal.settlementItems[i]),
-              ],
-            ),
+    const gutter =
+        EdgeInsets.symmetric(horizontal: LoanRegisterStyles.padding);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 18),
+        Divider(height: 1, thickness: 1, color: LoanRegisterStyles.divider),
+        const SizedBox(height: 4),
+        Padding(
+          padding: gutter.copyWith(top: 10, bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'ยอดที่ต้องชำระเพื่อเติมวงเงิน',
+                style: TopupTheme.value(size: 18, weight: FontWeight.w800),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '*กรุณาชำระเงินก่อนดำเนินการ',
+                style: GoogleFonts.notoSansThai(
+                    fontSize: 12, color: TopupTheme.alert),
+              ),
+              const SizedBox(height: 12),
+              Text('รายละเอียด', style: TopupTheme.label(size: 13.5)),
+              const SizedBox(height: 2),
+              for (var i = 0; i < recal.settlementItems.length; i++)
+                _settlementRow(i + 1, recal.settlementItems[i]),
+            ],
           ),
-          // The total's own band. Full width by design — see the class note.
-          Container(
-            color: LoanRegisterStyles.divider,
-            padding: gutter.copyWith(top: 13, bottom: 13),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Expanded(
-                  child: Text('รวมยอดที่ต้องชำระ',
-                      style:
-                          TopupTheme.value(size: 15, weight: FontWeight.w700)),
+        ),
+        // The total's own band. Full width by design — see the class note.
+        Container(
+          color: LoanRegisterStyles.divider,
+          padding: gutter.copyWith(top: 13, bottom: 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text('รวมยอดที่ต้องชำระ',
+                    style:
+                        TopupTheme.value(size: 15, weight: FontWeight.w700)),
+              ),
+              Text(
+                // Displayed **as sent**, never summed from the rows above —
+                // see TopupRecalculation.itemsSumMatchesTotal.
+                formatTopupMoney(recal.settlementTotalAmount),
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: LoanRegisterStyles.primary,
                 ),
-                Text(
-                  // Displayed **as sent**, never summed from the rows above —
-                  // see TopupRecalculation.itemsSumMatchesTotal.
-                  formatTopupMoney(recal.settlementTotalAmount),
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: LoanRegisterStyles.primary,
-                  ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'บาท',
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  // The unit takes the figure's colour, as everywhere else on
+                  // these screens — a grey บาท breaks the phrase in half.
+                  color: LoanRegisterStyles.primary,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  'บาท',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    // The unit takes the figure's colour, as everywhere else on
-                    // these screens — a grey บาท breaks the phrase in half.
-                    color: LoanRegisterStyles.primary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Padding(
-            padding: gutter.copyWith(top: 10, bottom: 12),
-            child: Text(
-              '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
-              style: GoogleFonts.notoSansThai(
-                  fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
-            ),
+        ),
+        Padding(
+          padding: gutter.copyWith(top: 10, bottom: 12),
+          child: Text(
+            '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
+            style: GoogleFonts.notoSansThai(
+                fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
