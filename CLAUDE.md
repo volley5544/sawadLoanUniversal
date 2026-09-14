@@ -1786,6 +1786,7 @@ Screens (`TopupStepIndicator` counts 1–7):
 | --- | --- | --- | --- |
 | 1 | `topup_card_page` | **เติมวงเงิน** | `/user/detail`, `/loan/list` |
 | 2 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `POST /topup/recal`, `/topup/calculator` |
+|  | ⚠ shows `can_topup_msg` directly above its buttons whenever the API sends one — see below | | |
 | 3 | `topup_installment_page` | เลือกจำนวนงวด | — |
 | 4 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
 | 5 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
@@ -2082,6 +2083,21 @@ The `+` is what marks it.
 ⚠ **The เงื่อนไข note states the rounding rule** because the field enforces it
 silently: typing `96,050` and being handed `96,000` back is otherwise
 indistinguishable from the app losing the input.
+
+⚠ **`can_topup_msg` is shown above the amount screen's buttons whenever it is
+non-empty** (`TopupFlow.canTopupMessage`, added 2026-09-14) — **not** only on a
+refusal. That is the point of it: a contract can be perfectly eligible
+(`can_topup == 'Y'`) and still carry one, and
+*"สัญญามีผู้ค้ำ กรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ"* is the case
+it was added for — that customer **can** pay, and gating the note on
+`can_topup` would hide exactly the message that matters. A test pins the
+eligible case.
+
+It sits directly above the buttons because it qualifies them: it is the last
+thing read before pressing, and further down the screen it would be scrolled
+past. Read off the **contract**, not `amountDetail` — `can_topup_msg` exists
+only on `/loan/list`'s `topup_detail`, and `/topup/recal` sends its nested
+`contract_details` blank anyway.
 
 **`ยอดที่ต้องชำระเพื่อเติมวงเงิน` is the server's breakdown**, from
 `POST /topup/recal` — see that section. It is re-read on every calculator

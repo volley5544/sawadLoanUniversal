@@ -277,6 +277,21 @@ class TopupFlow {
   /// otherwise has to stand. Blank is silence, not an answer.
   bool get hasUnpaidInterest => _interestPaidFlag == 'Y';
 
+  /// `topup_detail.can_topup_msg` — the API's own note about this contract,
+  /// shown above the amount screen's buttons when it sends one.
+  ///
+  /// It is **not** only a refusal message. A contract can be perfectly
+  /// eligible and still carry one — *"สัญญามีผู้ค้ำ กรุณาติดต่อสาขา…"* is the
+  /// case this was added for — so the screen shows it whenever it is present
+  /// rather than gating on `can_topup`. Empty means the API has nothing to
+  /// say, and nothing is rendered.
+  ///
+  /// Read off the contract, not [amountDetail]: `can_topup_msg` exists only on
+  /// `/loan/list`'s `topup_detail`, and `/topup/recal` sends its nested
+  /// `contract_details` blank anyway.
+  String get canTopupMessage =>
+      contract?.topupDetail.canTopupMsg.trim() ?? '';
+
   String get _interestPaidFlag => _firstNonEmpty([
         amountDetail?.interestPaidFlag,
         contract?.topupDetail.interestPaidFlag,

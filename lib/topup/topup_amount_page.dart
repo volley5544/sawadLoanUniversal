@@ -1040,13 +1040,8 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     // it; the QR screen deliberately refreshes nothing itself, so that two
     // screens cannot disagree about whether the money is still owed.
     if (outcome == TopupOutcome.payInterest) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: LoanRegisterStyles.divider)),
-        ),
-        child: Row(
+      return _withApiNote(
+        Row(
           children: [
             Expanded(
               child: TopupPrimaryButton(
@@ -1075,7 +1070,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       TopupOutcome.topup =>
         _flow.isRequestedAmountAllowed && (editing || _flow.plan != null),
     };
-    return PLoanBottomButton(
+    final button = PLoanBottomButton(
       label: editing && outcome == TopupOutcome.topup
           ? 'ยืนยันยอดเงิน'
           : outcome == TopupOutcome.topup
@@ -1083,6 +1078,57 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
               : _flow.primaryActionLabel,
       busy: busy,
       onPressed: ready && !busy ? _primaryAction : null,
+    );
+    final note = _flow.canTopupMessage;
+    // PLoanBottomButton draws its own white bar and top rule, so with no note
+    // it is returned untouched rather than wrapped in a second one.
+    return note.isEmpty ? button : _withApiNote(button, padded: false);
+  }
+
+  /// Wraps the bottom bar's buttons with `can_topup_msg` above them, when the
+  /// API sends one.
+  ///
+  /// ⚠ Shown whenever the message is present, **not** only on a refusal: a
+  /// contract can be eligible and still carry one — *"สัญญามีผู้ค้ำ กรุณา
+  /// ติดต่อสาขา…"* is the case it was added for, and that contract can still
+  /// pay. Gating it on `can_topup` would hide exactly the note that matters.
+  ///
+  /// It sits directly above the buttons because it qualifies them: it is the
+  /// last thing read before pressing, and lower down the screen it would be
+  /// scrolled past.
+  Widget _withApiNote(Widget buttons, {bool padded = true}) {
+    final note = _flow.canTopupMessage;
+    return Container(
+      padding: padded
+          ? const EdgeInsets.fromLTRB(22, 12, 22, 20)
+          : const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: LoanRegisterStyles.divider)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (note.isNotEmpty)
+            Padding(
+              padding: padded
+                  ? const EdgeInsets.only(bottom: 10)
+                  : const EdgeInsets.fromLTRB(22, 0, 22, 10),
+              child: Text(
+                note,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: TopupTheme.alert,
+                ),
+              ),
+            ),
+          buttons,
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/topup/components/topup_redesign.dart';
+import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 
 void main() {
   group('formatTopupMoney — always two decimals', () {
@@ -100,6 +101,50 @@ void main() {
 
     test('is empty when the API sends neither — the line is then hidden', () {
       expect(parse({'can_topup': 'N'}).canTopupCode, isEmpty);
+    });
+  });
+
+  group('TopupFlow.canTopupMessage — the note above the amount buttons', () {
+    TopupFlow flowWith(Map<String, dynamic>? topupDetail) {
+      final flow = TopupFlow(hashThaiId: 'HASH', authToken: 'TOKEN');
+      if (topupDetail != null) {
+        flow.contract = LoanContract.fromJson({
+          'contract_no': 'C-1',
+          'db_name': 'MLOAN',
+          'topup_detail': topupDetail,
+        });
+      }
+      return flow;
+    }
+
+    test('carries the API message when there is one', () {
+      const guarantor =
+          'สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ';
+      expect(
+        flowWith({'can_topup': 'Y', 'can_topup_msg': guarantor})
+            .canTopupMessage,
+        guarantor,
+      );
+    });
+
+    test('is shown on an ELIGIBLE contract too, not only on a refusal', () {
+      // ⚠ The case it was added for: can_topup is 'Y', the customer can pay,
+      // and the note still has to reach them. Gating on can_topup would hide
+      // exactly the message that matters.
+      final flow = flowWith(
+          {'can_topup': 'Y', 'can_topup_msg': 'สัญญามีผู้ค้ำ กรุณาติดต่อสาขา'});
+      expect(flow.contract!.isEligible, isTrue);
+      expect(flow.canTopupMessage, isNotEmpty);
+    });
+
+    test('is empty when the API says nothing, so nothing renders', () {
+      expect(flowWith({'can_topup': 'Y'}).canTopupMessage, isEmpty);
+      expect(
+        flowWith({'can_topup': 'Y', 'can_topup_msg': '   '}).canTopupMessage,
+        isEmpty,
+      );
+      expect(flowWith(null).canTopupMessage, isEmpty,
+          reason: 'no contract loaded yet');
     });
   });
 
