@@ -422,6 +422,26 @@ class TopupDetail {
   /// Why [canTopup] isn't `Y`; shown to the user in place of the limits.
   final String canTopupMsg;
 
+  /// Fallback for [ineligibleReason] when the API names no reason.
+  static const String contactBranchFallback =
+      'กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652';
+
+  /// The second line of the top-up card's **can_topup = N** state.
+  ///
+  /// [canTopupMsg] when the API sends one — it names the actual reason, where
+  /// a hardcoded line can only ever say "phone the branch", and a customer who
+  /// is told *why* may not need to phone at all.
+  ///
+  /// ⚠ The fallback is load-bearing, not tidiness. The card's first line says
+  /// the request cannot be done in the app and stops there, so an empty
+  /// message with no fallback would refuse the customer without telling them
+  /// what to do next. `can_topup_msg` is not guaranteed on a refusal — the
+  /// same reason `can_topup_code` is hidden when absent.
+  String get ineligibleReason {
+    final reason = canTopupMsg.trim();
+    return reason.isNotEmpty ? reason : contactBranchFallback;
+  }
+
   /// The error code the redesigned card shows as `Code : xxx` on an
   /// ineligible contract.
   ///

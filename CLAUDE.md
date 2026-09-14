@@ -1969,6 +1969,19 @@ a different question. Peach header, red warning glyph, *ขออภัย ร�
 `⏱ ไม่เข้าเงื่อนไข` pill, and **วงเงินสินเชื่อเดิม** — the existing line, never
 an offer above a refusal of it. **No button**: the action is a phone call.
 
+⚠ **The refusal's second line is the API's own `can_topup_msg`**
+(`TopupDetail.ineligibleReason`, changed 2026-09-14). It names the actual
+reason, where the hardcoded line it replaced could only ever say "phone the
+branch" — and a customer told *why* may not need to phone at all.
+
+It **falls back** to `กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652` when the API
+sends nothing, and that fallback is load-bearing rather than tidiness: the
+first line says only that the request cannot be done in the app and stops
+there, so an empty message with no fallback would refuse the customer without
+telling them what to do next. `can_topup_msg` is not guaranteed on a refusal —
+the same reason `can_topup_code` is hidden when absent. A test pins both
+branches.
+
 ⚠ **`Code : xxx` renders only when the API sends a code.**
 `TopupDetail.canTopupCode` reads `can_topup_code`, falls back to a bare `code`,
 and is **empty otherwise** — in which case the line is absent. No sample
@@ -2093,7 +2106,7 @@ ineligible and carries products shows the ineligible header, not the offer:
 
 | Variant | When | Shows |
 | --- | --- | --- |
-| `ineligible` | `topup_detail.can_topup == 'N'` | ยังไม่สามารถเติมวงเงินได้ในขณะนี้ / ติดต่อสาขาเพื่อขอคำแนะนำ. No amount, no action |
+| `ineligible` | `topup_detail.can_topup == 'N'` | ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้, then **`can_topup_msg`** — see below. No amount, no action |
 | `specialOffer` | the contract carries add-on products | ข้อเสนอพิเศษสำหรับคุณ (+ the special limit when there is one), then the ordinary card |
 | `plain` | otherwise | the ordinary card |
 

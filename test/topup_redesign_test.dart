@@ -102,4 +102,38 @@ void main() {
       expect(parse({'can_topup': 'N'}).canTopupCode, isEmpty);
     });
   });
+
+  group('TopupDetail.ineligibleReason — the can_topup = N second line', () {
+    TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
+
+    test("shows the API's own reason when it sends one", () {
+      // It names why, where the hardcoded line could only say "phone the
+      // branch" — a customer told the reason may not need to phone at all.
+      expect(
+        parse({'can_topup': 'N', 'can_topup_msg': 'อยู่ระหว่างตรวจสอบเอกสาร'})
+            .ineligibleReason,
+        'อยู่ระหว่างตรวจสอบเอกสาร',
+      );
+    });
+
+    test('falls back when the refusal names no reason', () {
+      // ⚠ Load-bearing: the card's first line says only that this cannot be
+      // done in the app, so without the fallback the customer would be refused
+      // with no idea what to do next.
+      for (final json in <Map<String, dynamic>>[
+        {'can_topup': 'N'},
+        {'can_topup': 'N', 'can_topup_msg': ''},
+        {'can_topup': 'N', 'can_topup_msg': '   '},
+      ]) {
+        expect(parse(json).ineligibleReason, TopupDetail.contactBranchFallback);
+      }
+    });
+
+    test('trims, so a padded message does not indent the card', () {
+      expect(
+        parse({'can_topup_msg': '  ติดต่อสาขา  '}).ineligibleReason,
+        'ติดต่อสาขา',
+      );
+    });
+  });
 }

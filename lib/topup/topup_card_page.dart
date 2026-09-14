@@ -724,6 +724,10 @@ class _TopupContractCard extends StatelessWidget {
   /// phone call.
   Widget _ineligible() {
     final code = contract.topupDetail.canTopupCode;
+    // Second line is the API's own reason — see TopupDetail.ineligibleReason,
+    // which also holds the fallback for a refusal that names none.
+    final message = 'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
+        '${contract.topupDetail.ineligibleReason}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -750,8 +754,7 @@ class _TopupContractCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
-                      'กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652',
+                      message,
                       style: GoogleFonts.notoSansThai(
                         fontSize: 13.5,
                         height: 1.5,
