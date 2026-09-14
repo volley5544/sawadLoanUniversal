@@ -220,6 +220,57 @@
 /// );
 /// ```
 ///
+/// ## `openExternalUrl` — leaving the WebView for a document
+///
+/// Added for the **loan detail** screen's คู่สัญญา / คำขอออกตั๋ว button and
+/// the กรมธรรม์ (policy) download, both of which live on srisawad portals
+/// outside this build.
+///
+/// This needs the host for a reason worth stating, because it looks like
+/// something the web can do on its own: `window.open` is **inert inside the
+/// srisawad host**, which registers no `onCreateWindow`, so the tap does
+/// nothing at all — no error, no navigation. That is why the step-6 contract
+/// viewer's เปิดในแท็บใหม่ affordance is commented out rather than shipped.
+/// The alternative, `window.location.href`, would replace this build in the
+/// WebView and leave the customer with no way back into their application.
+///
+/// Takes the URL as a plain **string** and **returns a bool**: `true` opened,
+/// `false` tried and failed. Returning nothing is how an old host build
+/// identifies itself; the web tells the two apart, so return a real `false`
+/// on failure or a customer on a current app is told to update it.
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'openExternalUrl',
+///   callback: (args) async {
+///     try {
+///       final url = args.isNotEmpty ? '${args.first}' : '';
+///       final uri = Uri.tryParse(url);
+///       // SECURITY: https only, and allowlist the host — this hands a URL
+///       // chosen by page content to the system browser.
+///       if (uri == null || uri.scheme != 'https') return false;
+///       if (!_kExternalUrlAllowedPrefixes.any(url.startsWith)) return false;
+///       // The srisawad app already does this for Tableau/contract pages:
+///       // openTableauBrowser('', url, false) — or launchUrl(uri,
+///       // mode: LaunchMode.externalApplication).
+///       await openTableauBrowser('', url, false);
+///       return true;
+///     } catch (_) {
+///       return false; // NOT null — that means "no handler here"
+///     }
+///   },
+/// );
+/// ```
+///
+/// ⚠ Allowlist it the way `httpRequest` is allowlisted. The loan detail screen
+/// builds the URL from `api_url['contract_url']` in the Firestore config, which
+/// is editable with no app release — so without a host-side allowlist a config
+/// edit could point the customer's browser anywhere.
+///
+/// ⚠ Not implemented in the host yet. Until an app build carrying it ships,
+/// the button reports `เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร กรุณาอัปเดตแอป`
+/// and the customer is not left staring at a dead tap.
+///
 /// ⚠ iOS needs `NSPhotoLibraryAddUsageDescription` in `Info.plist`, and
 /// Android ≤ 32 needs `WRITE_EXTERNAL_STORAGE`. Without them the save fails at
 /// the OS, which reaches the customer as "บันทึกรูปภาพไม่สำเร็จ" with nothing

@@ -53,6 +53,11 @@ const String _kGetAuthTokenHandlerName = 'getAuthToken';
 /// writes the file and tells us whether it landed. See `native_bridge.dart`.
 const String _kSaveImageToGalleryHandlerName = 'saveImageToGallery';
 
+/// Handler the native host registers to open a URL outside this WebView —
+/// the loan detail screen's คู่สัญญา / คำขอออกตั๋ว document and a policy PDF.
+/// See `native_bridge.dart`.
+const String _kOpenExternalUrlHandlerName = 'openExternalUrl';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -302,6 +307,52 @@ class NativeCameraBridge {
     final value = result.dartify();
     if (value is bool) return value;
     // Some hosts stringify their return value.
+    final text = value?.toString().toLowerCase();
+    if (text == 'true') return true;
+    if (text == 'false') return false;
+    return null;
+  }
+
+  /// Asks the native host to open [url] outside this WebView, and resolves
+  /// with whether it did.
+  ///
+  /// `true` opened, `false` the host tried and failed (a malformed URL, no
+  /// browser). **`null` means the host has no such handler** — an app build
+  /// predating it — which the caller must report differently: telling a
+  /// customer on a current app to go and update it is worse than saying
+  /// nothing. Same three-state contract as [saveImageToGallery].
+  ///
+  /// In a plain browser there is no host, so this falls back to `window.open`
+  /// and reports whether a window came back. ⚠ That fallback is **web-only by
+  /// nature**: inside the srisawad host `window.open` is inert, because it
+  /// registers no `onCreateWindow` — which is exactly why this handler exists
+  /// rather than the app just calling `window.open` everywhere.
+  static Future<bool?> openExternalUrl(String url) async {
+    final target = url.trim();
+    if (target.isEmpty) return false;
+
+    final host = _host;
+    if (host == null) {
+      // Plain browser: a real new tab, which works here and nowhere else.
+      // A popup blocker returns null (or a window that is already closed), and
+      // that is a genuine `false` — the host has no handler either way, but
+      // here we did try, so the caller should not tell the user to update an
+      // app they are not running.
+      final opened = web.window.open(target, '_blank');
+      return opened != null && !opened.closed;
+    }
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kOpenExternalUrlHandlerName.toJS,
+          target.toJS,
+        )
+        .toDart;
+
+    if (result.isUndefinedOrNull) return null; // old host, no handler
+    final value = result.dartify();
+    if (value is bool) return value;
     final text = value?.toString().toLowerCase();
     if (text == 'true') return true;
     if (text == 'false') return false;

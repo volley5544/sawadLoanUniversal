@@ -6,8 +6,10 @@ Flutter web**, embedded inside a separate native Flutter app via
 Android/iOS/desktop scaffolding still exists but the web build is what ships.
 App language/data is **Thai**; code comments are English.
 
-**Two features, at very different stages** — this is the thing to get straight
-before changing anything:
+**Several features, at very different stages** — this is the thing to get
+straight before changing anything. The table below is the oldest pair; the
+**top-up flow** (`lib/topup/`) and the read-only **loan detail** screen
+(`lib/loan_detail/`) are both live and both have their own sections:
 
 | | 5-step loan-register wizard (`lib/loan_register/`) | P-Loan application (`lib/p_loan/application/`) |
 | --- | --- | --- |
@@ -31,6 +33,14 @@ passes that again, archive the next round the same way.
 
 ## Current state (read this first)
 
+- **The loan detail screen is live** (added 2026-09-14, `lib/loan_detail/`).
+  `/loanDetail?contNo=…` — three read-only tabs over one contract, plus a
+  กรมธรรม์ sub-page. Not a flow: it is the loan-universal replacement for
+  LandAndHouseWeb's `LoanDetailPage`. It needs **no host change** to be reached
+  (the existing `/loan-universal-webview` route takes a `path` + `params`), but
+  its คู่สัญญา button needs a **new `openExternalUrl` bridge handler**, which
+  does. Read **Loan detail** before touching it — its visibility rules are
+  config-driven and near-mirror images of each other.
 - **The top-up flow is live too, and it is a different product** (added
   2026-09-11, `lib/topup/`). Home menu → **สินเชื่อเพิ่ม**, or `/topup`. It is
   **not** a P-Loan Extra: a top-up closes the existing contract out and
@@ -138,11 +148,12 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 354 tests (models, payloads, headers, NDID terms +
+flutter test               # 391 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard, the top-up flow's
-                           # pricing/outcome rules + its two payloads) — green
+                           # pricing/outcome rules + its two payloads, the
+                           # loan-detail comcode rules + header card) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1509,6 +1520,8 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `api_url.ndid_url_base_uat` | `https://uat.ndid.srisawadpower.com` | uat builds |
 | `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles | both (`…_uat` overrides) |
 | `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
+| `api_url.contract_url` | `https://pt.swpfin.com/portal` | the loan detail screen's คู่สัญญา / คำขอออกตั๋ว button |
+| `comcode_config` | *(map)* | the loan detail screen's two visibility rules — see **Loan detail** |
 
 | `ndid_as_id_uat` | `A18AC373-9CCB-47B3-A285-9ADBA29AFEFC` | uat builds — pins the AS, see **NDID API client** |
 
@@ -1623,6 +1636,7 @@ data (an existing contract, its limit, its installment calculation).
 | `topup_api.dart` | `TopupApi` — the single seam the **top-up flow** talks to: `/topup/detail`, `/topup/calculator`, `POST /topup`, `/topup/status-detail`, `POST /payment/interest`, the lead fallback, and thin delegates to `PLoanApi` for the product-neutral `/pdf/loan` + `/vision/thai-id-validate` |
 | `p_loan_api.dart` | `PLoanApi` — the single seam the P-Loan flow talks to. Delegates the three shared calls to `TopupApi`; owns `/pdf/loan`, `/vision/thai-id-validate`, and `calculateNewLoanInstallments` (interim client-side estimate for a new P-Loan) |
 | `p_loan_contract_api.dart` | `PLoanContractApi` — `POST /ploan`, the **P-Loan save API** (mobile API base, **bearer** auth, JSON). Reached via `PLoanApi.savePLoanContract` |
+| `loan_detail_api.dart` | `LoanDetailApi` — `POST /payment/history_new`, the one endpoint the **loan detail** screen needs that no other flow calls. Everything else on that screen comes from `/loan/list` |
 | `user_api.dart` | Customer profile + address book |
 
 **Base URL resolution order** (`SrisawadApi.baseUrl()`), changed 2026-09-11:
@@ -2517,6 +2531,218 @@ server assigns the transaction number). A failed submit appends the blank ones
 to the message, because "HTTP 400" against 37 fields is unactionable on a
 device, and drops a `Diagnostics.log` crumb readable from the `(UAT ver…)` tag.
 
+### Loan detail (`lib/loan_detail/`)
+
+**A read-only view of one contract** — **รายละเอียดสินเชื่อ**, added 2026-09-14.
+Not a wizard and not a flow: three tabs over a single contract, plus a
+กรมธรรม์ sub-page. It is the loan-universal replacement for LandAndHouseWeb's
+`LoanDetailPage`, which the host opens today through
+`api_url['loan_detail_web' | 'loan_detail_web_uat']`.
+
+Ported from **two** references, and it matters which supplied what:
+
+| From | What |
+| --- | --- |
+| the srisawad app's `lib/pages/loan_installment/loan_installment_detail_page.dart` (+ its 4 sub-widgets) | **the UI and every visibility rule**, transcribed |
+| LandAndHouseWeb's `customer_loan_detail/loan_detail_page/` | **the API and config wiring** — which endpoints, which Firestore keys |
+
+**It makes no `loan/detail` call.** Everything on the first two tabs comes off
+the row `GET /loan/list` already returns — `contract_details`,
+`payment_details`, `car_details` and `insurances` are complete there. **Both**
+references do it this way and it is the right shape: the screen is opened from
+a list the customer was just looking at, and a second endpoint could disagree
+with it. Only **ประวัติการชำระ** needs a call of its own
+(`POST /payment/history_new`), and it is made lazily, the first time that tab
+is opened — so a customer who never taps it never makes it.
+
+**URL-addressable**: `/loanDetail?contNo=…`, optionally `&dbName=` (contract
+numbers are unique only *within* a db; LandAndHouseWeb matches on the number
+alone, which is why it is optional) and `&fromHost=true` (back closes the
+WebView). Same shape and same reason as `/topup/status`: the host deep-links it
+in a fresh WebView and a reload has to work. The host needs **no change** —
+its existing `/loan-universal-webview` route already takes
+`path: '/loanDetail', params: {'contNo': …}` and appends `hashThaiId` + `token`.
+
+| # | Tab | Source | Rows |
+| --- | --- | --- | --- |
+| 1 | ข้อมูลสินเชื่อ | `/loan/list` | ค่างวด, จำนวนงวด, สาขาที่ทำสัญญา, วันที่ทำสัญญา, กลุ่มสินค้า, ยี่ห้อ/รุ่น/รายละเอียดสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันงวดสุดท้าย |
+| 2 | ข้อมูลการชำระ | `/loan/list` | ชำระค่างวดแล้ว, จำนวนวันที่ค้าง, จำนวนงวดที่ค้าง, วันชำระครั้งล่าสุด |
+| 3 | ประวัติการชำระ | `POST /payment/history_new` | one card per payment |
+
+⚠ **No ชำระเงิน button** (asked for, 2026-09-14: *"not to do payment page for
+now"*). The source puts it in the bottom bar beside the contract-document
+button, behind its own `is_show_payButton` config flag. It is **absent**, not
+disabled — a button that cannot ever do anything is worse than no button. When
+the payment flow lands, add it as the first child of `_buildBottomBar`'s row
+behind that flag.
+
+#### The header card is a wall of conditionals — they live in a model
+
+`models/loan_detail_summary.dart` holds every derived rule the card renders,
+transcribed from the source's `loan_installment_payment_detail.dart`, which
+computes them inline as nested ternaries over three dates and four amounts.
+They are separated out because *"the overdue figure turned red a day early"* is
+not something a screenshot review catches. Worth knowing:
+
+- **The last installment changes the card's shape.** `งวดสุดท้าย` drops the
+  denominator, `รวมต้องชำระ` disappears, and a red *"ยอดดังกล่าวไม่ไช่ยอดปิดบัญชี…"*
+  caveat appears under it.
+  ⚠ **`totalInstallmentNumber` is a `double`** on `PaymentDetails` (the top-up
+  endpoints send it that way) and this is a *count*: compared raw, `24` never
+  equals `24.0`, so the last installment would never be recognised and the row
+  would read `24.0 งวด`. It is `.round()`ed before every comparison and every
+  render.
+- **`เกินกำหนดชำระ` replaces a figure in exactly one state** — last installment
+  **and** past due. Being merely overdue does not produce it. At that point the
+  amount on file is stale (the payoff has to be quoted by the branch), so the
+  card says so rather than showing a number that would be acted on.
+- **Dates are judged against the server clock**, `payment_details.current_date_time`,
+  never `DateTime.now()`. It matters more here than anywhere: a device clock a
+  day fast would tell a paid-up customer they are overdue. An unreadable date
+  reads as **due** — the source would throw outright, so there is no behaviour
+  to match, and this is the direction that doesn't promise time the customer
+  hasn't got.
+- ⚠ **`ค่างวดปัจจุบัน` comes off `contract_details.installment_amount`**, not the
+  identically-named field on `payment_details`. The contract's is the scheduled
+  installment; the payment one is what is due now and feeds `รวมต้องชำระ`. The
+  source reads them from those two different places and so do we.
+- ⚠ **`(ยอดดังกล่าวไม่ไช่ยอดปิดบัญชี …)` carries the shipped app's typo**
+  (`ไม่ไช่` for `ไม่ใช่`). Reproduced verbatim: it is what a customer reads on
+  this screen today, and correcting it here alone would make the two builds
+  disagree on a sentence about their payoff balance. Fix it in both or neither.
+- The source's widget carries a whole second mode behind a `subTitle` argument,
+  for reuse elsewhere. This page never passes it, so that branch is **not**
+  reproduced — it would be dead code wearing the appearance of a rule.
+
+#### `comcode_config` — what the screen offers, per company
+
+`models/comcode_config.dart`, read from the Firestore runtime config (see
+**Runtime config from Firestore**). It answers two questions:
+
+| | Shown when |
+| --- | --- |
+| the bottom **คู่สัญญา / คำขอออกตั๋ว** button | the company is listed, `this_comcode_is_contract` is true at its index, the loan type is on its list, and it is **not** in `check_contract_date` |
+| the red *"ถ้าลูกค้ายังไม่ได้รับตั๋วสัญญาใช้เงิน … download"* notice | the contract is a listed exception, **or** the company issues a note rather than a contract and is not date-gated, **or** it *is* date-gated and was signed after `contract_default_date` |
+
+The two are near-mirror images: a date-gated company (`S14`, `SDG` today) gets
+the notice and **never** the button. The source writes the notice as an
+`if / else if / else if` chain, but all three arms render the same widget, so
+an OR is the same output.
+
+⚠ **Four of the fields are index-aligned arrays, not a map**: `comcode` supplies
+the order and `this_comcode_is_contract` / `button_name` are read at the same
+index (`exception_contract` / `exception_contract_comcode` are a separate
+pair). That is the shape the srisawad app's config already has, reproduced
+rather than reshaped so one document keeps serving both clients. Every read is
+**bounds-checked** — a `button_name` list one shorter than `comcode` is a
+single config edit away and must degrade, not throw, on a screen the customer
+is looking at. A test pins the ragged case.
+
+⚠ **An absent or unreadable document leaves every rule `false`**, so the screen
+renders with no button and no notice. That is the safe direction — it withholds
+an action rather than offering one the company doesn't support — but it is
+**not** the intended one, so a prod deploy needs the config seeded (see below).
+
+⚠ **The visibility rules key on `barcode_details.comcode`**, not
+`contract_details.comcode` (which is something else entirely — `1C` in the
+fixtures) and not `comcode_code`. Both references agree on this. They disagree
+on the **URL**: the srisawad app puts the barcode comcode in it, LandAndHouseWeb
+puts `contract_details.comcode_code`. This build uses the barcode one, so the
+value that decided the button is the value in the link — if the portal ever
+404s, that is the first thing to try.
+
+⚠ **`loan_type_code == 'O'` asks first.** Those contracts' คู่สัญญา document is
+issued only at the branch that owns the account, so ตกลง is an acknowledgement
+that the customer already holds it, not a request to issue one. The source then
+writes a **Firestore audit record** (who, when, best-effort GPS). This build has
+no write path — `firestore.rules` grant no client any write — so the
+acknowledgement is a session-local `Diagnostics.log` breadcrumb only, readable
+from the `(UAT ver…)` tag. Same shape as the NDID ปฏิเสธ log; it needs an
+endpoint, not a rules change (Outstanding #34).
+
+⚠ **LandAndHouseWeb has a fourth condition this build does not**:
+`ticket_comcode_check_list` + `ticket_branch_check_list` + `contract_default_date2`,
+which suppress the button for a ticket-issuing branch. It is **absent from the
+srisawad app**, which is the stated UI reference, so it is not reproduced —
+the config keys are seeded, so adding it is a `ComcodeConfig` change with no
+config work.
+
+#### `openExternalUrl` — a new host bridge handler
+
+The คู่สัญญา button and the กรมธรรม์ **ดาวน์โหลด** button both open a srisawad
+portal outside this WebView, and that genuinely needs the host: `window.open`
+is **inert inside the srisawad host**, which registers no `onCreateWindow`, so
+the tap does nothing at all — no error, no navigation. (Same reason step 6's
+เปิดในแท็บใหม่ affordance is commented out.) `window.location.href` would
+replace this build in the WebView and leave the customer with no way back.
+
+Contract and a ready-to-paste snippet are in `services/native_bridge.dart`.
+Three-state return, exactly like `saveImageToGallery`: **`true`** opened,
+**`false`** tried and failed, **`null`** the host has no handler. Collapsing the
+last two would tell a customer on a current app to go and update it.
+
+⚠ **Not implemented in the host yet** — it ships in an **app release**, not a
+web deploy (same constraint as Outstanding #10). Until one lands the button
+says `เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร กรุณาอัปเดตแอป`. ⚠ Allowlist it
+host-side the way `httpRequest` is allowlisted: the URL is built from
+`api_url['contract_url']`, which is editable with no app release, so without one
+a config edit could point the customer's browser anywhere.
+
+In a plain browser there is no host and it falls back to a real `window.open`,
+which works there and nowhere else.
+
+#### `POST /payment/history_new` (`services/loan_detail_api.dart`)
+
+Body `{contract_no, db_name}`, rows under **`data`** — not the `results`
+envelope the rest of the mobile API uses.
+
+⚠ **The two references disagree about `db_name`.** The srisawad app sends it
+whole (`MLOAN`); LandAndHouseWeb sends `dbName.substring(0, 2)` (`ML`) to the
+same endpoint, so one of the two is being tolerated rather than honoured and
+there is no documentation saying which. This build sends it **whole**, matching
+the shipped native app. `LoanDetailApi.useDbNamePrefix` is the one place to
+flip it if the tab comes back empty on a contract that demonstrably has
+payments; a test pins the current choice so it stays visible.
+
+⚠ **`date` is `dd-MM-yyyy HH:mm` — day first.** The source builds an ISO string
+by reversing the three parts, which only parses if the wire format is day-first.
+`PaymentHistoryEntry.paidOn` treats a **four-digit** leading segment as ISO
+instead, so a backend that switches format renders correctly rather than
+silently reading the day as a year.
+
+The heading is `formatThaiShortDate` — `14 ก.ค. 68`, a **two-digit** Buddhist
+year, because the source slices characters 2–3 out of `'2568'`.
+
+⚠ A failed history load shows a **retry**. The source renders an empty
+`Container()` on that branch, making a failure indistinguishable from a
+contract with no payments. Deliberately not reproduced.
+
+#### This screen carries its own palette
+
+`LoanDetailPalette` — navy `#003063`, label grey `#404040`, muted `#8A98A7`,
+pure red `#FF0000`, tab strip `#FAFAFA`, peach button `#FCEFE4` on `#DB771A`.
+Same trade as the top-up QR screen and the 2026-09 redesign, and for a related
+reason: this is a screen the customer already knows from the srisawad app, and
+two different-looking versions of *their own contract* invites doubt about which
+one is telling the truth. The difference is visible — `LoanRegisterStyles.value`
+is `#1B3A6B`, a different navy. **That trade does not generalise**; don't copy
+the pattern onto a screen this build owns outright.
+
+`EnvVersionTag` is still in the AppBar, as on every other screen here.
+
+#### กรมธรรม์ (`insurance_list_page.dart`)
+
+Shown from the header's ดูรายละเอียด link, only when `insurances` is non-empty.
+One card per policy: insurer name + a navy **ดาวน์โหลด** button opening
+`ins_url` through `openExternalUrl`.
+
+⚠ The source's page has four more rows — customer name, sum insured, cover
+dates — all wrapped in `Visibility(visible: false)`. They are hidden in the
+shipped app, so they are not reproduced; reinstating them is a design decision,
+not a port omission. A policy with **no** `ins_url` gets a dimmed, untappable
+button rather than the source's `launchURL('')`, which does nothing and looks
+like a broken tap.
+
 ### P-Loan submission form (`lib/p_loan/submit_form/`)
 
 A **standalone** data-entry form — *not* part of any wizard — reached from
@@ -3052,6 +3278,16 @@ text against `ndid_terms_content.dart`.
   what the handler was actually for: **CORS, not multipart.** The snippet stays
   in `native_bridge.dart` as the reference pattern for a future upload to a host
   that doesn't send those headers.
+- **`openExternalUrl` handler — new, and not in the host yet (2026-09-14).**
+  `openExternalUrl(url)` asks the host to open a URL outside this WebView, for
+  the loan detail screen's คู่สัญญา / คำขอออกตั๋ว document and its กรมธรรม์
+  download. It genuinely needs the host: `window.open` is **inert** inside the
+  srisawad host (no `onCreateWindow` registered), so the tap does nothing at
+  all. Three-state bool like `saveImageToGallery` — `true` opened, `false`
+  tried and failed, `null` no handler. Snippet in `native_bridge.dart`.
+  ⚠ Ships in an **app release**; until then the button reports itself
+  unsupported. ⚠ Allowlist it host-side — the URL comes from
+  `api_url['contract_url']`, editable with no release.
 - **`openBranchPicker` handler:** `pickBranch()` asks the host to open its
   branch-picker map (step-5 appointment). The host pushes a selection-mode map
   page and returns the chosen branch as a **JSON string** (`branchName`,
@@ -3615,6 +3851,47 @@ reason recorded.
       `topup_extra` 5,000 that `/topup/recal` does not recognise, so the
       customer is offered a limit the settlement is not priced at. See
       `TopupFlow.settlementPricingAmount`.
+
+**Loan detail (added 2026-09-14):**
+
+34. **`openExternalUrl` needs a host build.** The คู่สัญญา / คำขอออกตั๋ว button
+    and the กรมธรรม์ ดาวน์โหลด button both report themselves unsupported until
+    the srisawad app registers that handler — `window.open` is inert inside its
+    WebView, so there is no web-side substitute. Contract and snippet are in
+    `services/native_bridge.dart`; allowlist the URL prefix host-side, since it
+    is built from a Firestore value anyone can edit. Same release constraint as
+    #10.
+35. **Seed `comcode_config` + `api_url.contract_url` into the *prod*
+    `public_config`.** uat was seeded 2026-09-14 and verified; prod was not.
+    One command: `node tools/firestore-import/seed-loan-detail-config.mjs
+    --project=sawad-loan-universal-prod`. Without it every rule answers false,
+    so the screen ships with no contract-document button and no notice — safe,
+    but not intended. (Same omission the top-up product icons still carry.)
+36. **Point the host's `loan_detail_web*` at this build** when it is signed off.
+    The srisawad app opens LandAndHouseWeb's `LoanDetailPage` today, from
+    `api_url['loan_detail_web' | '…_uat']` in **its own** appConfig. Switching
+    it is a config edit there, not a code change here — but check first that
+    the host passes `contNo` in a shape this route reads (it does: its
+    `/webview-page-topup` route already appends `&contNo=`).
+37. **A branch-issued ('O') acknowledgement is logged only in the session.**
+    The source writes a Firestore audit record — who acknowledged, when, and a
+    best-effort GPS fix — before opening the contract page. This build has no
+    write path, so it drops a `Diagnostics.log` breadcrumb instead, gone when
+    the WebView closes. If a durable record is wanted, that endpoint is what is
+    missing; the call site is the one `Diagnostics.log` in
+    `_onContractDocumentPressed`. Same shape as #23.
+38. **Confirm `db_name` for `POST /payment/history_new`.** The two reference
+    clients send different values to it (`MLOAN` vs `ML`) and only one can be
+    what the API means. This build sends the whole name, matching the shipped
+    srisawad app; `LoanDetailApi.useDbNamePrefix` flips it. Worth one live
+    check on a contract that has payments — an empty ประวัติการชำระ tab is the
+    symptom.
+39. **No live loan-detail screen has been opened against a real contract.**
+    Every rule is unit-tested and the build compiles, but nothing here has been
+    seen on a device — in particular the `loan_type_icon` SVG (an inline data
+    URL this build renders with `SvgPicture.string`) and the
+    `POST /payment/history_new` response shape. Same caveat #30 carries for the
+    top-up submit.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

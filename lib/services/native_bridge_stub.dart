@@ -67,6 +67,10 @@ class NativeCameraBridge {
   }) async =>
       null;
 
+  /// Always `null` off-web — there is no host to open a URL through, and no
+  /// browser window either. See `native_bridge.dart`.
+  static Future<bool?> openExternalUrl(String url) async => null;
+
   /// No-op off-web (there is no WebView host to close).
   static Future<void> closeWebview() async {}
 

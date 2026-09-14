@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../loan_detail/loan_detail_page.dart';
 import '../loan_register/appointment_datetime_page.dart';
 import '../loan_register/appointment_page.dart';
 import '../loan_register/branch_select_page.dart';
@@ -131,6 +132,15 @@ abstract final class AppRoutes {
   /// Interest-payment QR — the dead end for a contract with unpaid accrued
   /// interest, which has to be settled before a top-up can be raised.
   static const String topupQrPayment = '/topup/qr';
+
+  // Loan detail (lib/loan_detail/) — read-only, one contract.
+
+  /// **รายละเอียดสินเชื่อ**. `?contNo=` names the contract (optionally
+  /// `&dbName=` to disambiguate, and `&fromHost=true` so back closes the
+  /// WebView). URL-addressable rather than `extra`-carried because the host
+  /// deep-links it in a fresh WebView and a reload has to work — the same
+  /// shape `/topup/status` uses.
+  static const String loanDetail = '/loanDetail';
 }
 
 /// The app router.
@@ -249,6 +259,18 @@ final GoRouter appRouter = GoRouter(
     // everything they need in the query string precisely because they are
     // reachable without a flow (a link from the contract card, and a reload
     // after submitting).
+    // ── loan detail ────────────────────────────────────────────────────
+    GoRoute(
+      path: AppRoutes.loanDetail,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return LoanDetailPage(
+          contractNo: q['contNo'] ?? '',
+          dbName: q['dbName'] ?? '',
+          fromHost: q['fromHost'] == 'true',
+        );
+      },
+    ),
     GoRoute(
       path: AppRoutes.topupCard,
       builder: (context, state) {

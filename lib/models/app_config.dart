@@ -8,6 +8,7 @@
 library;
 
 import '../config/app_environment.dart';
+import 'comcode_config.dart';
 
 /// The `api_url` map plus the top-level keys this app cares about.
 class AppConfig {
@@ -17,6 +18,7 @@ class AppConfig {
     this.webVersionUat,
     this.topupProductIcons = const {},
     this.topupProductIconsUat = const {},
+    this.comcodeConfig = const ComcodeConfig(),
     String? ndidRequestType,
     String? ndidRequestTypeUat,
     String? ndidAsId,
@@ -58,6 +60,20 @@ class AppConfig {
 
   /// `sawad_loan_universal_version_uat` — same, for uat.
   final int? webVersionUat;
+
+  /// `comcode_config` — the per-company rules the **loan detail** screen reads
+  /// to decide whether to offer the contract document and whether to warn that
+  /// the promissory note may not have been issued. See [ComcodeConfig].
+  ///
+  /// Not environment-suffixed: it describes srisawad's companies, which are
+  /// the same set on both. A `comcode_config_uat` would still be picked up by
+  /// [envValue] if one is ever added.
+  final ComcodeConfig comcodeConfig;
+
+  /// `api_url['contract_url']` — the portal that serves a contract document
+  /// (คู่สัญญา) or a promissory-note request (คำขอออกตั๋ว). The loan detail
+  /// screen appends `/contract?contno=…&comcode=…`.
+  String? get contractUrl => urlFor('contract_url');
 
   /// Mobile-API base for the P-Loan / top-up calls.
   ///
@@ -239,6 +255,9 @@ class AppConfig {
           decoded['topup_product_icon_default']?.toString(),
       topupProductIconDefaultUat:
           decoded['topup_product_icon_default_uat']?.toString(),
+      comcodeConfig: ComcodeConfig.fromDecoded(
+        decoded['comcode_config_uat'] ?? decoded['comcode_config'],
+      ),
     );
   }
 
