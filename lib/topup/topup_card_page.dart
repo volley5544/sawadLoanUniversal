@@ -488,10 +488,16 @@ class _TopupContractCard extends StatelessWidget {
     final detail = contract.topupDetail;
     final specials = TopupFlow.specialLimitOf(contract);
 
-    // The M35 วงเงินพิเศษ is granted **on top of** the ordinary limit and is
-    // not included in it, so the headline has to add the two. The card shows
-    // only the combined figure; the amount screen breaks it back out.
-    final offered = detail.defaultTopupAmount + specials;
+    // ⚠ **`default_topup_amount` already includes `topup_extra`** (confirmed
+    // by the API team 2026-09-14), so the headline is that field alone. It
+    // used to add the two, which double-counted the uplift — the card offered
+    // 43,900 on a contract whose real ceiling is 38,900, and the amount screen
+    // then asked `/topup/recal` to price a figure it refuses.
+    //
+    // `specials` stays, but only to decide whether the offer *header* applies;
+    // the amount screen breaks the same total back out as
+    // `topup_actual + topup_extra`.
+    final offered = detail.defaultTopupAmount;
     final principal = contract.contractDetails.closingBalance;
     final duty = detail.feeAmount;
 

@@ -1910,6 +1910,8 @@ app, not in their arithmetic.
   -> is topup_extra"*), via `TopupFlow.specialLimitOf`. ⚠ **`topup_special_flag`
   is no longer the gate** — a non-zero amount is; that flag belonged to
   `topup_specials`, so requiring it would hide money the backend granted.
+  ⚠ **It is not added to anything** (2026-09-14) — `default_topup_amount`
+  already contains it. See the double-count note under **`POST /topup/recal`**.
   ⚠ **The same field is a P-Loan Extra's entire request amount**
   (`LoanAmountDetail.extraRequestAmount`): one number, two products. Nothing
   needs to reconcile them — the card's PLD001 tile leaves this flow — but don't
@@ -2013,8 +2015,10 @@ of the `_old` pair is that editing the redesign cannot change them. The
 Delete the original along with the `_old` pages.
 
 **The amount screen** (PDF pp.5–7, 9–11): contract block (no status pill), the
-M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` + `วงเงินพิเศษเพิ่มเติม
-+5,000.00` — the only figure on the screen that *adds*), the blue
+M35 pair when there is one (`ยอดจัดสินเชื่อเดิม` = `topup_actual`, +
+`วงเงินพิเศษเพิ่มเติม +5,000.00` = `topup_extra` — ⚠ the `+` marks a
+**breakdown of the bar below**, not an addition to it; the two sum *to*
+`default_topup_amount`), the blue
 **วงเงินสินเชื่อใหม่สูงสุด** bar, the orange **เงื่อนไข** note, the big
 borderless amount field, the **เลื่อนเพื่อปรับลดวงเงิน** slider, the two หัก
 rows and **เงินคงเหลือโอนเข้าบัญชี**.
@@ -2307,13 +2311,25 @@ blank is silence, not a refusal. `LoanAmountDetail.closingBalance` was added
 for the top-level field; it defaults to 0, so the P-Loan flow reading the
 nested block is untouched.
 
-⚠ **The M35 disagreement is not resolved by this.** `TopupFlow`
-`settlementPricingAmount` still strips the uplift before calling, because
-`/loan/list` grants `topup_extra` 5,000 on a contract whose recalculation
-reports `topup_extra` 0 and `max_topup_amount` 38,900 — asking for 43,900 is
-refused `400 topup_amount out of range`. Verified against the QA endpoint's own
-sample, which reports the same ceiling. **The customer is offered a limit the
-settlement is not priced at**; that needs a backend answer.
+✅ **There was never an M35 disagreement — the client was double-counting.**
+`default_topup_amount` **already includes `topup_extra`** (confirmed by the API
+team, 2026-09-14). `TopupFlow.applySpecialLimit` added the uplift on top of it
+and the card added it inline, so both screens offered `38,900 + 5,000 = 43,900`
+on a contract whose real ceiling is 38,900 — and `/topup/recal` refused to
+price it, `400 topup_amount out of range`. `/loan/list` and `/topup/recal` had
+been saying the same thing all along.
+
+- `applySpecialLimit` is now a **no-op**, kept so the call sites read as a
+  decision rather than an omission;
+- the card's headline is `default_topup_amount` alone;
+- `settlementPricingAmount` no longer subtracts the uplift back out — that
+  subtraction only made sense as a counterweight to the addition, and the two
+  must move together;
+- **ยอดจัดสินเชื่อเดิม is `topup_actual`**, not `default − extra`. The M35 pair
+  **decomposes** the bar above it rather than adding to it:
+  `topup_actual + topup_extra == default_topup_amount`. `TopupFlow.baseLimit`
+  falls back to the subtraction only for `/topup/detail`, which may not send
+  `topup_actual`.
 
 #### The lead fallback (`TopupApi.saveLead`)
 

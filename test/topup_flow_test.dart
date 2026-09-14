@@ -235,47 +235,65 @@ void main() {
           ..contract = contract
           ..amountDetail = mockAmountDetail('MOCK-M-6701001');
 
-    test('applySpecialLimit raises both the default and the ceiling', () {
+    // ⚠ Rewritten 2026-09-14. `applySpecialLimit` used to add `topup_extra`
+    // onto `default_topup_amount`, and these tests pinned that. The API team
+    // confirmed the field **already includes** the uplift, so the addition was
+    // a double-count: it offered 43,900 on a contract whose ceiling is 38,900,
+    // and `/topup/recal` refused to price it. The method is now a no-op and
+    // these pin that it stays one.
+    test('it no longer raises anything — the default already includes the '
+        'uplift', () {
       final flow = flowFor(withTopupDetail({'topup_extra': 5000}));
       final before = flow.amountDetail!;
       flow.applySpecialLimit();
       final after = flow.amountDetail!;
 
-      expect(after.defaultTopupAmount, before.defaultTopupAmount + 5000);
-      expect(after.maxTopupAmount, before.maxTopupAmount + 5000);
-      expect(after.topupSpecials, 5000);
+      expect(after.defaultTopupAmount, before.defaultTopupAmount);
+      expect(after.maxTopupAmount, before.maxTopupAmount);
     });
 
-    // The field changed on 2026-09-12: M35 is `topup_extra`. `topup_specials`
-    // was the source's pairing and must not quietly keep working, or a
-    // contract carrying both would be uplifted by the wrong number.
-    test('topup_specials alone no longer uplifts anything', () {
-      final flow = flowFor(
-          withTopupDetail({'topup_extra': 0, 'topup_specials': 5000}));
-      final before = flow.amountDetail!.defaultTopupAmount;
-      flow.applySpecialLimit();
-      expect(flow.amountDetail!.defaultTopupAmount, before);
+    test('the M35 pair decomposes the total rather than adding to it', () {
+      // topup_actual + topup_extra == default_topup_amount, which is what the
+      // amount screen renders as ยอดจัดสินเชื่อเดิม + วงเงินพิเศษเพิ่มเติม
+      // above the วงเงินสินเชื่อใหม่สูงสุด bar.
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = withTopupDetail({'topup_extra': 5000})
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'default_topup_amount': 38900,
+          'topup_actual': 33900,
+          'topup_extra': 5000,
+        });
+      expect(flow.baseLimit, 33900);
+      expect(flow.specialLimit, 5000);
+      expect(flow.baseLimit + flow.specialLimit,
+          flow.amountDetail!.defaultTopupAmount);
     });
 
-    // `topup_special_flag` belonged to `topup_specials`. Requiring it would
-    // hide a real `topup_extra` the backend granted.
-    test('a missing topup_special_flag does not withhold topup_extra', () {
-      final contract = LoanContract.fromJson({
-        ...withTopupDetail({'topup_extra': 5000}).rawJson,
-        'topup_special_flag': false,
-      });
-      expect(contract.topupSpecialFlag, isFalse);
-      final flow = flowFor(contract);
-      final before = flow.amountDetail!.defaultTopupAmount;
-      flow.applySpecialLimit();
-      expect(flow.amountDetail!.defaultTopupAmount, before + 5000);
+    test('the settlement is priced at the stated limit, not a derived one',
+        () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'default_topup_amount': 38900,
+          'topup_actual': 33900,
+          'topup_extra': 5000,
+        });
+      // 38,900 — the figure the endpoint itself states it will accept. Not
+      // 33,900 (the old workaround) and not 43,900 (the old double-count).
+      expect(flow.settlementPricingAmount, 38900);
     });
 
-    test('does nothing when there is no special limit', () {
-      final flow = flowFor(withTopupDetail({'topup_extra': 0}));
-      final before = flow.amountDetail!.defaultTopupAmount;
-      flow.applySpecialLimit();
-      expect(flow.amountDetail!.defaultTopupAmount, before);
+    test('baseLimit falls back to default − extra when topup_actual is absent',
+        () {
+      // `/topup/detail` — the `_old` page and P-Loan — may not send it.
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'default_topup_amount': 38900,
+          'topup_extra': 5000,
+        });
+      expect(flow.baseLimit, 33900);
     });
   });
 

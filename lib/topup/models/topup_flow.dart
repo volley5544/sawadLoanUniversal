@@ -135,53 +135,64 @@ class TopupFlow {
 
   // ── Derived: amounts ─────────────────────────────────────────────────
 
-  /// Folds the contract's special limit into [amountDetail].
+  /// ~~Folds the contract's special limit into [amountDetail].~~
+  /// **Now a no-op, kept so the call sites read as a deliberate decision.**
   ///
-  /// `topup_special_flag` on the contract means the customer has been granted
-  /// `topup_specials` on top of the ordinary limit, and `/topup/detail` does
-  /// **not** include it — so both the default and the ceiling have to be
-  /// raised here or the extra limit is offered nowhere.
+  /// ⚠ **`default_topup_amount` already includes `topup_extra`** (confirmed by
+  /// the API team, 2026-09-14). Adding the uplift on top of it — which this
+  /// did, and which the card still did inline — **double-counted** it: on
+  /// `MLOAN`/`1สM681102002NF63C` the screens offered `38,900 + 5,000 = 43,900`
+  /// against a real ceiling of 38,900, and `POST /topup/recal` refused to
+  /// price it with `400 topup_amount out of range`.
+  ///
+  /// That, not a disagreement between two endpoints, is what hid the
+  /// ยอดที่ต้องชำระเพื่อเติมวงเงิน section for two days. `/loan/list` and
+  /// `/topup/recal` were saying the same thing all along; the client was
+  /// adding a number that was already in the total.
+  ///
+  /// The uplift is still **shown**, as the breakdown of a sum rather than an
+  /// addition to it: `topup_actual` + `topup_extra` = `default_topup_amount`.
+  /// See the M35 pair on the amount screen.
   void applySpecialLimit() {
-    final detail = amountDetail;
-    final contract = this.contract;
-    if (detail == null || contract == null) return;
-    final specials = specialLimitOf(contract);
-    if (specials <= 0) return;
-    amountDetail = detail.copyWith(
-      topupSpecials: specials,
-      defaultTopupAmount: detail.defaultTopupAmount + specials,
-      maxTopupAmount: detail.maxTopupAmount + specials,
-    );
+    // Deliberately empty. Restoring the addition would re-break the ceiling.
   }
 
-  /// The amount `POST /GetRecalTopupData` is asked to price the settlement at:
-  /// the contract's **own** default limit, before [applySpecialLimit] folds the
-  /// M35 uplift in.
+  /// The amount `POST /topup/recal` is asked to price the settlement at: the
+  /// limit the endpoint itself states, which is [LoanAmountDetail.defaultTopupAmount].
   ///
-  /// ⚠ **Deliberately not [requestedAmount]**, even though the settlement is
-  /// priced per `topup_amount` (instructed 2026-09-13). The two endpoints
-  /// disagree about this contract's ceiling: `/loan/list` grants
-  /// `topup_extra` 5,000 on top of 38,900, while `GetRecalTopupData` reports
-  /// `topup_extra` 0 and `max_topup_amount` 38,900 — so asking it to price the
-  /// 43,900 the screen offers is refused outright with
-  /// `400 topup_amount out of range`, and the customer sees no settlement at
-  /// all rather than a slightly differently-priced one.
+  /// ⚠ This used to subtract [LoanAmountDetail.topupSpecials] back out, as a
+  /// workaround for the double-count [applySpecialLimit] introduced — the
+  /// screen offered 43,900 against a real ceiling of 38,900 and the endpoint
+  /// refused it. With the double-count gone the subtraction would take the
+  /// uplift off a figure that is supposed to contain it, so it has been
+  /// removed. The two must move together; do not restore one without the
+  /// other.
+  int get settlementPricingAmount =>
+      amountDetail?.defaultTopupAmount ?? requestedAmount;
+
+  /// **ยอดจัดสินเชื่อเดิม** — the limit before the M35 uplift, i.e.
+  /// `topup_actual` as the API states it.
   ///
-  /// Subtracting [LoanAmountDetail.topupSpecials] rather than re-reading
-  /// `/topup/detail` is what makes this work **after** the uplift has been
-  /// applied — `amountDetail.defaultTopupAmount` is itself already raised by
-  /// then, so quoting it directly would change nothing.
-  ///
-  /// ⚠ The settlement shown is therefore priced for the base limit, not for
-  /// what the customer asked for. Acceptable only because these rows are
-  /// arrears on the **old** contract — interest, fees, penalties — which is
-  /// what the customer must clear either way. Revisit this if the breakdown
-  /// ever carries a figure that genuinely scales with the new loan.
-  int get settlementPricingAmount {
+  /// ⚠ Not `defaultTopupAmount − specialLimit`. That derivation was only ever
+  /// correct while the client double-counted the uplift into the default; see
+  /// [applySpecialLimit]. Taking the API's own field cannot drift.
+  int get baseLimit {
     final detail = amountDetail;
-    if (detail == null) return requestedAmount;
-    final base = detail.defaultTopupAmount - detail.topupSpecials;
-    return base > 0 ? base : detail.defaultTopupAmount;
+    if (detail == null) return 0;
+    if (detail.topupActual > 0) return detail.topupActual;
+    // `/topup/detail` (the `_old` page, P-Loan) may not send it.
+    final derived = detail.defaultTopupAmount - specialLimit;
+    return derived > 0 ? derived : detail.defaultTopupAmount;
+  }
+
+  /// **วงเงินพิเศษเพิ่มเติม** — `topup_extra`, preferring the amount response's
+  /// own value over `/loan/list`'s so the pair always decomposes the bar it
+  /// sits above.
+  int get specialLimit {
+    final fromDetail = amountDetail?.topupExtra ?? 0;
+    if (fromDetail > 0) return fromDetail;
+    final c = contract;
+    return c == null ? 0 : specialLimitOf(c);
   }
 
   /// **The M35 วงเงินพิเศษ on [contract] — `topup_extra`.**

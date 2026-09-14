@@ -485,7 +485,16 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
           // The uplift is broken back out only here. The card shows one
           // combined figure; this screen has to explain where it came from,
           // because the customer is about to choose a number inside it.
-          if (detail.topupSpecials > 0)
+          //
+          // ⚠ These two rows **decompose** the bar below them, they do not add
+          // to it: `default_topup_amount` already contains `topup_extra`
+          // (confirmed 2026-09-14), so
+          // `topup_actual + topup_extra == defaultTopupAmount`. Reading the
+          // base as `default − extra` gave the same answer only while the
+          // client was also double-counting the uplift into the default; now
+          // it would subtract it twice. `topup_actual` is the base the API
+          // states, so take it rather than deriving it.
+          if (_flow.specialLimit > 0)
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: LoanRegisterStyles.padding),
@@ -494,8 +503,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                 children: [
                   TopupStackedFigure(
                     label: 'ยอดจัดสินเชื่อเดิม',
-                    value: formatTopupMoney(
-                        detail.defaultTopupAmount - detail.topupSpecials),
+                    value: formatTopupMoney(_flow.baseLimit),
                   ),
                   const SizedBox(height: 10),
                   TopupStackedFigure(
@@ -506,7 +514,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                     // as two readings of the same kind, and colouring one of
                     // them made the uplift look like a separate offer instead
                     // of a term of the sum above the bar.
-                    value: '+${formatTopupMoney(detail.topupSpecials)}',
+                    value: '+${formatTopupMoney(_flow.specialLimit)}',
                   ),
                   const SizedBox(height: 12),
                 ],

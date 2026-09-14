@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
-import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 import 'package:sawad_loan_universal/topup/models/topup_settlement.dart';
 
 /// The supplied sample body (`etc/new_topup_api.txt`), trimmed to the fields
@@ -245,35 +244,40 @@ void main() {
     });
   });
 
-  group('settlementPricingAmount — what the breakdown is priced at', () {
-    test('strips the M35 uplift, so the endpoint is not asked for more than '
-        'it allows', () {
-      // Exactly the MLOAN case: /topup/detail offers 38,900 and the contract
-      // grants topup_extra 5,000 on top, so the screen shows 43,900 — which
-      // GetRecalTopupData refuses with 400 topup_amount out of range.
-      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..amountDetail = const LoanAmountDetail(
-          code: '200',
-          defaultTopupAmount: 43900,
-          topupSpecials: 5000,
-        )
-        ..requestedAmount = 43900;
-      expect(flow.settlementPricingAmount, 38900);
-    });
+  // ⚠ `settlementPricingAmount` moved to test/topup_flow_test.dart on
+  // 2026-09-14, and its expectation inverted. It used to subtract the M35
+  // uplift back out, because the client had added it onto a
+  // `default_topup_amount` that already contained it — a double-count that
+  // made the endpoint refuse the amount. With the addition gone the
+  // subtraction had to go too; the pair only ever made sense together.
 
-    test('no uplift → the default limit, unchanged', () {
-      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..amountDetail = const LoanAmountDetail(
-          code: '200',
-          defaultTopupAmount: 88500,
-        )
-        ..requestedAmount = 70000;
-      expect(flow.settlementPricingAmount, 88500);
-    });
+  // The old test host wanted a shared `Basic` service account, and a test
+  // pinned that it never shipped. `POST /topup/recal` authenticates with the
+  // customer's own bearer instead, so there is no credential left to pin —
+  // which is why that test is gone rather than relaxed.
 
-    test('no detail yet → falls back to the requested amount', () {
-      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')..requestedAmount = 12000;
-      expect(flow.settlementPricingAmount, 12000);
+  group('POST /topup/recal — the QA endpoint that replaced /topup/detail', () {
+    // The supplied sample (etc/recal_api.txt) is FLAT: no `results` wrapper,
+    // unlike the retired GetRecalTopupData test host. One body has to satisfy
+    // both models, since fetchRecal parses it twice.
+    test('one flat body feeds both LoanAmountDetail and TopupRecalculation',
+        () {
+      final body = _qaRecalResponse();
+      final detail = LoanAmountDetail.fromJson(body);
+      final recal = TopupRecalculation.fromJson(body);
+
+      expect(detail.isOk, isTrue);
+      expect(detail.defaultTopupAmount, 38900);
+      expect(detail.maxTopupAmount, 38900);
+      expect(detail.minTopupAmount, 16400);
+      expect(detail.interestRate, 1.09);
+      expect(detail.feeAmount, 20);
+
+      expect(recal.hasSettlement, isTrue);
+      expect(recal.settlementItems.single.description, 'ดอกเบี้ย');
+      expect(recal.settlementTotalAmount, 21);
+      expect(recal.itemsSumMatchesTotal, isTrue);
     });
   });
+
 }
