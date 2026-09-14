@@ -44,6 +44,7 @@ class LoanAmountDetail {
     this.interestPaidFlag = '',
     this.interestYield = 0,
     this.topupSpecials = 0,
+    this.closingBalance = 0,
   });
 
   /// `'200'` on success; anything else means [message] should be shown and the
@@ -103,6 +104,16 @@ class LoanAmountDetail {
   /// ⚠ **Decimal**, for the same reason as [collectionFee].
   final double interestYield;
   final int topupSpecials;
+
+  /// Top-level `closing_balance` — the outstanding principal on the contract.
+  ///
+  /// ⚠ Added 2026-09-14 for **`POST /topup/recal`**, whose nested
+  /// `contract_details` block comes back entirely blank while every real
+  /// figure sits at the top level. `GET /topup/detail` populates the nested
+  /// one instead, so both are read — see `TopupFlow.closingBalance`, which
+  /// falls through them in order. Defaults to 0, so the P-Loan flow (which
+  /// still calls `/topup/detail` and reads the nested block) is unaffected.
+  final double closingBalance;
 
   bool get isOk => code == '200';
 
@@ -189,6 +200,7 @@ class LoanAmountDetail {
         interestPaidFlag: asString(json['interest_paid_flag']),
         interestYield: asDouble(json['yield']),
         topupSpecials: asInt(json['topup_specials']),
+        closingBalance: asDouble(json['closing_balance']),
       );
 
   // There is deliberately no `fromContract` seed for a new P-Loan. One existed
@@ -249,5 +261,6 @@ class LoanAmountDetail {
         interestPaidFlag: interestPaidFlag,
         interestYield: interestYield,
         topupSpecials: topupSpecials ?? this.topupSpecials,
+        closingBalance: closingBalance,
       );
 }

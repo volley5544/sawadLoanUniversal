@@ -2288,6 +2288,25 @@ should come out**: `http://34.142.213.42:8080/` in
 released). That is the removal checklist Outstanding #33 always carried; the
 condition for it has now been met.
 
+⚠ **`/topup/recal` sends `contract_details` and `car_details` entirely
+blank** — every real figure is at the **top level**, where `/topup/detail`
+populated the nested block. Four top-up reads depended on the nested one and
+broke the moment the flow switched (all fixed 2026-09-14, each with a test):
+
+| Reader | What a blank block did |
+| --- | --- |
+| `TopupFlow.outcome` → `can_topup` | `''` → **every contract filed a lead** |
+| `TopupFlow.closingBalance` | **0** → payout overstated by the whole principal, on screen *and* in `transfer_amount` |
+| amount screen `collateralInformation` | an empty line under the contract number |
+| `topup_submission` `credit_limit` | **0** filed on every top-up |
+
+Each now falls through to `/loan/list`'s copy, which the flow already holds.
+⚠ **`can_topup` checks the detail first and the contract second**, not the
+reverse: a refusal arriving *after* the list said `Y` still has to stand —
+blank is silence, not a refusal. `LoanAmountDetail.closingBalance` was added
+for the top-level field; it defaults to 0, so the P-Loan flow reading the
+nested block is untouched.
+
 ⚠ **The M35 disagreement is not resolved by this.** `TopupFlow`
 `settlementPricingAmount` still strips the uplift before calling, because
 `/loan/list` grants `topup_extra` 5,000 on a contract whose recalculation

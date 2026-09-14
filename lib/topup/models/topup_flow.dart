@@ -225,8 +225,23 @@ class TopupFlow {
   /// Outstanding principal on the contract being replaced.
   ///
   /// `double` since 2026-09-12 — see [ContractDetails.closingBalance].
-  double get closingBalance =>
-      amountDetail?.contractDetails.closingBalance ?? 0;
+  ///
+  /// ⚠ **Three sources, in this order, because `POST /topup/recal` sends its
+  /// `contract_details` block entirely blank** (verified against the QA sample,
+  /// 2026-09-14): every real figure is at the **top level** there, while
+  /// `GET /topup/detail` populated the nested block. Reading only the nested
+  /// one made this **0** the moment the top-up flow switched endpoints — which
+  /// does not look like an error, it looks like a payout larger by the whole
+  /// outstanding principal, on screen *and* in `transfer_amount` on the submit
+  /// body.
+  double get closingBalance {
+    final top = amountDetail?.closingBalance ?? 0;
+    if (top > 0) return top;
+    final nested = amountDetail?.contractDetails.closingBalance ?? 0;
+    if (nested > 0) return nested;
+    // `/loan/list`'s copy is as of its `data_date`, so it is the last resort.
+    return contract?.contractDetails.closingBalance ?? 0;
+  }
 
   /// Accrued interest, counted only when it has not already been settled.
   ///
@@ -403,12 +418,32 @@ class TopupFlow {
   TopupOutcome get outcome {
     if (hasUnpaidInterest) return TopupOutcome.payInterest;
     final typeCode = contract?.contractDetails.loanTypeCode ?? '';
-    final canTopup = amountDetail?.contractDetails.canTopup ?? '';
+    // ⚠ **`can_topup` falls back to `/loan/list`** (instructed 2026-09-14).
+    // `POST /topup/recal` sends `contract_details` blank, so reading only that
+    // gave `''` for every contract — and `'' != 'Y'` sent *every* one of them
+    // down the lead branch, which reads as a backend refusal rather than as a
+    // missing field.
+    //
+    // ⚠ The order is **detail first, list second**, not the other way round,
+    // and that is deliberate: a refusal arriving *after* the list said `Y` has
+    // to stand, which is the whole point of re-checking it here. Blank is not
+    // a refusal — it is silence — so it defers to the contract. On the recal
+    // endpoint that makes the list the effective source, which is what was
+    // asked for, without discarding a real `N` from `/topup/detail` (still the
+    // path `_old` and P-Loan take).
+    final canTopup = _firstNonEmpty([
+      amountDetail?.contractDetails.canTopup,
+      contract?.topupDetail.canTopup,
+    ]);
     if (typeCode == 'L' || typeCode == 'H') return TopupOutcome.lead;
     if (canTopup != 'Y') return TopupOutcome.lead;
     if (netTransferAmount > maxTransferAmount) return TopupOutcome.lead;
     return TopupOutcome.topup;
   }
+
+  static String _firstNonEmpty(List<String?> values) =>
+      values.firstWhere((v) => v != null && v.isNotEmpty, orElse: () => '') ??
+      '';
 
   /// Label for that button, so the screen never has to restate the rule.
   String get primaryActionLabel => switch (outcome) {

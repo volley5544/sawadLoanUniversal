@@ -470,8 +470,13 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
               loanTypeCode: contract.contractDetails.loanTypeCode,
               loanTypeName: contract.contractDetails.loanTypeName,
               contractNo: detail.contractNo,
+              // ⚠ From the contract, not the amount detail: `/topup/recal`
+              // sends its `contract_details` block blank, so reading it there
+              // renders an empty line under the contract number.
               collateralInformation:
-                  detail.contractDetails.collateralInformation,
+                  contract.contractDetails.collateralInformation.isNotEmpty
+                      ? contract.contractDetails.collateralInformation
+                      : detail.contractDetails.collateralInformation,
               // No status pill here. The card already showed it, and by this
               // screen the customer has acted on it.
             ),

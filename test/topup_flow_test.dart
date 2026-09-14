@@ -103,6 +103,59 @@ TopupFlow _submittableFlow() {
 }
 
 void main() {
+  group('a blank contract_details block cannot change the outcome', () {
+    // `POST /topup/recal` (2026-09-14) sends `contract_details` and
+    // `car_details` entirely blank — every real figure is at the top level.
+    // Reading the nested block for can_topup sent EVERY contract down the lead
+    // branch, and reading it for closing_balance overstated the payout by the
+    // whole outstanding principal. Both now fall through to `/loan/list`.
+    LoanAmountDetail recalShaped() => LoanAmountDetail.fromJson({
+          'code': '200',
+          'default_topup_amount': 38900,
+          'max_topup_amount': 38900,
+          'min_topup_amount': 16400,
+          'interest_rate': 1.09,
+          'fee_amount': 20,
+          // top level, as the recal endpoint sends it
+          'closing_balance': 16124,
+          'interest_paid_flag': '',
+          // ...and a blank nested block, as it also sends
+          'contract_details': <String, dynamic>{
+            'can_topup': '',
+            'closing_balance': 0,
+            'credit_limit': 0,
+          },
+        });
+
+    test('can_topup comes from the contract, so the outcome is not lead', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = mockContracts().first
+        ..amountDetail = recalShaped();
+      expect(flow.contract!.topupDetail.canTopup, 'Y',
+          reason: 'fixture precondition');
+      expect(flow.outcome, isNot(TopupOutcome.lead));
+    });
+
+    test('an explicit N still refuses — blank defers, a refusal does not', () {
+      // The ordering that makes both true: /topup/recal's silence falls back
+      // to the list, while a real `N` from /topup/detail still files a lead.
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = mockContracts().first
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'contract_details': <String, dynamic>{'can_topup': 'N'},
+        });
+      expect(flow.outcome, TopupOutcome.lead);
+    });
+
+    test('closing balance is read from the top level, not the blank block', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = mockContracts().first
+        ..amountDetail = recalShaped();
+      expect(flow.closingBalance, 16124);
+    });
+  });
+
   group('payout — a top-up is not a P-Loan Extra', () {
     test('payoutAmount deducts the old principal and the duty', () {
       final flow = _flowFor('MOCK-C-6701002');

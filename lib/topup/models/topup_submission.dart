@@ -81,7 +81,13 @@ class TopupSubmission {
       'interest_rate': flow.plan?.interestRate ?? detail.interestRate,
       'interest_amount': installment.intAmt,
       'total_amount': installment.totalAmt,
-      'credit_limit': detail.contractDetails.creditLimit,
+      // ⚠ From the contract, not the amount detail: `/topup/recal` sends its
+      // `contract_details` block blank, so this filed 0 for every top-up the
+      // moment the flow switched endpoints (2026-09-14).
+      'credit_limit': flow.contract?.contractDetails.creditLimit != null &&
+              flow.contract!.contractDetails.creditLimit > 0
+          ? flow.contract!.contractDetails.creditLimit
+          : detail.contractDetails.creditLimit,
       'term_period': installment.tenor,
       'regular_period': installment.regularPeriodAmt,
       'last_period': installment.lastPeriodAmt,
