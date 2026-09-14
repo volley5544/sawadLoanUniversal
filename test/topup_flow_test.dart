@@ -12,6 +12,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart'
 import 'package:sawad_loan_universal/p_loan/application/p_loan_topup_card_resume_page.dart';
 import 'package:sawad_loan_universal/topup/models/topup_card_variant.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
+import 'package:sawad_loan_universal/services/external_url.dart';
 import 'package:sawad_loan_universal/services/firebase_storage_rest.dart';
 import 'package:sawad_loan_universal/topup/models/topup_photo.dart';
 import 'package:sawad_loan_universal/topup/models/topup_purpose.dart';
@@ -1064,6 +1065,48 @@ void main() {
       final flow = TopupFlow(hashThaiId: 'HASH', authToken: 'T');
       flow.setPhoto(TopupPhoto.taxDisc, Uint8List(0));
       expect(flow.hasPhoto(TopupPhoto.taxDisc), isFalse);
+    });
+  });
+
+  group('the application-status URL', () {
+    test('carries the token as a FRAGMENT, never a query parameter', () {
+      // ⚠ A security property, not a style choice: fragments are never sent to
+      // the server, so the JWT stays out of web-server access logs and out of
+      // the Referer of anything that page loads. `?token=` would leak a live
+      // credential into logs this app does not control.
+      final url = applicationStatusUrl(
+        base: 'https://dev.swpfin.com:5179/status',
+        hashThaiId: 'HASH123',
+        token: 'JWT.ABC',
+      );
+      expect(url, 'https://dev.swpfin.com:5179/status/HASH123#token=JWT.ABC');
+      expect(url, isNot(contains('?token=')));
+      expect(url.split('#').first, isNot(contains('JWT')));
+    });
+
+    test('strips trailing slashes so the path cannot double up', () {
+      expect(
+        applicationStatusUrl(
+            base: 'https://x/status//', hashThaiId: 'H', token: 'T'),
+        'https://x/status/H#token=T',
+      );
+    });
+
+    test('omits the fragment entirely when there is no token', () {
+      // A bare `#token=` would claim a credential we do not have; the status
+      // site can ask the customer to sign in instead.
+      expect(
+        applicationStatusUrl(base: 'https://x/status', hashThaiId: 'H', token: ''),
+        'https://x/status/H',
+      );
+    });
+
+    test('percent-encodes the hash rather than pasting it into the path', () {
+      expect(
+        applicationStatusUrl(
+            base: 'https://x/status', hashThaiId: 'a/b', token: 'T'),
+        'https://x/status/a%2Fb#token=T',
+      );
     });
   });
 }

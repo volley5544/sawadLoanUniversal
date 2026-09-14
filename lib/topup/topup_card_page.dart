@@ -10,6 +10,7 @@ import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../router/app_router.dart';
+import '../services/external_url.dart';
 import '../services/native_bridge.dart';
 import '../services/srisawad_api.dart';
 import '../services/topup_api.dart';
@@ -144,16 +145,19 @@ class _TopupCardPageState extends State<TopupCardPage> {
   }
 
   /// Opens the status of the request already filed against [contract].
+  /// **ดูสถานะคำขอ** — opens the application-status **web page** in the host's
+  /// in-app browser, not this build's own `/topup/status` screen.
+  ///
+  /// Changed 2026-09-14 to match LandAndHouseWeb's ดูสถานะการขอเพิ่มวงเงิน and
+  /// the srisawad app's ติดตามสถานะ menu item: one status page, tracking every
+  /// application a customer has, rather than three clients each rendering
+  /// their own view of one request.
+  ///
+  /// [contract] is no longer read — the status page is keyed on the customer,
+  /// not on a single contract — but the parameter stays so the call sites keep
+  /// their shape and `/topup/status` remains a one-line revert away.
   void _openStatus(LoanContract contract) {
-    context.push(
-      Uri(
-        path: AppRoutes.topupStatus,
-        queryParameters: {
-          'dbName': contract.dbName,
-          'transNo': contract.transNo,
-        },
-      ).toString(),
-    );
+    openApplicationStatus(context);
   }
 
   /// **สิทธิพิเศษเฉพาะคุณ is hidden** (2026-09-12, on request — "for now").

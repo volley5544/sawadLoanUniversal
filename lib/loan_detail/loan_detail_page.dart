@@ -42,6 +42,7 @@ import '../loan_payment/models/loan_payment_seed.dart';
 import '../router/app_router.dart';
 import '../services/app_config_api.dart';
 import '../services/diagnostics.dart';
+import '../services/external_url.dart';
 import '../services/loan_detail_api.dart';
 import '../services/native_bridge.dart';
 import '../services/p_loan_api.dart';
@@ -559,24 +560,6 @@ class _BottomBarButton extends StatelessWidget {
           ),
         ),
       );
-}
-
-/// Opens [url] outside this WebView, reporting the three outcomes the bridge
-/// distinguishes.
-///
-/// Shared with [InsuranceListPage]'s ดาวน์โหลด button. `null` from the bridge
-/// means the **host has no handler** — an app build predating it — which is a
-/// different message from a failure: telling a customer on a current app to
-/// update it is worse than saying nothing useful at all.
-Future<void> openExternalDocument(BuildContext context, String url) async {
-  final opened = await NativeCameraBridge.openExternalUrl(url);
-  if (opened == true || !context.mounted) return;
-  final message = opened == null
-      ? 'เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร กรุณาอัปเดตแอป'
-      : 'ไม่สามารถเปิดเอกสารได้ กรุณาลองใหม่อีกครั้ง';
-  Diagnostics.log('openExternalUrl ${opened == null ? 'unsupported' : 'failed'}');
-  ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(message)));
 }
 
 // ── tab bodies ────────────────────────────────────────────────────────

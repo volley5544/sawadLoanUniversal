@@ -18,7 +18,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../router/app_router.dart';
 import 'components/loan_detail_components.dart';
-import 'loan_detail_page.dart' show openExternalDocument;
+import '../services/external_url.dart';
 
 class InsuranceListPage extends StatelessWidget {
   const InsuranceListPage({super.key, required this.insurances});

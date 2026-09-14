@@ -6,7 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../loan_register/components/env_version_tag.dart';
 import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
+import '../app_state.dart';
 import '../router/app_router.dart';
+import '../services/external_url.dart';
 import '../services/native_bridge.dart';
 import 'models/topup_flow.dart';
 
@@ -46,11 +48,16 @@ class TopupSuccessPage extends StatelessWidget {
 
   bool get _isLead => kind == TopupSuccessKind.lead;
 
-  /// The status screen needs both a `db_name` and a `trans_no`. A reload
-  /// lands here with no flow, so the button is offered only when both are
-  /// actually available rather than opening a screen that can only error.
-  bool get _canTrack =>
-      transNo.isNotEmpty && (flow?.contract?.dbName ?? '').isNotEmpty;
+  /// Whether ดูสถานะการขอเพิ่มวงเงิน is offered.
+  ///
+  /// It opens the **status web page**, which is keyed on the customer rather
+  /// than on one request — so the old `db_name` + `trans_no` requirement is
+  /// gone and only a `hashThaiId` is needed. A reload lands here with no flow
+  /// but `AppState` keeps the launch params, so the button survives one.
+  ///
+  /// ⚠ Still gated rather than always shown: without a `hashThaiId` the URL
+  /// would be `<base>/` and open a page that cannot know who is asking.
+  bool get _canTrack => AppState().hashThaiId.trim().isNotEmpty;
 
   /// The quote's expiry date, from the **server's** clock on the contract
   /// rather than the device's.
@@ -149,17 +156,11 @@ class TopupSuccessPage extends StatelessWidget {
                           height: 56,
                           width: double.infinity,
                           child: ElevatedButton(
+                            // Opens the application-status **web page** in the
+                            // host's in-app browser, matching LandAndHouseWeb's
+                            // button of the same name (changed 2026-09-14).
                             onPressed: _canTrack
-                                ? () => context.push(
-                                      Uri(
-                                        path: AppRoutes.topupStatus,
-                                        queryParameters: {
-                                          'dbName':
-                                              flow?.contract?.dbName ?? '',
-                                          'transNo': transNo,
-                                        },
-                                      ).toString(),
-                                    )
+                                ? () => openApplicationStatus(context)
                                 : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: LoanRegisterStyles.primary,

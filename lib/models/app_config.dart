@@ -82,6 +82,11 @@ class AppConfig {
   /// button rather than offering a payment path nobody has turned on.
   final bool isShowPayButton;
 
+  /// `api_url['check_application_status']` — the web page that tracks a filed
+  /// request, opened by the top-up flow's status buttons. See
+  /// `services/external_url.dart`.
+  String? get checkApplicationStatus => urlFor('check_application_status');
+
   /// `api_url['contract_url']` — the portal that serves a contract document
   /// (คู่สัญญา) or a promissory-note request (คำขอออกตั๋ว). The loan detail
   /// screen appends `/contract?contno=…&comcode=…`.

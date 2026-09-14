@@ -1533,6 +1533,7 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles | both (`…_uat` overrides) |
 | `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
 | `api_url.contract_url` | `https://pt.swpfin.com/portal` | the loan detail screen's คู่สัญญา / คำขอออกตั๋ว button |
+| `api_url.check_application_status` | `https://dev.swpfin.com:5179/status` | the top-up flow's two status buttons |
 | `comcode_config` | *(map)* | the loan detail screen's two visibility rules — see **Loan detail** |
 | `is_show_payButton` | `true` | whether the loan detail screen offers **ชำระเงิน**. ⚠ Defaults to false when absent |
 
@@ -2114,6 +2115,36 @@ would otherwise show **ถัดไป** gets the design's **ชำระเง�
 **ปรับปรุงยอดชำระ** pair instead. It never downgrades — a lead contract stays a
 lead however the settlement reads, and unpaid interest still blocks with no
 rows on screen.
+
+#### The status buttons open a web page, not a screen in this build
+
+**ดูสถานะคำขอ** on the contract card and **ดูสถานะการขอเพิ่มวงเงิน** on the
+success screen both open
+`<check_application_status>/<hashThaiId>#token=<jwt>` in the host's in-app
+browser (changed 2026-09-14). That is the destination LandAndHouseWeb's button
+of the same name uses, and the srisawad app's own ติดตามสถานะ menu item: one
+status page tracking every application a customer has, rather than three
+clients each rendering their own view of one request.
+
+⚠ **The token is a URL fragment, not a query parameter, and that is a security
+property.** Fragments are never sent to the server, so the JWT stays out of
+web-server access logs and out of the `Referer` of anything that page
+subsequently loads. `?token=` would leak a live credential into logs this app
+does not control. A test pins it, including that the pre-`#` half of the URL
+contains no token at all.
+
+The bearer is re-resolved through `AuthToken` rather than taken from the launch
+param — a top-up routinely outlives the hour a Firebase ID token is good for,
+and a stale one sends the customer to a page that cannot load.
+
+⚠ It needs the host's `openExternalUrl` handler **and** its allowlist:
+`https://dev.swpfin.com:5179/` was added alongside the contract portal, so this
+needs the same app release as Outstanding #34. Until one ships, both buttons
+report `เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร`.
+
+⚠ **`/topup/status` is now unreachable from inside this build** but is kept:
+it is URL-addressable, reload-safe, and the revert is one line in
+`_openStatus`. Don't delete it as dead code.
 
 #### The contract card has three headers
 
