@@ -138,7 +138,7 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 347 tests (models, payloads, headers, NDID terms +
+flutter test               # 354 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard, the top-up flow's
@@ -1758,7 +1758,7 @@ Screens (`TopupStepIndicator` counts 1–7):
 | # | Page | Title | Calls |
 | --- | --- | --- | --- |
 | 1 | `topup_card_page` | **เติมวงเงิน** | `/user/detail`, `/loan/list` |
-| 2 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `/topup/detail`, `/topup/calculator` |
+| 2 | `topup_amount_page` | ยอดสินเชื่อที่ต้องการ | `POST /topup/recal`, `/topup/calculator` |
 | 3 | `topup_installment_page` | เลือกจำนวนงวด | — |
 | 4 | `topup_photos_page` | **ข้อมูลการต่อภาษี** | `image_picker` (**not** the bridge — see below) |
 | 5 | `topup_customer_data_page` | ตรวจสอบข้อมูลส่วนตัว | `/profile/address/{hash}` |
@@ -1926,7 +1926,7 @@ payout, the contract block with a `ข้อมูลสถานะ` pill, a do
 
 ⚠ **The payout is computed, not read from `default_transfer_amount`.** That
 field arrives **without the duty taken off** — verified against the
-`GetRecalTopupData` sample: `88,500 − 86,217.08 = 2,282.92`, no fee. Three rows
+recalculation sample: `88,500 − 86,217.08 = 2,282.92`, no fee. Three rows
 above a total that disagrees with them is worse than either number alone, and
 the computed value is the same formula `TopupFlow.payoutAmount` files as
 `transfer_amount`. The band and the strip quote the **same** figure on purpose:

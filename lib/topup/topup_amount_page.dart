@@ -50,11 +50,12 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   bool _recalculating = false;
 
   /// The **ยอดที่ต้องชำระเพื่อเติมวงเงิน** breakdown from
-  /// `POST /GetRecalTopupData`, re-read whenever the amount is re-priced.
+  /// `POST /topup/recal`, re-read whenever the amount is re-priced.
   ///
-  /// Null means *no section* — and every way of getting null renders the same
-  /// screen: an unconfigured build, an unreachable gateway, or a contract with
-  /// nothing outstanding. That is deliberate; see [TopupApi.recalculate].
+  /// Null means *no section* — a response with no `settlement_items`, or a
+  /// re-read that failed. The two render the same screen deliberately; see
+  /// [TopupApi.fetchRecal] and [_settlementDebugNotice], which is what tells a
+  /// tester which of them happened.
   TopupRecalculation? _recal;
 
   /// True while a settlement read is in flight — i.e. while [_recal] is null

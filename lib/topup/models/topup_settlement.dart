@@ -1,4 +1,4 @@
-/// Models for `POST /GetRecalTopupData` — the recalculation behind the
+/// Models for `POST /topup/recal` — the recalculation behind the
 /// **ยอดที่ต้องชำระเพื่อเติมวงเงิน** block on the amount screen.
 ///
 /// The response is a superset of `GET /topup/detail`: the same limits and
@@ -55,7 +55,7 @@ class TopupSettlementItem {
       );
 }
 
-/// `POST /GetRecalTopupData` — the parts `/topup/detail` does not carry.
+/// `POST /topup/recal` — the parts `/topup/detail` does not carry.
 class TopupRecalculation {
   const TopupRecalculation({
     this.code = '',

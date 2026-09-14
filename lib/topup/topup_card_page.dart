@@ -503,7 +503,7 @@ class _TopupContractCard extends StatelessWidget {
 
     // Computed rather than read from `default_transfer_amount`, which the API
     // sends **without** the duty taken off (verified against the
-    // GetRecalTopupData sample: 88,500 − 86,217.08 = 2,282.92, no fee). Three
+    // recalculation sample: 88,500 − 86,217.08 = 2,282.92, no fee). Three
     // rows and a total that disagrees with them is worse than either number
     // alone, and this is the same formula TopupFlow.payoutAmount files as
     // `transfer_amount`.
