@@ -296,6 +296,10 @@ class LoanPaymentAmountField extends StatelessWidget {
 }
 
 /// The sticky ชำระเงิน button. Null [onPressed] renders it disabled.
+///
+/// Orange, matching the ชำระเงิน button in the loan detail screen's bottom bar
+/// that leads here — the two are the same action one screen apart, so they
+/// read as one control rather than two.
 class LoanPaymentPrimaryButton extends StatelessWidget {
   const LoanPaymentPrimaryButton({
     super.key,
@@ -312,9 +316,9 @@ class LoanPaymentPrimaryButton extends StatelessWidget {
         child: ElevatedButton(
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
-            backgroundColor: LoanDetailPalette.navy,
+            backgroundColor: LoanDetailPalette.contractButtonText,
             disabledBackgroundColor:
-                LoanDetailPalette.navy.withValues(alpha: 0.4),
+                LoanDetailPalette.contractButtonText.withValues(alpha: 0.4),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

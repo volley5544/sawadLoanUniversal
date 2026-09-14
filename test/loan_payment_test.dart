@@ -187,6 +187,14 @@ void main() {
       expect(summary.blurredFieldText('39999.99'), '39,999.99');
     });
 
+    test('the balance still caps the field even though it is not shown', () {
+      // The ยอดหนี้คงเหลือ row was removed from the screen on 2026-09-14, but
+      // os_balance is still the ceiling. Pinned so nobody deletes the getter
+      // on the grounds that nothing renders it.
+      expect(summary.osBalance, 40000);
+      expect(summary.blurredFieldText('50000'), '40,000.00');
+    });
+
     test('an empty field becomes 0.0, not 0.00', () {
       // The source writes the shorter literal here; the comma formatter never
       // runs on this branch.

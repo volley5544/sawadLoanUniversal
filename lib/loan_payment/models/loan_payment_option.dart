@@ -50,8 +50,13 @@ class LoanPaymentSummary {
   /// fields — see the same distinction on `LoanDetailSummary`.
   int get installmentAmount => contract.paymentDetails.installmentAmount;
 
-  /// `contract_details.os_balance` — ยอดหนี้คงเหลือ, and the ceiling a typed
-  /// amount is clamped to.
+  /// `contract_details.os_balance` — the ceiling a typed amount is clamped to.
+  ///
+  /// ⚠ **Not displayed** since 2026-09-14: the screen's ยอดหนี้คงเหลือ row was
+  /// removed on request, because the company does not show the outstanding
+  /// balance here. It is still the rule — this getter feeds
+  /// [blurredFieldText], and the screen still carries the note saying the
+  /// amount cannot exceed it. Do not delete it because nothing renders it.
   double get osBalance => contract.contractDetails.osBalance;
 
   // ── per-option amounts ──────────────────────────────────────────────
@@ -146,9 +151,15 @@ class LoanPaymentSummary {
   /// ⚠ **An amount above [osBalance] is silently replaced by it.** That is the
   /// source's behaviour, reproduced deliberately: type 999,999 against a
   /// balance of 40,000 and the field hands back `40,000.00` with no message.
-  /// The screen carries a standing note saying it cannot exceed the balance,
-  /// which is why the correction needs no toast of its own — but it does mean
-  /// a customer who looks away mid-edit will not see it happen.
+  ///
+  /// ⚠⚠ That silence got quieter on 2026-09-14, when the ยอดหนี้คงเหลือ row
+  /// was removed from the screen. The correction was previously explainable
+  /// from what was on screen — the note named the rule and the row named the
+  /// number. Now the note names the rule and the number is nowhere, so a
+  /// customer who types more than their balance sees their figure change to
+  /// one they have never been shown. Both halves are deliberate, but if that
+  /// is ever reported as a bug, this is the reason and a toast here is the
+  /// one-line fix.
   ///
   /// An empty field becomes `0.0` — not `0.00`; the source writes the shorter
   /// literal here and the comma formatter never runs on it.

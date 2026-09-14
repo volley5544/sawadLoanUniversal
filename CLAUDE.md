@@ -2868,11 +2868,24 @@ differ on a contract in arrears.
 
 ⚠ **The typed field clamps silently to `os_balance` on blur.** Type 999,999
 against a balance of 40,000 and the field hands back `40,000.00` with no
-message. Reproduced deliberately (confirmed 2026-09-14) — the screen carries a
-standing note — **ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้** — which is why the
-correction needs no toast of its own. An empty field becomes `0.0`, not
-`0.00`; the source writes the shorter literal on that branch and its comma
-formatter never runs.
+message. Reproduced deliberately (confirmed 2026-09-14). An empty field becomes
+`0.0`, not `0.00`; the source writes the shorter literal on that branch and its
+comma formatter never runs.
+
+⚠ **The `ยอดหนี้คงเหลือ` row is hidden** (2026-09-14, on request — the company
+does not show the outstanding balance on this screen). The balance is still the
+**ceiling**, and the standing note
+**ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้** still states the rule; only the
+figure is withheld.
+
+⚠⚠ Those two decisions compound, and it is worth knowing they do. The silent
+correction used to be explainable from the screen — the note named the rule and
+the row named the number. Now a customer who types more than their balance sees
+their figure change to one they have **never been shown**. Both halves are
+deliberate; if it is ever reported as a bug, a toast in
+`LoanPaymentSummary.blurredFieldText` is the one-line fix. A test pins that the
+clamp survives the row's removal, so nobody deletes `osBalance` on the grounds
+that nothing renders it.
 
 #### The header card is shared with the loan detail screen
 
@@ -2930,6 +2943,11 @@ lazy sliver never builds what is off-screen.
 | From | How |
 | --- | --- |
 | this build's **loan detail** screen | **ชำระเงิน** in the bottom bar, beside คู่สัญญา. No `fromHost` — the customer came from a real page, so back returns there |
+
+Both ชำระเงิน buttons — the one in the loan detail bottom bar and the one at
+the foot of this screen — are **orange** (`#DB771A`), not the screen's navy.
+They are the same action one screen apart, so they read as one control rather
+than two.
 | the srisawad app's loan card **ชำระเงิน** button | `/loan-universal-webview` with `path: '/loanPayment'`, from both `personal_loan_list.dart` and `loan_installment_list_page.dart` |
 
 ⚠ The host edit is the same shape and carries the same trap as the loan detail

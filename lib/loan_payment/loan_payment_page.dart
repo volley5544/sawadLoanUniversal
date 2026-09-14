@@ -358,11 +358,15 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const LoanPaymentDetailHeading(text: 'กำหนดยอดชำระ'),
-          LoanPaymentDetailRow(
-            label: 'ยอดหนี้คงเหลือ',
-            value: '${formatMoney(summary.osBalance)} บาท',
-          ),
-          const SizedBox(height: 12),
+          // ⚠ The source shows a **ยอดหนี้คงเหลือ** row here. Removed
+          // 2026-09-14 on request — the company does not show the outstanding
+          // balance on this screen.
+          //
+          // The balance is still the **ceiling**: `blurredFieldText` clamps to
+          // `os_balance` exactly as before, and the note below still states
+          // the rule. Only the figure is withheld. See the ⚠ in
+          // `LoanPaymentSummary.blurredFieldText` about what that costs.
+          const SizedBox(height: 4),
           LoanPaymentNotice(
             text: '*การกำหนดยอดชำระเอง: การชำระค่างวดไม่เต็มจำนวน '
                 'จะมีดอกเบี้ยเพิ่มขึ้นและค่าติดตามทวงถามหนี้ (ถ้ามี) '
