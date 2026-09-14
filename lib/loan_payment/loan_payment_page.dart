@@ -265,7 +265,7 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
                   ),
                 ),
                 for (final option in LoanPaymentOption.values)
-                  _optionCard(option, summary),
+                  ..._optionBlock(option, summary),
                 const SizedBox(height: 24),
               ],
             ),
@@ -276,64 +276,109 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
     );
   }
 
-  Widget _optionCard(LoanPaymentOption option, LoanPaymentSummary summary) {
-    return LoanPaymentOptionCard(
-      label: option.label,
-      // The typed option's header shows no figure — the amount is the field
-      // below it, and a second number beside the radio would compete with it.
-      amount: switch (option) {
-        LoanPaymentOption.full => '${formatMoney(summary.fullAmount)} บาท',
-        LoanPaymentOption.overdue =>
-          '${formatMoney(summary.overdueTotal)} บาท',
-        LoanPaymentOption.custom => null,
-      },
-      selected: _option == option,
-      onTap: () => _select(option),
-      detail: _option == option ? _optionDetail(option, summary) : null,
-    );
-  }
+  /// The option's header card, plus its detail cards when it is the selected
+  /// one. They are **siblings**, not nested — see [LoanPaymentOptionCard].
+  List<Widget> _optionBlock(
+    LoanPaymentOption option,
+    LoanPaymentSummary summary,
+  ) =>
+      [
+        LoanPaymentOptionCard(
+          label: option.label,
+          amount: switch (option) {
+            LoanPaymentOption.full => '${formatMoney(summary.fullAmount)} บาท',
+            LoanPaymentOption.overdue =>
+              '${formatMoney(summary.overdueTotal)} บาท',
+            LoanPaymentOption.custom => null,
+          },
+          selected: _option == option,
+          onTap: () => _select(option),
+        ),
+        if (_option == option) ..._detailCards(option, summary),
+      ];
 
-  Widget _optionDetail(LoanPaymentOption option, LoanPaymentSummary summary) =>
+  List<Widget> _detailCards(
+    LoanPaymentOption option,
+    LoanPaymentSummary summary,
+  ) =>
       switch (option) {
-        LoanPaymentOption.full => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (summary.showsOverdueBlock) ..._overdueRows(summary),
-              LoanPaymentDetailRow(
-                label: 'ค่างวดปัจจุบัน',
-                value: summary.currentInstallmentLabel,
+        // Two cards, deliberately: what is late, then what is due next.
+        LoanPaymentOption.full => [
+            if (summary.showsOverdueBlock)
+              LoanPaymentDetailCard(
+                heading: 'ค่างวดเลยกำหนดชำระ',
+                children: _arrearsRows(summary, showsTotal: true),
               ),
-              LoanPaymentDetailRow(
-                label: '',
-                value: '${formatMoney(summary.installmentAmount)} บาท',
-              ),
-              LoanPaymentDetailRow(
-                label: 'วันครบกำหนดชำระ',
-                value: summary.currentDueDate,
-              ),
-            ],
-          ),
-        LoanPaymentOption.overdue => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (summary.showsOverdueBlock) ...[
-                ..._overdueRows(summary),
+            LoanPaymentDetailCard(
+              heading: 'ค่างวดปัจจุบัน',
+              children: [
+                LoanPaymentDetailRow(
+                  label: summary.currentInstallmentLabel,
+                  value: '${formatMoney(summary.installmentAmount)} บาท',
+                ),
                 LoanPaymentDetailRow(
                   label: 'วันครบกำหนดชำระ',
                   value: summary.currentDueDate,
                 ),
               ],
-              if (summary.showsNoOverdueNotice)
-                const LoanPaymentNotice(text: 'คุณไม่มียอดค้างชำระ'),
-            ],
-          ),
-        LoanPaymentOption.custom => _customAmountBlock(summary),
+            ),
+          ],
+        LoanPaymentOption.overdue => [
+            if (summary.showsOverdueBlock)
+              LoanPaymentDetailCard(
+                heading: 'ค่างวดเลยกำหนดชำระ',
+                // ⚠ **No รวม row unless there is a collection fee**, where
+                // ชำระเต็มจำนวน always shows one. Not a tidy-up candidate: the
+                // source guards this option's รวม behind `collection_fee != 0`
+                // and the other option's not at all. With no fee the total
+                // would only repeat the single row above it.
+                children: _arrearsRows(
+                  summary,
+                  showsTotal: summary.showsCollectionFee,
+                ),
+              ),
+            if (summary.showsNoOverdueNotice)
+              const LoanPaymentDetailCard(
+                heading: 'ค่างวดเลยกำหนดชำระ',
+                children: [LoanPaymentNotice(text: 'คุณไม่มียอดค้างชำระ')],
+              ),
+          ],
+        LoanPaymentOption.custom => [
+            LoanPaymentDetailCard(
+              heading: 'กำหนดยอดชำระ',
+              children: [
+                LoanPaymentNotice(
+                  text: '*การกำหนดยอดชำระเอง: การชำระค่างวดไม่เต็มจำนวน '
+                      'จะมีดอกเบี้ยเพิ่มขึ้นและค่าติดตามทวงถามหนี้ (ถ้ามี) '
+                      'ส่งผลให้ชำระหนี้ไม่ครบตามระยะเวลาที่กำหนด '
+                      'สอบถามข้อมูลเพิ่มเติมติดต่อ 1652',
+                  alert: true,
+                ),
+                // The standing statement of the ceiling — and, since the
+                // ยอดหนี้คงเหลือ row was removed, the only place the rule
+                // appears at all.
+                const LoanPaymentNotice(
+                  text: '**ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้',
+                  alert: true,
+                ),
+                const SizedBox(height: 12),
+                LoanPaymentAmountField(
+                  controller: _amountController,
+                  focusNode: _amountFocus,
+                  hintText: 'กรอกจำนวนเงินที่ต้องการจ่ายค่างวด',
+                ),
+              ],
+            ),
+          ],
       };
 
-  /// ค่างวดเลยกำหนดชำระ and its breakdown — shared by the two fixed options,
-  /// which render it identically.
-  List<Widget> _overdueRows(LoanPaymentSummary summary) => [
-        const LoanPaymentDetailHeading(text: 'ค่างวดเลยกำหนดชำระ'),
+  /// ค่างวดเลยกำหนดชำระ's rows. [showsTotal] differs by option — see the note
+  /// on the ยอดค้างชำระ arm above.
+  List<Widget> _arrearsRows(
+    LoanPaymentSummary summary, {
+    required bool showsTotal,
+  }) =>
+      [
         LoanPaymentDetailRow(
           label: summary.overdueRangeLabel,
           value: '${formatMoney(summary.overdueAmount)} บาท',
@@ -343,52 +388,16 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
             label: 'ค่าติดตามทวงถาม',
             value: '${formatMoney(summary.collectionFee)} บาท',
           ),
-        LoanPaymentDetailRow(
-          label: 'รวม',
-          value: '${formatMoney(summary.overdueTotal)} บาท',
-          emphasised: true,
-        ),
+        if (showsTotal)
+          LoanPaymentDetailRow(
+            label: 'รวม',
+            value: '${formatMoney(summary.overdueTotal)} บาท',
+          ),
         LoanPaymentDetailRow(
           label: 'วันครบกำหนดชำระ',
           value: summary.overdueDueDate,
         ),
       ];
-
-  Widget _customAmountBlock(LoanPaymentSummary summary) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const LoanPaymentDetailHeading(text: 'กำหนดยอดชำระ'),
-          // ⚠ The source shows a **ยอดหนี้คงเหลือ** row here. Removed
-          // 2026-09-14 on request — the company does not show the outstanding
-          // balance on this screen.
-          //
-          // The balance is still the **ceiling**: `blurredFieldText` clamps to
-          // `os_balance` exactly as before, and the note below still states
-          // the rule. Only the figure is withheld. See the ⚠ in
-          // `LoanPaymentSummary.blurredFieldText` about what that costs.
-          const SizedBox(height: 4),
-          LoanPaymentNotice(
-            text: '*การกำหนดยอดชำระเอง: การชำระค่างวดไม่เต็มจำนวน '
-                'จะมีดอกเบี้ยเพิ่มขึ้นและค่าติดตามทวงถามหนี้ (ถ้ามี) '
-                'ส่งผลให้ชำระหนี้ไม่ครบตามระยะเวลาที่กำหนด '
-                'สอบถามข้อมูลเพิ่มเติมติดต่อ 1652',
-            alert: true,
-          ),
-          const SizedBox(height: 8),
-          // The standing statement of the ceiling. It is why the silent clamp
-          // in `blurredFieldText` needs no toast of its own.
-          const LoanPaymentNotice(
-            text: '**ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้',
-            alert: true,
-          ),
-          const SizedBox(height: 12),
-          LoanPaymentAmountField(
-            controller: _amountController,
-            focusNode: _amountFocus,
-            hintText: 'กรอกจำนวนเงินที่ต้องการจ่ายค่างวด',
-          ),
-        ],
-      );
 
   Widget _payBar(LoanPaymentSummary summary) {
     final disabled = summary.isDisabled(_option, _amountController.text);

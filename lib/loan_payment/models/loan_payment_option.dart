@@ -99,10 +99,24 @@ class LoanPaymentSummary {
   String get currentInstallmentLabel =>
       'งวดที่ ${contract.paymentDetails.currentInstallmentNumber}';
 
-  /// Due date of the **overdue** instalments (`overdue_date`), shown against
-  /// the arrears block — as opposed to [currentDueDate] below.
-  String get overdueDueDate =>
-      formatThaiDate(contract.paymentDetails.overdueDate);
+  /// Due date shown against the **arrears** block.
+  ///
+  /// `overdue_date` when the contract carries one, else [currentDueDate].
+  ///
+  /// ⚠ The fallback is not tidiness. The source reads `overdue_date` here and
+  /// nothing else, and on a real contract (2026-09-14, `000จYC69020100002NFX`)
+  /// that field came back empty while the old build plainly rendered a date in
+  /// this row — the same one as the instalment block below it. Whatever the
+  /// old build resolves it from, a **blank date under a bill** is the one
+  /// outcome that is certainly wrong, so an absent value degrades to the
+  /// contract's own due date rather than to nothing.
+  ///
+  /// If the API starts sending `overdue_date`, this prefers it and the
+  /// fallback stops mattering.
+  String get overdueDueDate {
+    final overdue = formatThaiDate(contract.paymentDetails.overdueDate);
+    return overdue.isNotEmpty ? overdue : currentDueDate;
+  }
 
   /// Due date of the instalment coming up (`current_due_date`).
   String get currentDueDate =>

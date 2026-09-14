@@ -115,6 +115,34 @@ void main() {
       expect(summary.currentDueDate, '05/10/2569');
     });
 
+    test('an absent overdue_date falls back to the contract due date', () {
+      // A blank date under a bill is the one outcome that is certainly wrong.
+      final summary = LoanPaymentSummary(
+          _contract(overdueDate: '', currentDueDate: '2026-09-11'));
+      expect(summary.overdueDueDate, '11/09/2569');
+      expect(
+        LoanPaymentSummary(
+                _contract(overdueDate: 'nonsense', currentDueDate: '2026-09-11'))
+            .overdueDueDate,
+        '11/09/2569',
+      );
+    });
+
+    test('รวม is shown for ชำระเต็มจำนวน but gated for ยอดค้างชำระ', () {
+      // ⚠ The source guards this option's total behind `collection_fee != 0`
+      // and the other option's not at all, so with no fee the two arrears
+      // blocks legitimately differ by a row. Pinned because it reads as a bug.
+      final noFee = LoanPaymentSummary(
+          _contract(overdueAmount: 9170, collectionFee: 0));
+      expect(noFee.showsCollectionFee, isFalse);
+
+      final withFee = LoanPaymentSummary(
+          _contract(overdueAmount: 9170, collectionFee: 50));
+      expect(withFee.showsCollectionFee, isTrue);
+      // And the total it would show is the sum, not the arrears alone.
+      expect(withFee.overdueTotal, 9220);
+    });
+
     test('ค่างวดปัจจุบัน reads installment_amount, not current_due_amount', () {
       // They differ on a contract in arrears: one is the schedule, the other
       // is what is owed now.

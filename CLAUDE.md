@@ -2851,7 +2851,34 @@ differ on a contract in arrears.
 ⚠ **Two due-date fields.** `overdue_date` dates the arrears block;
 `current_due_date` dates the instalment coming up. Both appear in the
 ชำระเต็มจำนวน option, against different rows. `overdue_date` was added to
-`PaymentDetails` for this.
+`PaymentDetails` for this — and an **empty one falls back** to the contract's
+due date, because a real contract came back without it while the old build
+rendered a date in that row. A blank date under a bill is the one outcome
+that is certainly wrong.
+
+#### The option list: header cards, detail cards underneath
+
+Matched to the old build's render on 2026-09-14. The shape is load-bearing:
+
+- an option's **detail does not live inside its header card**. The header is a
+  white card (orange border + a filled orange tick when selected, otherwise a
+  grey ring), and the detail is one or more **grey cards rendered as
+  siblings beneath it**, each headed in orange;
+- **ชำระเต็มจำนวน renders two of them** — `ค่างวดเลยกำหนดชำระ` then
+  `ค่างวดปัจจุบัน`. That separation is the point: one block is what is late,
+  the other is what is due next, and merging them asks the customer to add up
+  rows belonging to different things;
+- `ค่างวดปัจจุบัน` is the card's **heading**, so its row reads
+  `งวดที่ 7 | 4,585.00 บาท` rather than needing a blank label;
+- the typed-amount field is an **underline** with the figure left-aligned and
+  `บาท` outside it — a boxed, right-aligned field reads as a form control.
+
+⚠ **The two arrears blocks are not identical, and that is the source's.**
+ชำระเต็มจำนวน always shows a `รวม` row; ยอดค้างชำระ shows one **only when
+there is a collection fee**, because the source guards that option's total
+behind `collection_fee != 0` and the other's not at all. With no fee the total
+would only repeat the single row above it. A test pins it, since it reads as a
+bug in a screenshot.
 
 **When the button refuses**, and it is not symmetric:
 
