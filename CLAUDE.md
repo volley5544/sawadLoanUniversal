@@ -2312,12 +2312,13 @@ and the customer's **own bearer token**. So:
 - the uat build paths agree again, so a CI deploy can no longer silently
   replace a hook deploy with a build that cannot make the call.
 
-⚠ **Two things in the srisawad host were only ever for the old test host and
-should come out**: `http://34.142.213.42:8080/` in
-`_kHttpRequestAllowedPrefixes`, and the `<domain-config>` block for that IP in
-`network_security_config.xml` (commit `4ea8f79` on `pentest_resolved`, never
-released). That is the removal checklist Outstanding #33 always carried; the
-condition for it has now been met.
+✅ **The srisawad host's two allowances for the old test host are gone**
+(2026-09-14, `123cf65` on `pentest_resolved`): `http://34.142.213.42:8080/` in
+`_kHttpRequestAllowedPrefixes` and the `<domain-config>` block for that IP in
+`network_security_config.xml`, both added by `4ea8f79` and never released.
+They came out together because removing only the allowlist entry would have
+left a cleartext exception for an IP nothing can reach — an unnecessary hole in
+a pentest control is harder to justify than a useful one.
 
 ⚠ **`/topup/recal` sends `contract_details` and `car_details` entirely
 blank** — every real figure is at the **top level**, where `/topup/detail`
@@ -4090,11 +4091,15 @@ reason recorded.
 
     - ⚠ **Rotate the `…prod` `Basic` account** from the old sample. It shipped
       readable in uat builds 124–126 on 2026-09-13 and is now used by nothing.
-    - ⚠ **Take the test host out of the srisawad app**:
-      `http://34.142.213.42:8080/` in `_kHttpRequestAllowedPrefixes` plus the
-      matching `network_security_config.xml` block (`4ea8f79`,
-      `pentest_resolved`, never released). This was always the removal
-      checklist; its condition is now met.
+    - ✅ **The test host is out of the srisawad app** (done 2026-09-14,
+      `123cf65` on `pentest_resolved`). Both halves went together:
+      `http://34.142.213.42:8080/` from `_kHttpRequestAllowedPrefixes` — the
+      only plain-http entry in an otherwise all-https list — and the
+      `<domain-config>` block for that IP in `network_security_config.xml`, a
+      scoped hole in the pentest's finding-13 cleartext control, which is whole
+      again. Removing only the allowlist entry would have left an Android
+      cleartext exception for an IP nothing can reach, which is the worse half
+      to leave behind.
     - ⚠ **The M35 ceiling disagreement is still open** — `/loan/list` grants
       `topup_extra` 5,000 that `/topup/recal` does not recognise, so the
       customer is offered a limit the settlement is not priced at. See
