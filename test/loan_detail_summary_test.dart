@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/loan_detail/components/loan_detail_components.dart';
 import 'package:sawad_loan_universal/loan_detail/models/loan_detail_summary.dart';
 import 'package:sawad_loan_universal/loan_detail/models/payment_history_entry.dart';
+import 'package:sawad_loan_universal/config/app_environment.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
+import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart';
+import 'package:sawad_loan_universal/services/p_loan_api.dart';
 import 'package:sawad_loan_universal/services/loan_detail_api.dart';
 
 /// A `/loan/list` row shaped like the ones this screen reads, overridable per
@@ -294,6 +297,20 @@ void main() {
       expect(entry.paidOn, DateTime(2026, 8, 5));
       expect(entry.paidAtTime, '');
       expect(PaymentHistoryEntry.fromJson(const {}).paidOn, isNull);
+    });
+
+    test('mock mode serves this screen too, and is off by default', () {
+      // The screen looks up its contract through PLoanApi, the seam carrying
+      // the kPLoanUseMockData guard — not SrisawadApi directly. Without that a
+      // build wearing PLoanMockBanner on every screen would quietly call the
+      // live API behind the banner on this one.
+      expect(PLoanApi.isMocked, isFalse);
+      expect(kPLoanUseMockData, isFalse);
+      expect(
+        mockContracts().map((c) => c.contractNo),
+        containsAll(<String>['MOCK-M-6701001', 'MOCK-C-6701002']),
+        reason: 'the two fixtures the ?contNo= recipe names',
+      );
     });
 
     test('db_name is sent whole, matching the srisawad mobile app', () {

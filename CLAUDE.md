@@ -1474,7 +1474,11 @@ flutter build web ... --dart-define=P_LOAN_MOCK=true
   `p_loan_flow_test` / `p_loan_submission_test`.
 - Guards: one `if (kPLoanUseMockData)` per method in `services/p_loan_api.dart`,
   including `fetchCustomer` / `fetchAddressBook` — which is why steps 1 and 5
-  call `PLoanApi` rather than `UserApi` directly.
+  call `PLoanApi` rather than `UserApi` directly. Same reason the **loan
+  detail** screen looks its contract up through `PLoanApi.listContracts`
+  rather than `SrisawadApi.listContracts`: a build wearing `PLoanMockBanner` on
+  every screen must not quietly call the live API behind the banner on one of
+  them.
 - While on, every screen shows `PLoanMockBanner` and a submit returns a `MOCK-`
   prefixed transaction number. `test/p_loan_mock_test.dart` asserts the default
   is **off**, so a deployment can never quietly serve fixtures.
@@ -2562,6 +2566,19 @@ WebView). Same shape and same reason as `/topup/status`: the host deep-links it
 in a fresh WebView and a reload has to work. The host needs **no change** —
 its existing `/loan-universal-webview` route already takes
 `path: '/loanDetail', params: {'contNo': …}` and appends `hashThaiId` + `token`.
+
+**Testing it.** In a plain browser, `?hashThaiId=&token=&contNo=` — the mobile
+API sends `access-control-allow-origin: *`, so no WebView is needed. With
+`--dart-define=P_LOAN_MOCK=true` the two P-Loan fixtures work with **no token
+at all**: `MOCK-M-6701001` (one insurance policy) and `MOCK-C-6701002`.
+
+⚠ **Inside the srisawad app it must be opened through
+`/loan-universal-webview`**, never `/webview-page-topup`. That route renders
+`WebviewPage` → `VideoRecordWebWidget`, which registers **zero** JS handlers —
+so repointing `api_url['loan_detail_web_uat']` at this build (the tempting
+config-only shortcut, since `open_page_config.loan_detail_page_open_web` is
+already `true` on QA) fails on the first call with *"Host app is outdated (no
+httpRequest bridge handler)"*. Same trap the P-Loan Extra deep link carries.
 
 | # | Tab | Source | Rows |
 | --- | --- | --- | --- |

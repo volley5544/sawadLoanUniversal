@@ -44,6 +44,7 @@ import '../services/app_config_api.dart';
 import '../services/diagnostics.dart';
 import '../services/loan_detail_api.dart';
 import '../services/native_bridge.dart';
+import '../services/p_loan_api.dart';
 import '../services/srisawad_api.dart';
 import 'components/loan_detail_components.dart';
 import 'insurance_list_page.dart';
@@ -132,7 +133,12 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     }
 
     try {
-      final contracts = await SrisawadApi.listContracts(
+      // Through PLoanApi, not SrisawadApi directly: that is the one seam
+      // carrying the `kPLoanUseMockData` guard, and a build advertising itself
+      // as a mock build (every screen wears PLoanMockBanner) must not quietly
+      // call the live API behind that banner. It also means the fixtures make
+      // this screen demoable with no backend and no bearer token.
+      final contracts = await PLoanApi.listContracts(
         hashThaiId: appState.hashThaiId,
         token: appState.authToken,
       );
@@ -337,6 +343,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const PLoanMockBanner(),
         _LoanDetailHeaderCard(
           contract: contract,
           showsNotIssuedNotice: _showsNotIssuedNotice(contract),
