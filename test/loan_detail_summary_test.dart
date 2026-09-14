@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/loan_detail/components/loan_detail_components.dart';
+import 'package:sawad_loan_universal/p_loan/application/components/p_loan_components.dart';
 import 'package:sawad_loan_universal/loan_detail/models/loan_detail_summary.dart';
 import 'package:sawad_loan_universal/loan_detail/models/payment_history_entry.dart';
 import 'package:sawad_loan_universal/config/app_environment.dart';
@@ -340,6 +341,22 @@ void main() {
         containsAll(<String>['MOCK-M-6701001', 'MOCK-C-6701002']),
         reason: 'the two fixtures the ?contNo= recipe names',
       );
+    });
+
+    test('the history tab dates itself from the response, not the contract', () {
+      // `data_date` rides on the history response and is quoted under that
+      // list; the two tabs above it quote /loan/list's. Separate reads, taken
+      // at different moments.
+      const history = PaymentHistory(dataDate: '2026-09-09 13:05:04');
+      expect(formatThaiDate(history.dataDate), '09/09/2569');
+      expect(formatLoanDetailTime(history.dataDate), '13.05');
+    });
+
+    test('a response with no data_date withholds the footer', () {
+      // Rendering `ข้อมูลวันที่  เวลา  น.` would be worse than no line at all.
+      expect(const PaymentHistory().dataDate, isEmpty);
+      expect(LoanDetailApi.mockPaymentHistory.dataDate, isNotEmpty);
+      expect(LoanDetailApi.mockPaymentHistory.isEmpty, isFalse);
     });
 
     test('db_name is truncated to two characters for this endpoint', () {

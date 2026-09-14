@@ -51,3 +51,23 @@ class PaymentHistoryEntry {
     return pieces.length > 1 ? pieces[1] : '';
   }
 }
+
+/// A whole `POST /payment/history_new` response: the rows plus the timestamp
+/// the data was read at.
+///
+/// [dataDate] is the **history call's own** `data_date`, not the contract's.
+/// The two tabs above this one quote `/loan/list`'s, and they are separate
+/// reads taken at different moments — putting the contract's timestamp under
+/// the payment list would date the list by when something else was fetched.
+class PaymentHistory {
+  const PaymentHistory({this.entries = const [], this.dataDate = ''});
+
+  final List<PaymentHistoryEntry> entries;
+
+  /// `data_date` — `yyyy-MM-dd HH:mm:ss`, e.g. `2026-09-09 13:05:04`.
+  /// Empty when the response omits it, in which case the footer is withheld
+  /// rather than rendered with a blank date in it.
+  final String dataDate;
+
+  bool get isEmpty => entries.isEmpty;
+}

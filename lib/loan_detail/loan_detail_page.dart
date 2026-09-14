@@ -104,7 +104,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
 
   LoanDetailTab _tab = LoanDetailTab.info;
 
-  List<PaymentHistoryEntry>? _history;
+  PaymentHistory? _history;
   String? _historyError;
   bool _historyLoading = false;
 
@@ -196,14 +196,14 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
       _historyError = null;
     });
     try {
-      final entries = await LoanDetailApi.fetchPaymentHistory(
+      final history = await LoanDetailApi.fetchPaymentHistory(
         contractNo: contract.contractNo,
         dbName: contract.dbName,
         token: AppState().authToken,
       );
       if (!mounted) return;
       setState(() {
-        _history = entries;
+        _history = history;
         _historyLoading = false;
       });
     } on SrisawadApiException catch (e) {
@@ -440,7 +440,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         LoanDetailTab.info => _LoanInfoTab(contract: contract),
         LoanDetailTab.payment => _PaymentInfoTab(contract: contract),
         LoanDetailTab.history => _PaymentHistoryTab(
-            entries: _history,
+            history: _history,
             loading: _historyLoading,
             error: _historyError,
             onRetry: _loadHistory,
@@ -798,13 +798,13 @@ class _PaymentInfoTab extends StatelessWidget {
 /// **ประวัติการชำระ** — `POST /payment/history_new`, loaded on first open.
 class _PaymentHistoryTab extends StatelessWidget {
   const _PaymentHistoryTab({
-    required this.entries,
+    required this.history,
     required this.loading,
     required this.error,
     required this.onRetry,
   });
 
-  final List<PaymentHistoryEntry>? entries;
+  final PaymentHistory? history;
   final bool loading;
   final String? error;
   final VoidCallback onRetry;
@@ -832,8 +832,8 @@ class _PaymentHistoryTab extends StatelessWidget {
         child: PLoanErrorView(message: message, onRetry: onRetry),
       );
     }
-    final rows = entries;
-    if (rows == null || rows.isEmpty) {
+    final loaded = history;
+    if (loaded == null || loaded.isEmpty) {
       return SizedBox(
         height: 200,
         child: Center(
@@ -845,22 +845,31 @@ class _PaymentHistoryTab extends StatelessWidget {
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        children: [
-          for (final entry in rows)
-            PaymentHistoryCard(
-              headingDate: formatThaiShortDate(entry.paidOn),
-              paidAtLabel: [
-                formatThaiShortDate(entry.paidOn),
-                if (entry.paidAtTime.isNotEmpty) '${entry.paidAtTime} น.',
-              ].join(' '),
-              amount: '${formatMoney(entry.paidAmount)} บาท',
-              channel: entry.paymentChannelName,
-            ),
-        ],
-      ),
+    return Column(
+      children: [
+        for (final entry in loaded.entries)
+          PaymentHistoryCard(
+            headingDate: formatThaiShortDate(entry.paidOn),
+            paidAtLabel: [
+              formatThaiShortDate(entry.paidOn),
+              if (entry.paidAtTime.isNotEmpty) '${entry.paidAtTime} น.',
+            ].join(' '),
+            amount: '${formatMoney(entry.paidAmount)} บาท',
+            channel: entry.paymentChannelName,
+          ),
+        const SizedBox(height: 24),
+        // This tab's own `data_date`, from the history response — not the
+        // contract's, which is what the two tabs above quote. They are
+        // separate reads taken at different moments, and dating the payment
+        // list by when the *contract* was fetched would be wrong. Withheld
+        // entirely when the response carries none, rather than shown with a
+        // blank date in it.
+        if (loaded.dataDate.isNotEmpty)
+          LoanDetailDataDateFooter(
+            date: formatThaiDate(loaded.dataDate),
+            time: formatLoanDetailTime(loaded.dataDate),
+          ),
+      ],
     );
   }
 }

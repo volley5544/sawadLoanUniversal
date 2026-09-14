@@ -10,6 +10,7 @@ library;
 
 import '../config/app_environment.dart';
 import '../loan_detail/models/payment_history_entry.dart';
+import '../p_loan/application/models/json_coerce.dart';
 import 'srisawad_api.dart';
 
 class LoanDetailApi {
@@ -41,7 +42,7 @@ class LoanDetailApi {
   /// Worth an ask — but not worth blocking on, since this direction is the
   /// one with evidence behind it. [useDbNamePrefix] flips it back in one
   /// line.
-  static Future<List<PaymentHistoryEntry>> fetchPaymentHistory({
+  static Future<PaymentHistory> fetchPaymentHistory({
     required String contractNo,
     required String dbName,
     required String token,
@@ -58,16 +59,20 @@ class LoanDetailApi {
       body: {'contract_no': contractNo, 'db_name': wireDbName(dbName)},
     );
     // `data`, not `results` — this endpoint does not use the envelope the rest
-    // of the mobile API does.
-    final data = json is Map<String, dynamic> ? json['data'] : null;
+    // of the mobile API does. `data_date` sits beside it, at the top level.
+    final body = json is Map<String, dynamic> ? json : const {};
+    final data = body['data'];
     if (data is! List) {
       throw SrisawadApiException(
           'Unexpected /payment/history_new response: $json');
     }
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(PaymentHistoryEntry.fromJson)
-        .toList(growable: false);
+    return PaymentHistory(
+      entries: data
+          .whereType<Map<String, dynamic>>()
+          .map(PaymentHistoryEntry.fromJson)
+          .toList(growable: false),
+      dataDate: asString(body['data_date']),
+    );
   }
 
   /// How `db_name` is spelled on the wire for this endpoint. See
@@ -89,7 +94,9 @@ class LoanDetailApi {
 
   /// Fixtures for `--dart-define=P_LOAN_MOCK=true`, built through the real
   /// `fromJson` so a wire-key change breaks them too.
-  static final List<PaymentHistoryEntry> mockPaymentHistory = [
+  static final PaymentHistory mockPaymentHistory = PaymentHistory(
+    dataDate: '2026-09-09 13:05:04',
+    entries: [
     PaymentHistoryEntry.fromJson(const {
       'date': '05-08-2026 14:12',
       'paid_amount': 3250.0,
@@ -101,6 +108,7 @@ class LoanDetailApi {
       'paid_amount': 3250.0,
       'payment_channel_code': 'MBK',
       'payment_channel_name': 'โมบายแบงก์กิ้ง',
-    }),
-  ];
+      }),
+    ],
+  );
 }

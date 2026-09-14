@@ -2739,6 +2739,15 @@ silently reading the day as a year.
 The heading is `formatThaiShortDate` — `14 ก.ค. 68`, a **two-digit** Buddhist
 year, because the source slices characters 2–3 out of `'2568'`.
 
+⚠ **The `ข้อมูลวันที่` footer under this list is the response's own
+`data_date`**, which sits at the top level beside `data` (`2026-09-09
+13:05:04`) — **not** the contract's, which is what the two tabs above it
+quote. They are separate reads taken at different moments, and dating the
+payment list by when the *contract* was fetched would be wrong. A response
+carrying no `data_date` withholds the line entirely rather than rendering
+`ข้อมูลวันที่  เวลา  น.`, so `PaymentHistory` is the whole response, not just
+its rows.
+
 ⚠ A failed history load shows a **retry**. The source renders an empty
 `Container()` on that branch, making a failure indistinguishable from a
 contract with no payments. Deliberately not reproduced.
