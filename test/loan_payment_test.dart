@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/loan_payment/models/loan_payment_option.dart';
+import 'package:sawad_loan_universal/loan_payment/models/loan_payment_seed.dart';
 import 'package:sawad_loan_universal/models/app_config.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 
@@ -216,6 +217,57 @@ void main() {
             .isShowPayButton,
         isFalse,
         reason: 'a string is not a boolean — do not grant a payment path on it',
+      );
+    });
+  });
+
+  group('the contract is handed on, not re-fetched', () {
+    // Reached from inside this build, both payment screens already have the
+    // row: the loan detail screen loaded it to draw the card, and the payment
+    // screen hands the same one to the QR screen. Neither should ask
+    // /loan/list for something it is holding.
+    final seed = LoanPaymentSeed(contract: _contract());
+
+    test('a seed for the named contract is used', () {
+      expect(
+        seed.matches(contractNo: '000จYC69020100002NFX', dbName: 'MLOAN'),
+        isTrue,
+      );
+    });
+
+    test('db_name is optional, exactly as it is on the fetching path', () {
+      // The routes let dbName be omitted, and the fetch matches on the
+      // contract number alone when it is. A seed must apply the same rule, or
+      // a seeded and an unseeded run could resolve different contracts.
+      expect(
+        seed.matches(contractNo: '000จYC69020100002NFX', dbName: ''),
+        isTrue,
+      );
+      expect(
+        seed.matches(contractNo: '000จYC69020100002NFX', dbName: '   '),
+        isTrue,
+      );
+    });
+
+    test('a seed that disagrees with the URL is ignored', () {
+      // ⚠ The query string is the authority: it is what a reload would use,
+      // and the two must never resolve differently.
+      expect(
+        seed.matches(contractNo: 'SOME-OTHER-CONTRACT', dbName: 'MLOAN'),
+        isFalse,
+      );
+      expect(
+        seed.matches(contractNo: '000จYC69020100002NFX', dbName: 'LLOAN'),
+        isFalse,
+        reason: 'contract numbers are unique only within a database',
+      );
+    });
+
+    test('surrounding whitespace does not defeat the match', () {
+      expect(
+        seed.matches(
+            contractNo: '  000จYC69020100002NFX  ', dbName: ' MLOAN '),
+        isTrue,
       );
     });
   });

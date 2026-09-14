@@ -2808,6 +2808,25 @@ The amount rides in the **query string**, not `extra`: a reload reproduces the
 same bill, and the figure on screen is provably the one the payment screen
 settled on rather than something re-derived from data that may have moved.
 
+⚠ **Neither screen re-fetches a contract it was handed** (`LoanPaymentSeed`,
+added 2026-09-14). Reached from inside this build, the row is already in
+memory twice over — the loan detail screen loaded it to draw the card the
+customer tapped, and the payment screen hands the same row to the QR screen,
+which needs `barcode_details` and the plate off it. Asking `/loan/list` again
+would put a spinner between pressing ชำระเงิน and seeing the code.
+
+Same shape and same reasoning as `PLoanResumeSeed`, including the two rules
+that make it safe:
+
+- the seed is **an optimisation on one path, never a requirement** — the host
+  deep link arrives in a fresh WebView with nothing in memory, and a reload
+  drops `extra`, so both screens still fetch for themselves;
+- **the query string stays the authority**. A seed is used only when it
+  matches the contract the URL names, and `dbName` is matched only when the
+  URL carries one — exactly the rule the fetching path applies, so a seeded
+  and an unseeded run cannot resolve different contracts. A test pins the
+  mismatch cases.
+
 #### Three options, three amounts (`models/loan_payment_option.dart`)
 
 | Option | Amount |

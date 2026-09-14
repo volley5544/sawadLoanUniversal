@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../loan_detail/loan_detail_page.dart';
 import '../loan_payment/loan_payment_page.dart';
+import '../loan_payment/models/loan_payment_seed.dart';
 import '../loan_payment/loan_payment_qr_page.dart';
 import '../loan_register/appointment_datetime_page.dart';
 import '../loan_register/appointment_page.dart';
@@ -283,6 +284,11 @@ final GoRouter appRouter = GoRouter(
           contractNo: q['contNo'] ?? '',
           dbName: q['dbName'] ?? '',
           fromHost: q['fromHost'] == 'true',
+          // Present only when another screen in this build pushed here; a
+          // reload drops `extra`, and the screen fetches instead.
+          seed: state.extra is LoanPaymentSeed
+              ? state.extra as LoanPaymentSeed
+              : null,
         );
       },
     ),
@@ -294,6 +300,9 @@ final GoRouter appRouter = GoRouter(
           contractNo: q['contNo'] ?? '',
           dbName: q['dbName'] ?? '',
           amount: double.tryParse(q['amount'] ?? '') ?? 0,
+          seed: state.extra is LoanPaymentSeed
+              ? state.extra as LoanPaymentSeed
+              : null,
         );
       },
     ),

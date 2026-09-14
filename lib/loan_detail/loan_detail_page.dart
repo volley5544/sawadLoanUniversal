@@ -38,6 +38,7 @@ import '../app_state.dart';
 import '../models/comcode_config.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
+import '../loan_payment/models/loan_payment_seed.dart';
 import '../router/app_router.dart';
 import '../services/app_config_api.dart';
 import '../services/diagnostics.dart';
@@ -502,6 +503,11 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   ///
   /// No `fromHost`: the customer came from this screen, so back should return
   /// here rather than close the WebView out from under them.
+  ///
+  /// The contract goes with it. This screen loaded that row to draw what the
+  /// customer is looking at, and the payment screen needs the same one — so
+  /// re-fetching it would put a spinner in front of data already in memory.
+  /// The query string still names the contract, so a reload re-fetches.
   void _openPayment(LoanContract contract) {
     context.push(
       Uri(
@@ -512,6 +518,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
             'dbName': contract.dbName.trim(),
         },
       ).toString(),
+      extra: LoanPaymentSeed(contract: contract),
     );
   }
 }

@@ -37,6 +37,7 @@ import '../router/app_router.dart';
 import '../services/p_loan_api.dart';
 import '../services/qr_image_capture.dart';
 import '../services/srisawad_api.dart';
+import 'models/loan_payment_seed.dart';
 
 class LoanPaymentQrPage extends StatefulWidget {
   const LoanPaymentQrPage({
@@ -44,10 +45,16 @@ class LoanPaymentQrPage extends StatefulWidget {
     required this.contractNo,
     required this.amount,
     this.dbName = '',
+    this.seed,
   });
 
   final String contractNo;
   final String dbName;
+
+  /// The contract the payment screen was already holding. Null only on a
+  /// reload, which is when this screen fetches for itself. See
+  /// [LoanPaymentSeed].
+  final LoanPaymentSeed? seed;
 
   /// The figure the payment screen settled on. Carried in the query string, so
   /// a reload reproduces the same bill rather than a blank one — and so the
@@ -83,6 +90,17 @@ class _LoanPaymentQrPageState extends State<LoanPaymentQrPage> {
           'ไม่พบข้อมูลผู้ใช้ กรุณาเปิดหน้านี้จากแอปพลิเคชันอีกครั้ง');
       return;
     }
+    // Everything this screen renders — `barcode_details`, the plate, the loan
+    // type — is on the row the payment screen just used. Fetching it again
+    // would put a round trip between pressing ชำระเงิน and seeing the code.
+    final seeded = widget.seed;
+    if (seeded != null &&
+        seeded.matches(
+            contractNo: widget.contractNo, dbName: widget.dbName)) {
+      setState(() => _contract = seeded.contract);
+      return;
+    }
+
     try {
       final contracts = await PLoanApi.listContracts(
         hashThaiId: appState.hashThaiId,

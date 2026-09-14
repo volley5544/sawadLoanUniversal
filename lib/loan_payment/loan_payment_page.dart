@@ -32,6 +32,7 @@ import '../services/p_loan_api.dart';
 import '../services/srisawad_api.dart';
 import 'components/loan_payment_components.dart';
 import 'models/loan_payment_option.dart';
+import 'models/loan_payment_seed.dart';
 
 class LoanPaymentPage extends StatefulWidget {
   const LoanPaymentPage({
@@ -39,10 +40,16 @@ class LoanPaymentPage extends StatefulWidget {
     required this.contractNo,
     this.dbName = '',
     this.fromHost = false,
+    this.seed,
   });
 
   final String contractNo;
   final String dbName;
+
+  /// The contract already in memory, when the caller has it — the loan detail
+  /// screen does. Null on the host deep link and on a reload, which is when
+  /// this screen fetches. See [LoanPaymentSeed].
+  final LoanPaymentSeed? seed;
 
   /// Nothing of this build's own sits beneath this screen, so back closes the
   /// WebView. Set when the host opens it directly; **not** set when the loan
@@ -112,6 +119,17 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
       setState(() => _error = 'ไม่พบเลขที่สัญญา');
       return;
     }
+
+    // The loan detail screen already loaded this row to draw the card the
+    // customer just tapped. Asking for it again would put a round trip in
+    // front of a screen whose data is sitting in memory.
+    final seeded = widget.seed;
+    if (seeded != null &&
+        seeded.matches(contractNo: wanted, dbName: widget.dbName)) {
+      setState(() => _contract = seeded.contract);
+      return;
+    }
+
     try {
       final contracts = await PLoanApi.listContracts(
         hashThaiId: appState.hashThaiId,
@@ -173,6 +191,10 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
           'amount': amount.toString(),
         },
       ).toString(),
+      // The QR screen needs `barcode_details` and the plate off this same
+      // row — all of which is already here. The query string still carries
+      // everything it needs to fetch for itself after a reload.
+      extra: LoanPaymentSeed(contract: summary.contract),
     );
   }
 
