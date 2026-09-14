@@ -19,6 +19,7 @@ class AppConfig {
     this.topupProductIcons = const {},
     this.topupProductIconsUat = const {},
     this.comcodeConfig = const ComcodeConfig(),
+    this.isShowPayButton = false,
     String? ndidRequestType,
     String? ndidRequestTypeUat,
     String? ndidAsId,
@@ -69,6 +70,17 @@ class AppConfig {
   /// the same set on both. A `comcode_config_uat` would still be picked up by
   /// [envValue] if one is ever added.
   final ComcodeConfig comcodeConfig;
+
+  /// `is_show_payButton` — whether the loan detail screen offers **ชำระเงิน**.
+  ///
+  /// The srisawad app's own kill switch for its payment path, reproduced with
+  /// the same spelling (the `B` is capitalised in the document). It gates the
+  /// button only; `/loanPayment` stays reachable by URL, which is what makes
+  /// it testable while the switch is off.
+  ///
+  /// ⚠ Defaults to **false** — a config that has not been seeded withholds the
+  /// button rather than offering a payment path nobody has turned on.
+  final bool isShowPayButton;
 
   /// `api_url['contract_url']` — the portal that serves a contract document
   /// (คู่สัญญา) or a promissory-note request (คำขอออกตั๋ว). The loan detail
@@ -255,6 +267,8 @@ class AppConfig {
           decoded['topup_product_icon_default']?.toString(),
       topupProductIconDefaultUat:
           decoded['topup_product_icon_default_uat']?.toString(),
+      isShowPayButton: decoded['is_show_payButton'] == true ||
+          decoded['is_show_pay_button'] == true,
       comcodeConfig: ComcodeConfig.fromDecoded(
         decoded['comcode_config_uat'] ?? decoded['comcode_config'],
       ),

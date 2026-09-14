@@ -282,6 +282,7 @@ class PaymentDetails {
     this.overdueFrom = '',
     this.overdueTo = '',
     this.latestPaidDate = '',
+    this.overdueDate = '',
     this.currentDateTime = '',
     this.collectionFee = 0,
   });
@@ -302,6 +303,11 @@ class PaymentDetails {
   final String overdueTo;
   final String latestPaidDate;
 
+  /// `overdue_date` — the due date of the *overdue* instalments, as opposed to
+  /// [currentDueDate], which is the one coming up. The payment screen's
+  /// ชำระเต็มจำนวน option shows both, against different rows.
+  final String overdueDate;
+
   /// Server-side timestamp; the source uses it as the request date rather than
   /// the device clock, so a wrong device time can't date a contract.
   final String currentDateTime;
@@ -321,6 +327,7 @@ class PaymentDetails {
         overdueFrom: asString(json['overdue_from']),
         overdueTo: asString(json['overdue_to']),
         latestPaidDate: asString(json['latest_paid_date']),
+        overdueDate: asString(json['overdue_date']),
         currentDateTime: asString(json['current_date_time']),
         collectionFee: asDouble(json['collection_fee']),
       );

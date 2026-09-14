@@ -31,7 +31,6 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -47,6 +46,7 @@ import '../services/native_bridge.dart';
 import '../services/p_loan_api.dart';
 import '../services/srisawad_api.dart';
 import 'components/loan_detail_components.dart';
+import 'components/loan_detail_header_card.dart';
 import 'insurance_list_page.dart';
 import 'models/loan_detail_summary.dart';
 import 'models/payment_history_entry.dart';
@@ -100,6 +100,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   LoanContract? _contract;
   ComcodeConfig _comcodeConfig = const ComcodeConfig();
   String? _contractUrl;
+  bool _showPayButton = false;
   String? _error;
 
   LoanDetailTab _tab = LoanDetailTab.info;
@@ -158,6 +159,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         _contract = match;
         _comcodeConfig = config.comcodeConfig;
         _contractUrl = config.contractUrl;
+        _showPayButton = config.isShowPayButton;
       });
     } on SrisawadApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -344,7 +346,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const PLoanMockBanner(),
-        _LoanDetailHeaderCard(
+        LoanDetailHeaderCard(
           contract: contract,
           showsNotIssuedNotice: _showsNotIssuedNotice(contract),
           onDownloadContract:
@@ -447,22 +449,19 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
           ),
       };
 
-  /// The bottom bar.
+  /// The bottom bar: **ชำระเงิน** and the contract document, either, both or
+  /// neither.
   ///
-  /// ⚠ The source puts **ชำระเงิน** here, beside the contract-document button,
-  /// gated on its own `is_show_payButton` config flag. This build has no
-  /// payment screen yet, so that half is deliberately absent rather than
-  /// rendered disabled — a button that cannot ever do anything is worse than
-  /// no button. When the payment flow lands, add it as the first child of this
-  /// row, behind that flag.
+  /// Both are independently gated — ชำระเงิน on `is_show_payButton`, the
+  /// document on [ComcodeConfig.showsContractButton] — so the bar can hold one
+  /// button, two, or vanish entirely. The source has the same shape.
   Widget _buildBottomBar(LoanContract contract) {
-    if (!_comcodeConfig.showsContractButton(
-      comcode: contract.barcodeDetails.comcode,
-      loanTypeCode: contract.contractDetails.loanTypeCode,
-    )) {
-      return const SizedBox.shrink();
-    }
-    if (_contractDocumentUrl == null) return const SizedBox.shrink();
+    final showsDocument = _contractDocumentUrl != null &&
+        _comcodeConfig.showsContractButton(
+          comcode: contract.barcodeDetails.comcode,
+          loanTypeCode: contract.contractDetails.loanTypeCode,
+        );
+    if (!_showPayButton && !showsDocument) return const SizedBox.shrink();
 
     final label =
         _comcodeConfig.contractButtonLabel(contract.barcodeDetails.comcode) ??
@@ -472,29 +471,87 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
       child: Container(
         color: Colors.white,
         padding: const EdgeInsets.fromLTRB(11, 12, 11, 12),
-        child: GestureDetector(
-          onTap: _onContractDocumentPressed,
-          child: Container(
-            height: 60,
-            decoration: BoxDecoration(
-              color: LoanDetailPalette.contractButtonFill,
-              borderRadius: const BorderRadius.all(Radius.circular(14)),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: GoogleFonts.notoSansThai(
-                fontSize: 16,
-                height: 1,
-                fontWeight: FontWeight.w600,
-                color: LoanDetailPalette.contractButtonText,
+        child: Row(
+          children: [
+            if (_showPayButton)
+              Expanded(
+                child: _BottomBarButton(
+                  label: 'ชำระเงิน',
+                  fill: LoanDetailPalette.contractButtonText,
+                  labelColor: Colors.white,
+                  onTap: () => _openPayment(contract),
+                ),
               ),
-            ),
-          ),
+            if (_showPayButton && showsDocument) const SizedBox(width: 12),
+            if (showsDocument)
+              Expanded(
+                child: _BottomBarButton(
+                  label: label,
+                  fill: LoanDetailPalette.contractButtonFill,
+                  labelColor: LoanDetailPalette.contractButtonText,
+                  onTap: _onContractDocumentPressed,
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
+
+  /// Opens **ชำระเงิน** for this contract.
+  ///
+  /// No `fromHost`: the customer came from this screen, so back should return
+  /// here rather than close the WebView out from under them.
+  void _openPayment(LoanContract contract) {
+    context.push(
+      Uri(
+        path: AppRoutes.loanPayment,
+        queryParameters: {
+          'contNo': contract.contractNo.trim(),
+          if (contract.dbName.trim().isNotEmpty)
+            'dbName': contract.dbName.trim(),
+        },
+      ).toString(),
+    );
+  }
+}
+
+/// One button in the bottom bar. Both are the same shape; only the fill and
+/// the label colour differ.
+class _BottomBarButton extends StatelessWidget {
+  const _BottomBarButton({
+    required this.label,
+    required this.fill,
+    required this.labelColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color fill;
+  final Color labelColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 60,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.notoSansThai(
+              fontSize: 16,
+              height: 1,
+              fontWeight: FontWeight.w600,
+              color: labelColor,
+            ),
+          ),
+        ),
+      );
 }
 
 /// Opens [url] outside this WebView, reporting the three outcomes the bridge
@@ -513,184 +570,6 @@ Future<void> openExternalDocument(BuildContext context, String url) async {
   Diagnostics.log('openExternalUrl ${opened == null ? 'unsupported' : 'failed'}');
   ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(message)));
-}
-
-// ── header card ───────────────────────────────────────────────────────
-
-/// Icon, contract name, and the running figures — everything above the tabs.
-///
-/// All of its conditions and fallbacks live on [LoanDetailSummary]; this
-/// widget only lays them out.
-class _LoanDetailHeaderCard extends StatelessWidget {
-  const _LoanDetailHeaderCard({
-    required this.contract,
-    required this.showsNotIssuedNotice,
-    required this.onDownloadContract,
-    required this.onViewInsurances,
-  });
-
-  final LoanContract contract;
-  final bool showsNotIssuedNotice;
-
-  /// Null when the config names no contract portal, in which case the notice's
-  /// `download` link is rendered as plain text rather than a dead tap.
-  final VoidCallback? onDownloadContract;
-  final VoidCallback onViewInsurances;
-
-  @override
-  Widget build(BuildContext context) {
-    final summary = LoanDetailSummary(contract);
-    return Container(
-      color: Colors.white,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 5, 20, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 15),
-                  child: LoanTypeIcon(
-                      dataUrl: contract.contractDetails.loanTypeIcon),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _rows(context, summary),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (summary.showsNotAClosingBalanceNote)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
-              child: Text(
-                LoanDetailSummary.notAClosingBalanceNote,
-                textAlign: TextAlign.end,
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: LoanDetailPalette.alert,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _rows(BuildContext context, LoanDetailSummary summary) => [
-        const SizedBox(height: 3),
-        Text(
-          contract.contractDetails.loanTypeName,
-          style: GoogleFonts.notoSansThai(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: LoanDetailPalette.label,
-          ),
-        ),
-        const SizedBox(height: 4),
-        LoanDetailSummaryRow(
-          label: 'เลขที่สัญญา',
-          value: contract.contractNo.trim(),
-        ),
-        const SizedBox(height: 3),
-        LoanDetailSummaryRow(
-          label: 'ชำระภายในวันที่',
-          value: summary.payByDateLabel,
-          valueColor: summary.payByDateIsOverdue
-              ? LoanDetailPalette.alert
-              : LoanDetailPalette.label,
-        ),
-        if (summary.showsInsuranceRow)
-          LoanDetailSummaryRow(
-            label: 'กรมธรรม์',
-            value: '',
-            trailing: GestureDetector(
-              onTap: onViewInsurances,
-              child: Text(
-                'ดูรายละเอียด',
-                textAlign: TextAlign.end,
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 13,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: LoanDetailPalette.navy,
-                  decoration: TextDecoration.underline,
-                  decorationColor: LoanDetailPalette.navy,
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 3),
-        if (showsNotIssuedNotice) _notIssuedNotice(),
-        if (summary.showsOverdueRow)
-          LoanDetailSummaryRow(
-            label: summary.overdueRangeLabel,
-            value: summary.overdueValueLabel,
-            emphasised: true,
-            valueColor: summary.showsPastDueInsteadOfAmount
-                ? LoanDetailPalette.alert
-                : LoanDetailPalette.navy,
-          ),
-        if (summary.showsInstallmentRow)
-          LoanDetailSummaryRow(
-            label: summary.installmentLabel,
-            value: summary.installmentValue,
-            emphasised: true,
-          ),
-        if (summary.showsCurrentInstallmentAmountRow)
-          LoanDetailSummaryRow(
-            label: 'ค่างวดปัจจุบัน',
-            value: summary.currentInstallmentAmountLabel,
-            emphasised: true,
-            valueColor: summary.showsPastDueInsteadOfAmount
-                ? LoanDetailPalette.alert
-                : LoanDetailPalette.navy,
-          ),
-        if (summary.showsTotalDueRow)
-          LoanDetailSummaryRow(
-            label: 'รวมต้องชำระ',
-            value: summary.totalDueLabel,
-            emphasised: true,
-          ),
-      ];
-
-  /// *"ถ้าลูกค้ายังไม่ได้รับตั๋วสัญญาใช้เงิน ณ วันที่ทำสัญญา กรุณา download"* —
-  /// whether it shows at all is [ComcodeConfig.showsContractNotIssuedNotice].
-  Widget _notIssuedNotice() {
-    final base = GoogleFonts.notoSansThai(
-      fontSize: 14,
-      height: 1.5,
-      color: LoanDetailPalette.alert,
-    );
-    return RichText(
-      text: TextSpan(
-        style: base,
-        children: [
-          const TextSpan(
-              text: 'ถ้าลูกค้ายังไม่ได้รับตั๋วสัญญาใช้เงิน ณ วันที่ทำสัญญา กรุณา '),
-          TextSpan(
-            text: 'download',
-            recognizer: onDownloadContract == null
-                ? null
-                : (TapGestureRecognizer()..onTap = onDownloadContract),
-            style: base.copyWith(
-              color: LoanDetailPalette.navy,
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
-              decorationColor: LoanDetailPalette.navy,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ── tab bodies ────────────────────────────────────────────────────────

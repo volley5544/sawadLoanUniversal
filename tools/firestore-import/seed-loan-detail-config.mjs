@@ -1,5 +1,6 @@
-// Seeds the two keys the **loan detail** screen reads into
-// `application/public_config`: `comcode_config` and `api_url.contract_url`.
+// Seeds the keys the **loan detail** and **loan payment** screens read into
+// `application/public_config`: `comcode_config`, `api_url.contract_url` and
+// `is_show_payButton`.
 //
 // Both are copied verbatim from the srisawad mobile app's own
 // `application/configs` (project `srisawad-mobile-app-qa-360402`), so the two
@@ -96,11 +97,25 @@ const comcodeConfig = {
 // keys are merged in rather than left to be wiped.
 const apiUrl = { ...current.api_url, contract_url: 'https://pt.swpfin.com/portal' };
 
-const body = { fields: { api_url: enc(apiUrl), comcode_config: enc(comcodeConfig) } };
-const mask = 'updateMask.fieldPaths=api_url&updateMask.fieldPaths=comcode_config';
+// `is_show_payButton` — the srisawad app's own kill switch for the payment
+// path, reproduced with the same (capital-B) spelling. It gates the ชำระเงิน
+// button on the loan detail screen; /loanPayment stays reachable by URL, which
+// is what keeps it testable while the switch is off.
+const body = {
+  fields: {
+    api_url: enc(apiUrl),
+    comcode_config: enc(comcodeConfig),
+    is_show_payButton: enc(true),
+  },
+};
+const mask =
+  'updateMask.fieldPaths=api_url' +
+  '&updateMask.fieldPaths=comcode_config' +
+  '&updateMask.fieldPaths=is_show_payButton';
 
 if (process.argv.includes('--dry-run')) {
-  console.log('would PATCH:', JSON.stringify({ api_url: apiUrl, comcode_config: comcodeConfig }, null, 2));
+  console.log('would PATCH:', JSON.stringify(
+    { api_url: apiUrl, comcode_config: comcodeConfig, is_show_payButton: true }, null, 2));
   process.exit(0);
 }
 
@@ -115,6 +130,7 @@ if (!res.ok) { console.error('PATCH failed', res.status, await res.text()); proc
 const after = await (await fetch(BASE + DOC, { headers: auth })).json();
 const now = Object.fromEntries(Object.entries(after.fields).map(([k, v]) => [k, dec(v)]));
 const ok =
+  now.is_show_payButton === true &&
   now.api_url.contract_url === 'https://pt.swpfin.com/portal' &&
   JSON.stringify(now.comcode_config.comcode) === JSON.stringify(comcodeConfig.comcode) &&
   Object.keys(current.api_url).every((k) => now.api_url[k] === current.api_url[k]);

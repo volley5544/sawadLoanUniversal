@@ -33,6 +33,13 @@ passes that again, archive the next round the same way.
 
 ## Current state (read this first)
 
+- **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
+  `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
+  It **files nothing** and makes no call of its own. Reached from the loan
+  detail screen's bottom bar (behind `is_show_payButton`) and from the srisawad
+  app's loan-card ชำระเงิน button. Read **Loan payment** first — its three
+  amount options and its asymmetric refusals are the part that is easy to get
+  subtly wrong.
 - **The loan detail screen is live** (added 2026-09-14, `lib/loan_detail/`).
   `/loanDetail?contNo=…` — three read-only tabs over one contract, plus a
   กรมธรรม์ sub-page. Not a flow: it is the loan-universal replacement for
@@ -148,12 +155,13 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 391 tests (models, payloads, headers, NDID terms +
+flutter test               # 416 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan
                            # failure report, mock-mode guard, the top-up flow's
                            # pricing/outcome rules + its two payloads, the
-                           # loan-detail comcode rules + header card) — green
+                           # loan-detail comcode rules + header card, the
+                           # loan-payment option amounts + refusals) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1526,6 +1534,7 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
 | `api_url.contract_url` | `https://pt.swpfin.com/portal` | the loan detail screen's คู่สัญญา / คำขอออกตั๋ว button |
 | `comcode_config` | *(map)* | the loan detail screen's two visibility rules — see **Loan detail** |
+| `is_show_payButton` | `true` | whether the loan detail screen offers **ชำระเงิน**. ⚠ Defaults to false when absent |
 
 | `ndid_as_id_uat` | `A18AC373-9CCB-47B3-A285-9ADBA29AFEFC` | uat builds — pins the AS, see **NDID API client** |
 
@@ -2776,6 +2785,138 @@ not a port omission. A policy with **no** `ins_url` gets a dimmed, untappable
 button rather than the source's `launchURL('')`, which does nothing and looks
 like a broken tap.
 
+### Loan payment (`lib/loan_payment/`)
+
+**ชำระเงิน** — pick how much of an instalment to pay, then get a QR for it.
+Added 2026-09-14, ported from LandAndHouseWeb's
+`customer_payment/select_payment_page` (UI and visibility rules) and its
+`customer_qr_payment_page`. It is the loan-universal replacement for both,
+which the host opens today through `api_url['customer_payment_web' | '…_uat']`.
+
+**It files nothing.** The screen's entire output is an amount, carried to the
+QR page, which the customer pays at their bank — this app never sees that
+transaction. So there is no submit, no confirmation, nothing to undo, and (like
+the loan detail screen) **no call of its own**: everything comes off the
+`GET /loan/list` row, which the source reads the same way.
+
+| Route | Takes |
+| --- | --- |
+| `/loanPayment` | `?contNo=` (+ optional `&dbName=`, `&fromHost=true`) |
+| `/loanPayment/qr` | `?contNo=&amount=` (+ optional `&dbName=`) |
+
+The amount rides in the **query string**, not `extra`: a reload reproduces the
+same bill, and the figure on screen is provably the one the payment screen
+settled on rather than something re-derived from data that may have moved.
+
+#### Three options, three amounts (`models/loan_payment_option.dart`)
+
+| Option | Amount |
+| --- | --- |
+| **ชำระเต็มจำนวน** | `current_due_amount + collection_fee` |
+| **ยอดค้างชำระ** | `overdue_amount + collection_fee` |
+| **กำหนดยอดชำระเอง** | what the customer types |
+
+The source holds these as a `[true, false, false]` bool list and recomputes
+each amount inline at **four** call sites — the radio's label, the option's own
+detail block, the button's disabled test and the push to the QR page. They are
+gathered onto `LoanPaymentSummary` so those four cannot disagree.
+
+⚠ **The collection fee rides on both fixed options**, not just the arrears one.
+Easy to get wrong, and a test pins it.
+
+⚠ **`ค่างวดปัจจุบัน` reads `installment_amount`, `รวมต้องชำระ`-style figures
+read `current_due_amount`** — the same two-fields-one-name trap the loan detail
+header carries. One is the schedule, the other is what is owed now, and they
+differ on a contract in arrears.
+
+⚠ **Two due-date fields.** `overdue_date` dates the arrears block;
+`current_due_date` dates the instalment coming up. Both appear in the
+ชำระเต็มจำนวน option, against different rows. `overdue_date` was added to
+`PaymentDetails` for this.
+
+**When the button refuses**, and it is not symmetric:
+
+- a **fixed** option whose total is zero is **disabled** — there is no bill to
+  raise;
+- a **typed** zero is disabled;
+- an **empty** typed field leaves the button *enabled*, and pressing it raises
+  `กรอกจำนวนเงินที่ต้องการจ่ายค่างวด`. The source's behaviour and the better
+  one: a prompt naming what is missing beats a dead button that explains
+  nothing;
+- below one baht → `จำนวนที่จ่ายต้องมากกว่า 1 บาท`. ⚠ The message says *more
+  than* 1 but the rule is `>= 1`, so exactly one baht passes. Both are the
+  source's; a test pins the boundary.
+
+⚠ **The typed field clamps silently to `os_balance` on blur.** Type 999,999
+against a balance of 40,000 and the field hands back `40,000.00` with no
+message. Reproduced deliberately (confirmed 2026-09-14) — the screen carries a
+standing note — **ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้** — which is why the
+correction needs no toast of its own. An empty field becomes `0.0`, not
+`0.00`; the source writes the shorter literal on that branch and its comma
+formatter never runs.
+
+#### The header card is shared with the loan detail screen
+
+`LoanDetailHeaderCard` was extracted from `loan_detail_page.dart` for this.
+That is not a convenience: the source embeds its own `LoanDetailCardComponent`
+here for exactly the same purpose, and that component turns out to carry **the
+same rows and the same rules** as the srisawad card the loan detail header was
+ported from. Two differently-shaped summaries of one contract, one screen
+apart, would invite the reader to wonder which is right.
+
+It is passed `showsNotIssuedNotice: false` — the source's `isShowDownload:
+false`. The contract-document link belongs on the detail screen, not in front
+of someone about to pay.
+
+#### The QR page is separate from the top-up flow's
+
+`loan_payment_qr_page.dart`, not a flag on `topup_qr_payment_page.dart`. The
+two are close but differ in ways that are not cosmetic: this one labels its
+figure **`จำนวนเงินค่างวด`** (an instalment; the top-up screen bills accrued
+interest and says `ยอดที่ต้องชำระ`), carries the **30-minute settlement note**,
+and has **no ปรับปรุงยอดชำระ button** — it has nothing to go back and re-price.
+That button on the top-up screen is half of a live hand-back relationship with
+its amount screen, which reloads `/topup/detail` on return; threading a flag
+through to suppress it would couple a pentested, shipped payment screen to a
+new one for no gain.
+
+**What the two do share is the part that was hard**: capture and save, in
+`services/qr_image_capture.dart` — the three-way outcome (`true` saved /
+`false` failed / `null` no host handler), the 2–3 pixel-ratio clamp, the
+opaque-fill requirement, and the browser download fallback. Each of those is a
+bug found once that should not have to be found again. The top-up page was
+refactored onto it; its layout is untouched.
+
+⚠ Both pages carry **the same `⚠` on the barcode payload**: it is byte-for-byte
+the source's `genQRCodePayment`, trailing `.0` included. See **The interest-payment
+QR** and Outstanding #29 — confirm the format with the payments team before
+touching either.
+
+⚠ Both also need the body to stay a `SingleChildScrollView` + `Column`, never a
+`ListView`: the saved image is the `RepaintBoundary`'s whole subtree, and a
+lazy sliver never builds what is off-screen.
+
+#### Entry points
+
+| From | How |
+| --- | --- |
+| this build's **loan detail** screen | **ชำระเงิน** in the bottom bar, beside คู่สัญญา. No `fromHost` — the customer came from a real page, so back returns there |
+| the srisawad app's loan card **ชำระเงิน** button | `/loan-universal-webview` with `path: '/loanPayment'`, from both `personal_loan_list.dart` and `loan_installment_list_page.dart` |
+
+⚠ The host edit is the same shape and carries the same trap as the loan detail
+one — it **must** go through `/loan-universal-webview`, never
+`/webview-page-topup`. `open_page_config.customer_payment_page_open_web` still
+gates it, so flipping that key to `false` rolls back to the native payment
+page. Needs an app release (Outstanding #10).
+
+**`is_show_payButton` gates the button, not the route.** The srisawad app's own
+kill switch for its payment path, reproduced with the same capital-B spelling
+and seeded into the uat `public_config` (2026-09-14). `/loanPayment` stays
+reachable by URL while the switch is off, which is what keeps it testable.
+⚠ It defaults to **false**, so an unseeded config — prod today — withholds the
+button rather than offering a payment path nobody turned on. A test pins that
+a *string* `'true'` does not grant it.
+
 ### P-Loan submission form (`lib/p_loan/submit_form/`)
 
 A **standalone** data-entry form — *not* part of any wizard — reached from
@@ -3885,7 +4026,7 @@ reason recorded.
       customer is offered a limit the settlement is not priced at. See
       `TopupFlow.settlementPricingAmount`.
 
-**Loan detail (added 2026-09-14):**
+**Loan detail + loan payment (added 2026-09-14):**
 
 34. **`openExternalUrl` needs a host build.** The คู่สัญญา / คำขอออกตั๋ว button
     and the กรมธรรม์ ดาวน์โหลด button both report themselves unsupported until
@@ -3894,8 +4035,9 @@ reason recorded.
     `services/native_bridge.dart`; allowlist the URL prefix host-side, since it
     is built from a Firestore value anyone can edit. Same release constraint as
     #10.
-35. **Seed `comcode_config` + `api_url.contract_url` into the *prod*
-    `public_config`.** uat was seeded 2026-09-14 and verified; prod was not.
+35. **Seed `comcode_config`, `api_url.contract_url` and `is_show_payButton`
+    into the *prod* `public_config`.** uat was seeded 2026-09-14 and verified;
+    prod was not.
     One command: `node tools/firestore-import/seed-loan-detail-config.mjs
     --project=sawad-loan-universal-prod`. Without it every rule answers false,
     so the screen ships with no contract-document button and no notice — safe,
@@ -3921,7 +4063,14 @@ reason recorded.
     either it reaches a different gateway, or its own ประวัติการชำระ tab has
     been quietly empty all along. Not blocking; worth one question, because
     whichever answer is true means one of the three clients has a bug.
-39. **No live loan-detail screen has been opened against a real contract.**
+39. **No live payment has been raised from this build.** The option
+    arithmetic and refusals are unit-tested and the screen renders, but nobody
+    has yet scanned one of its QR codes at a bank. The barcode payload is
+    byte-for-byte the source's, so the risk is low — but it is the one thing a
+    test cannot cover, and it involves real money. Same caveat #30 carries for
+    the top-up submit, and the note in #29 about the payload's format applies
+    to this screen as much as the top-up one.
+40. **No live loan-detail screen has been opened against a real contract.**
     Every rule is unit-tested and the build compiles, but nothing here has been
     seen on a device — in particular the `loan_type_icon` SVG (an inline data
     URL this build renders with `SvgPicture.string`) and the

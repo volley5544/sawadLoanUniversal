@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../loan_detail/loan_detail_page.dart';
+import '../loan_payment/loan_payment_page.dart';
+import '../loan_payment/loan_payment_qr_page.dart';
 import '../loan_register/appointment_datetime_page.dart';
 import '../loan_register/appointment_page.dart';
 import '../loan_register/branch_select_page.dart';
@@ -141,6 +143,19 @@ abstract final class AppRoutes {
   /// deep-links it in a fresh WebView and a reload has to work — the same
   /// shape `/topup/status` uses.
   static const String loanDetail = '/loanDetail';
+
+  // Loan payment (lib/loan_payment/) — pick an amount, get a QR for it.
+
+  /// **ชำระเงิน**. `?contNo=` (+ optional `&dbName=`, `&fromHost=true`).
+  static const String loanPayment = '/loanPayment';
+
+  /// **ชำระด้วย QR**. `?contNo=&amount=` (+ optional `&dbName=`).
+  ///
+  /// The amount rides in the query string rather than in `extra` so a reload
+  /// reproduces the same bill — and so the figure on screen is provably the
+  /// one the payment screen settled on, not something re-derived here from
+  /// data that may have moved since.
+  static const String loanPaymentQr = '/loanPayment/qr';
 }
 
 /// The app router.
@@ -259,6 +274,29 @@ final GoRouter appRouter = GoRouter(
     // everything they need in the query string precisely because they are
     // reachable without a flow (a link from the contract card, and a reload
     // after submitting).
+    // ── loan payment ───────────────────────────────────────────────────
+    GoRoute(
+      path: AppRoutes.loanPayment,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return LoanPaymentPage(
+          contractNo: q['contNo'] ?? '',
+          dbName: q['dbName'] ?? '',
+          fromHost: q['fromHost'] == 'true',
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.loanPaymentQr,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return LoanPaymentQrPage(
+          contractNo: q['contNo'] ?? '',
+          dbName: q['dbName'] ?? '',
+          amount: double.tryParse(q['amount'] ?? '') ?? 0,
+        );
+      },
+    ),
     // ── loan detail ────────────────────────────────────────────────────
     GoRoute(
       path: AppRoutes.loanDetail,

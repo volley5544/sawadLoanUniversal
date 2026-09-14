@@ -1,9 +1,5 @@
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -11,10 +7,8 @@ import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../router/app_router.dart';
-import '../services/diagnostics.dart';
-import '../services/native_bridge.dart';
+import '../services/qr_image_capture.dart';
 import 'components/topup_components.dart';
-import 'image_download.dart';
 import 'models/topup_flow.dart';
 
 /// **ชำระด้วย QR** — the dead end the amount screen sends a customer to when
@@ -292,59 +286,17 @@ class _TopupQrPaymentPageState extends State<TopupQrPaymentPage> {
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     // Read before the first await; the widget can be disposed during the save.
-    final ratio = MediaQuery.devicePixelRatioOf(context).clamp(2.0, 3.0);
-    String message;
-    try {
-      final boundary = _captureKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      final bytes = boundary == null ? null : await _renderPng(boundary, ratio);
-      if (bytes == null || bytes.isEmpty) {
-        message = 'บันทึกรูปภาพไม่สำเร็จ';
-      } else if (NativeCameraBridge.isSupported) {
-        final saved = await NativeCameraBridge.saveImageToGallery(
-          bytes,
-          name: 'QR-payment_${DateTime.now().millisecondsSinceEpoch}',
-        );
-        message = switch (saved) {
-          true => 'บันทึกรูปภาพลงในคลังภาพแล้ว',
-          false => 'บันทึกรูปภาพไม่สำเร็จ กรุณาอนุญาตการเข้าถึงคลังภาพ',
-          // The host answered nothing at all, i.e. it predates the handler.
-          // Naming the app is the only actionable thing we can say.
-          null => 'เวอร์ชันแอปนี้ยังไม่รองรับการบันทึกรูปภาพ กรุณาอัปเดตแอป',
-        };
-      } else {
-        // Plain browser. The download says only that it *started* — the
-        // browser never reports back — so the wording claims no more.
-        message = downloadImageBytes(bytes, fileName: 'qr-payment.png')
-            ? 'กำลังดาวน์โหลดรูปภาพ'
-            : 'บันทึกรูปภาพไม่สำเร็จ';
-      }
-    } catch (e) {
-      Diagnostics.log('topup qr save image failed: $e');
-      message = 'บันทึกรูปภาพไม่สำเร็จ';
-    }
+    final ratio = qrCapturePixelRatio(context);
+    final message = await captureAndSaveQrImage(
+      boundaryKey: _captureKey,
+      pixelRatio: ratio,
+      galleryName: 'QR-payment_${DateTime.now().millisecondsSinceEpoch}',
+      downloadFileName: 'qr-payment.png',
+      diagnosticsLabel: 'topup qr',
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     messenger.showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// Rasterises [boundary] to PNG bytes at [ratio].
-  ///
-  /// `pixelRatio` is clamped to 2–3 by the caller rather than taken raw: the
-  /// point of the image is that a bank app can scan the QR out of it, so the
-  /// capture must not be softer than the screen, and a 4x device would produce
-  /// a needlessly large file for a flat two-colour picture.
-  Future<Uint8List?> _renderPng(
-    RenderRepaintBoundary boundary,
-    double ratio,
-  ) async {
-    final image = await boundary.toImage(pixelRatio: ratio);
-    try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } finally {
-      image.dispose();
-    }
   }
 }
 
