@@ -760,61 +760,104 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   /// `settlement_total_amount` **as sent**, never re-added from the rows —
   /// this is a bill, and a client that disagrees with the server about it is
   /// worse than one that cannot explain it.
+  /// The **ยอดที่ต้องชำระเพื่อเติมวงเงิน** block, rebuilt 2026-09-14 to the
+  /// supplied design.
+  ///
+  /// Three things changed and each is deliberate:
+  ///
+  /// - **the total sits in a full-width grey band**, not under a hairline
+  ///   divider. It closes the block the way a bill's total line does, and it is
+  ///   the only element here the customer has to act on;
+  /// - **rows are navy, not label grey.** They were styled as captions, which
+  ///   read as footnotes to the payout above rather than as the bill itself;
+  /// - **the figures are larger and heavier than the labels beside them**, so a
+  ///   column of amounts scans without reading the Thai.
+  ///
+  /// ⚠ The band needs the card's own padding gone — a `Container` padded on
+  /// all sides cannot hold a full-bleed child. So the padding moved onto each
+  /// section and the card takes `clipBehavior`, which is what keeps the band's
+  /// bottom corners following the 12px radius instead of squaring it off.
   Widget _settlementBlock(TopupRecalculation recal) {
+    const gutter = EdgeInsets.symmetric(horizontal: 14);
     return Container(
       margin: const EdgeInsets.fromLTRB(
           LoanRegisterStyles.padding, 18, LoanRegisterStyles.padding, 0),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: LoanRegisterStyles.cardBorder),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'ยอดที่ต้องชำระเพื่อเติมวงเงิน',
-            style: TopupTheme.value(size: 15.5, weight: FontWeight.w800),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '*กรุณาชำระเงินก่อนดำเนินการ',
-            style: GoogleFonts.notoSansThai(
-                fontSize: 11.5, color: TopupTheme.alert),
-          ),
-          const SizedBox(height: 10),
-          Text('รายละเอียด', style: TopupTheme.label(size: 13)),
-          const SizedBox(height: 4),
-          for (var i = 0; i < recal.settlementItems.length; i++)
-            _settlementRow(i + 1, recal.settlementItems[i]),
-          const Divider(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
-                child: Text('รวมยอดที่ต้องชำระ',
-                    style:
-                        TopupTheme.value(size: 14.5, weight: FontWeight.w700)),
-              ),
-              Text(
-                formatTopupMoney(recal.settlementTotalAmount),
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: LoanRegisterStyles.primary,
+          Padding(
+            padding: gutter.copyWith(top: 14, bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'ยอดที่ต้องชำระเพื่อเติมวงเงิน',
+                  style: TopupTheme.value(size: 18, weight: FontWeight.w800),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text('บาท', style: TopupTheme.label(size: 12.5)),
-            ],
+                const SizedBox(height: 3),
+                Text(
+                  '*กรุณาชำระเงินก่อนดำเนินการ',
+                  style: GoogleFonts.notoSansThai(
+                      fontSize: 12, color: TopupTheme.alert),
+                ),
+                const SizedBox(height: 12),
+                Text('รายละเอียด', style: TopupTheme.label(size: 13.5)),
+                const SizedBox(height: 2),
+                for (var i = 0; i < recal.settlementItems.length; i++)
+                  _settlementRow(i + 1, recal.settlementItems[i]),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
-            style: GoogleFonts.notoSansThai(
-                fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
+          // The total's own band. Full width by design — see the class note.
+          Container(
+            color: LoanRegisterStyles.divider,
+            padding: gutter.copyWith(top: 13, bottom: 13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text('รวมยอดที่ต้องชำระ',
+                      style:
+                          TopupTheme.value(size: 15, weight: FontWeight.w700)),
+                ),
+                Text(
+                  // Displayed **as sent**, never summed from the rows above —
+                  // see TopupRecalculation.itemsSumMatchesTotal.
+                  formatTopupMoney(recal.settlementTotalAmount),
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'บาท',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    // The unit takes the figure's colour, as everywhere else on
+                    // these screens — a grey บาท breaks the phrase in half.
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: gutter.copyWith(top: 10, bottom: 12),
+            child: Text(
+              '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
+              style: GoogleFonts.notoSansThai(
+                  fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
+            ),
           ),
         ],
       ),
@@ -823,23 +866,27 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
 
   Widget _settlementRow(int number, TopupSettlementItem item) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 22,
-            child: Text('$number.', style: TopupTheme.label(size: 13)),
+            width: 24,
+            child: Text('$number.',
+                style: TopupTheme.value(size: 14.5, weight: FontWeight.w500)),
           ),
           // The server's own wording, shown verbatim — the client has no
           // mapping table and must not grow one.
-          Expanded(child: Text(item.description,
-              style: TopupTheme.label(size: 13))),
+          Expanded(
+            child: Text(item.description,
+                style: TopupTheme.value(size: 14.5, weight: FontWeight.w500)),
+          ),
           const SizedBox(width: 8),
           Text(formatTopupMoney(item.amount),
-              style: TopupTheme.value(size: 13.5, weight: FontWeight.w600)),
+              style: TopupTheme.value(size: 15, weight: FontWeight.w700)),
           const SizedBox(width: 5),
-          Text('บาท', style: TopupTheme.label(size: 12)),
+          Text('บาท',
+              style: TopupTheme.value(size: 13.5, weight: FontWeight.w600)),
         ],
       ),
     );
