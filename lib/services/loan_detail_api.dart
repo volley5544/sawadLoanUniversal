@@ -20,28 +20,22 @@ class LoanDetailApi {
   /// newest first as the server orders them.
   ///
   /// ⚠ **[dbName] is truncated to its first two characters** — `MLOAN` goes
-  /// out as `ML` — and that is not a typo.
+  /// out as `ML`. **Confirmed on a device, 2026-09-14**: that is what this
+  /// endpoint wants, and the whole name returns a `200` with an empty `data`
+  /// rather than an error, which is exactly what a well-formed request for a
+  /// database that does not exist looks like.
   ///
-  /// The two reference clients disagree: the srisawad mobile app sends the
-  /// whole name, LandAndHouseWeb sends `dbName.substring(0, 2)`. This build
-  /// shipped the whole name first (2026-09-14) and the ประวัติการชำระ tab came
-  /// back **empty on a contract that demonstrably has payments** — a `200`
-  /// with an empty `data`, not an error, which is exactly what a well-formed
-  /// request for a database that does not exist looks like.
+  /// It is worth knowing the two references disagree, because the truncation
+  /// reads like a bug: the srisawad mobile app sends the whole name,
+  /// LandAndHouseWeb sends `dbName.substring(0, 2)` — and that call is the
+  /// **only** `substring(0, 2)` on a `db_name` in its entire codebase, every
+  /// other one passing it whole. A truncation applied to one endpoint out of a
+  /// dozen is a deliberate accommodation of that endpoint, and the device test
+  /// bore that out.
   ///
-  /// What settles it: `substring(0, 2)` occurs **exactly once** in the whole
-  /// LandAndHouseWeb codebase, on this endpoint. Every other call there — and
-  /// there are many — passes `db_name` whole. A truncation applied to one
-  /// endpoint out of a dozen is a deliberate accommodation of that endpoint,
-  /// not a copy-paste artefact. And LandAndHouseWeb's loan detail page is the
-  /// client the QA app has been opening all along, so it is the one whose
-  /// history tab is known to populate.
-  ///
-  /// The srisawad app's whole-name call is left unexplained: it may reach a
-  /// different gateway, or its own history tab may be quietly empty too.
-  /// Worth an ask — but not worth blocking on, since this direction is the
-  /// one with evidence behind it. [useDbNamePrefix] flips it back in one
-  /// line.
+  /// The srisawad app's whole-name call stays unexplained — a different
+  /// gateway, or its own history tab is quietly empty too. One question to the
+  /// API team, not a blocker.
   static Future<PaymentHistory> fetchPaymentHistory({
     required String contractNo,
     required String dbName,
@@ -86,9 +80,10 @@ class LoanDetailApi {
         : name.substring(0, dbNamePrefixLength);
   }
 
-  /// `true` sends `ML` (the LandAndHouseWeb client, whose history tab
-  /// populates); `false` sends `MLOAN` (the srisawad mobile app). See
-  /// [fetchPaymentHistory] for the evidence.
+  /// `true` sends `ML`, which is what this endpoint answers to; `false` sends
+  /// `MLOAN`, which returns no rows. Kept as a named switch rather than
+  /// inlined so the truncation reads as a decision — see
+  /// [fetchPaymentHistory].
   static const bool useDbNamePrefix = true;
   static const int dbNamePrefixLength = 2;
 

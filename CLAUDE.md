@@ -2714,21 +2714,19 @@ which works there and nowhere else.
 Body `{contract_no, db_name}`, rows under **`data`** — not the `results`
 envelope the rest of the mobile API uses.
 
-⚠ **`db_name` is truncated to two characters** — `MLOAN` goes out as `ML` —
-and that is not a typo. This build shipped the whole name first and the
-ประวัติการชำระ tab came back **empty on a contract that has payments**: a
-`200` with an empty `data`, not an error, which is exactly what a well-formed
-request for a database that doesn't exist looks like.
+⚠ **`db_name` is truncated to two characters** — `MLOAN` goes out as `ML`.
+**Confirmed on a device, 2026-09-14.** The whole name returns a `200` with an
+empty `data` rather than an error, which is exactly what a well-formed request
+for a database that doesn't exist looks like — so this one is silent when it
+is wrong.
 
-What settles it: `substring(0, 2)` occurs **exactly once** in the whole
-LandAndHouseWeb codebase, on this endpoint. Every other call there passes
-`db_name` whole. A truncation applied to one endpoint out of a dozen is a
-deliberate accommodation of that endpoint, not a copy-paste artefact — and
-LandAndHouseWeb's loan detail page is the client the QA app had been opening
-all along, so it is the one whose history tab is known to populate. The
-srisawad app's whole-name call stays unexplained (a different gateway, or its
-own tab is quietly empty too); worth an ask, not worth blocking on.
-`LoanDetailApi.useDbNamePrefix` flips it back in one line; a test pins it.
+Worth knowing the two references disagree, because the truncation reads like a
+bug: the srisawad app sends the whole name, LandAndHouseWeb truncates — and
+that call is the **only** `substring(0, 2)` on a `db_name` in its entire
+codebase, every other one passing it whole. A truncation applied to one
+endpoint out of a dozen is a deliberate accommodation of that endpoint, and the
+device test bore it out. `LoanDetailApi.useDbNamePrefix` is the named switch; a
+test pins it.
 
 ⚠ **`date` is `dd-MM-yyyy HH:mm` — day first.** The source builds an ISO string
 by reversing the three parts, which only parses if the wire format is day-first.
@@ -3916,13 +3914,12 @@ reason recorded.
     missing; the call site is the one `Diagnostics.log` in
     `_onContractDocumentPressed`. Same shape as #23.
 38. **Ask why the srisawad app sends `db_name` whole to
-    `POST /payment/history_new`.** ~~Confirm which spelling the API wants~~ —
-    **settled 2026-09-14 on a device**: the whole name returns `200` with an
-    empty `data`, the two-character prefix (`ML`) returns the rows, so this
-    build now truncates like LandAndHouseWeb does. What is still unexplained is
+    `POST /payment/history_new`.** Which spelling the API wants is **settled**
+    (2026-09-14, on a device): the two-character prefix `ML` returns the rows,
+    the whole name returns `200` with an empty `data`. What is unexplained is
     the *native* app, which sends the whole name and is presumably not broken —
     either it reaches a different gateway, or its own ประวัติการชำระ tab has
-    been quietly empty. Not blocking; worth one question to the API team, since
+    been quietly empty all along. Not blocking; worth one question, because
     whichever answer is true means one of the three clients has a bug.
 39. **No live loan-detail screen has been opened against a real contract.**
     Every rule is unit-tested and the build compiles, but nothing here has been
