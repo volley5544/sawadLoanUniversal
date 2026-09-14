@@ -3721,6 +3721,37 @@ toolchain (built on Flutter 3.38 / Dart 3.10).
 
 ## Security posture
 
+**Both rule files are in the repo and registered in `firebase.json`**, so
+`firebase deploy --only firestore:rules,storage -P uat|prod` reproduces the live
+posture. Verified against uat on 2026-09-14 by probing it as an attacker would:
+
+| Probe | Result |
+| --- | --- |
+| unauthenticated `GET application/config` (the secret one) | **403** |
+| unauthenticated `GET application/public_config` | **403** |
+| unauthenticated `LIST` of the `application` collection | **403** |
+| unauthenticated bucket `LIST` and object `GET` | **403** |
+| **anonymous-signed-in** `GET application/public_config` | **200** — the app's own path |
+| the same anonymous identity on `application/config` / the bucket | **403** |
+
+`storage.rules` **denies everything, permanently**, and that is a finished
+state rather than a placeholder: this build has no Firebase SDK and never
+touches Cloud Storage. Every file it handles goes to the mobile API
+(`multipart/form-data` on `/ploan`, base64 in `POST /topup`) or to the
+customer's own device (`saveImageToGallery`, a browser download). A grant here
+would be granting to nobody.
+
+⚠ It was **live only in the console** until 2026-09-14 — correct (`if false`),
+but unmanaged: not in the repo, not in `firebase.json`, no recorded reasoning,
+and only reviewable by someone with console access. The file now carries the
+three rules-language facts the srisawad app's Cloud Storage pentest finding 1
+(Critical) cost to learn, because whoever first adds a path here will need all
+three: `allow` is additive and can never be narrowed; `read` means `get` +
+`list`, and enumeration is what turns a misconfigured bucket into a breach; and
+a catch-all `{allPaths=**}` **grant** re-opens every narrower path beneath it.
+(A catch-all *deny*, which is what this file is, cannot — denials grant
+nothing.)
+
 `firestore.rules` (deployed to **both** projects) is an allowlist of exactly one
 document:
 

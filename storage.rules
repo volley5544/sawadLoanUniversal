@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// Cloud Storage security rules for sawad-loan-universal (prod + uat).
+//
+// Deploy:  firebase deploy --only storage -P uat
+//
+// ## Nothing is granted, and that is the finished state — not a placeholder
+//
+// This build **has no Firebase SDK** and never touches Cloud Storage. Every
+// file it handles — the ID card and selfie, the three contract PDFs, the
+// collateral photos, the QR image — travels one of two ways:
+//
+//   * to the mobile API, as `multipart/form-data` on `POST /ploan` and as
+//     base64 inside `POST /topup`;
+//   * to the customer's own device, through the host's `saveImageToGallery`
+//     bridge handler or a browser download.
+//
+// So a bucket rule that granted anything would be granting it to nobody. The
+// deny below is the correct permanent posture, and this file exists mainly so
+// that fact is reviewable and reproducible instead of living only in a console
+// someone has to be given access to.
+//
+// ⚠ This build deliberately does **not** mirror uploads to Storage the way the
+// FlutterFlow source did — see CLAUDE.md, "Deliberate deviations from the
+// source". The Storage copy was never read back; the bytes the API wants are
+// the ones that get sent. Re-introducing that mirror would mean re-opening
+// this file, which is the point at which the notes below matter.
+//
+// ## Shaped by the SAWAD/MFEC mobile pentest, finding 1 (Critical)
+//
+// "Firebase Storage Misconfiguration Allowing Unauthenticated Actions" was
+// raised against the srisawad mobile app's bucket, not this one. The lessons
+// are recorded here anyway, because the moment anyone adds a path to this file
+// they will need all three, and the finding is what they cost to learn:
+//
+//  1. **`allow` is additive (OR) and can never be subtracted.** A later rule
+//     cannot narrow an earlier grant. `allow read: …` followed by
+//     `allow list: if false;` still permits listing.
+//  2. **`read` means `get` + `list`.** Grant `get` and a caller fetches one
+//     known object; grant `read` and they can enumerate the bucket. Prefer
+//     `get`, always — enumeration is how a misconfigured bucket turns into a
+//     data breach rather than a single leaked file.
+//  3. **A catch-all `match /{allPaths=**}` *grant* re-opens every narrower
+//     path beneath it**, whatever stricter rule sits there, because of (1).
+//     Match at exact depth instead, so any shape not enumerated is denied.
+//
+//  Two more worth carrying: prefer `create` to `write` where filenames are
+//  fresh and timestamped (`write` = create + update + delete, so `create`
+//  alone means an existing object cannot be overwritten or destroyed), and
+//  treat `request.resource.contentType` as necessary but never sufficient — it
+//  is client-declared, and a raw REST caller picks their own header.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // A catch-all **deny** is safe, where a catch-all grant would not be:
+    // denials grant nothing, so this cannot widen any rule added later. It is
+    // both the operative rule today and the baseline that makes an accidental
+    // "open everything" edit obvious in review.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
