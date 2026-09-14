@@ -28,6 +28,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
+import '../components/qr_payment_button.dart';
 import '../loan_detail/components/loan_detail_components.dart';
 import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
@@ -197,8 +198,12 @@ class _LoanPaymentQrPageState extends State<LoanPaymentQrPage> {
             ),
           ),
           const SizedBox(height: 20),
+          // Centred rather than in a row: the top-up screen's second button,
+          // ปรับปรุงยอดชำระ, has no counterpart here — see the class doc.
           Center(
-            child: _QrSaveButton(
+            child: QrPaymentButton(
+              label: 'บันทึกรูปภาพ',
+              color: _QrPalette.orange,
               busy: _saving,
               onTap: _saving ? null : _saveImage,
             ),
@@ -343,42 +348,6 @@ class _Caption extends StatelessWidget {
         textAlign: TextAlign.center,
         style:
             GoogleFonts.notoSansThai(fontSize: 12, color: _QrPalette.caption),
-      );
-}
-
-class _QrSaveButton extends StatelessWidget {
-  const _QrSaveButton({required this.busy, required this.onTap});
-
-  final bool busy;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 140,
-          height: 60,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _QrPalette.orange,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: busy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : Text(
-                  'บันทึกรูปภาพ',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-        ),
       );
 }
 

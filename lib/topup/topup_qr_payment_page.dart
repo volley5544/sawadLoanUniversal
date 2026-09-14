@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../components/qr_payment_button.dart';
 import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
@@ -242,13 +243,13 @@ class _TopupQrPaymentPageState extends State<TopupQrPaymentPage> {
   Widget _buttonRow(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _QrButton(
+          QrPaymentButton(
             label: 'บันทึกรูปภาพ',
             color: _QrPalette.orange,
             busy: _saving,
             onTap: _saving ? null : _saveImage,
           ),
-          _QrButton(
+          QrPaymentButton(
             label: 'ปรับปรุงยอดชำระ',
             color: _QrPalette.softBlue,
             labelColor: LoanRegisterStyles.value,
@@ -371,68 +372,4 @@ class _Caption extends StatelessWidget {
           color: _QrPalette.caption,
         ),
       );
-}
-
-/// The source's 140×60 action button: flat, 8pt radius, white label.
-class _QrButton extends StatelessWidget {
-  const _QrButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.labelColor,
-    this.busy = false,
-  });
-
-  final String label;
-  final Color color;
-  final VoidCallback? onTap;
-
-  /// Overrides the white label — needed once a button carries a pale fill,
-  /// where white text would be unreadable.
-  final Color? labelColor;
-
-  /// Swaps the label for a spinner. Capturing and saving the screen takes long
-  /// enough on a phone to look like nothing happened.
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = labelColor ?? Colors.white;
-    return SizedBox(
-      width: 140,
-      height: 60,
-      child: ElevatedButton(
-        onPressed: busy ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          // Hold the fill while busy: a greyed-out button beside an unchanged
-          // one reads as "disabled", not "working".
-          disabledBackgroundColor: color,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: busy
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(foreground),
-                ),
-              )
-            : Text(
-                label,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansThai(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: foreground,
-                ),
-              ),
-      ),
-    );
-  }
 }

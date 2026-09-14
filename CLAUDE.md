@@ -2880,12 +2880,22 @@ its amount screen, which reloads `/topup/detail` on return; threading a flag
 through to suppress it would couple a pentested, shipped payment screen to a
 new one for no gain.
 
-**What the two do share is the part that was hard**: capture and save, in
-`services/qr_image_capture.dart` — the three-way outcome (`true` saved /
-`false` failed / `null` no host handler), the 2–3 pixel-ratio clamp, the
-opaque-fill requirement, and the browser download fallback. Each of those is a
-bug found once that should not have to be found again. The top-up page was
-refactored onto it; its layout is untouched.
+**What the two do share**:
+
+- **the capture and save**, in `services/qr_image_capture.dart` — the
+  three-way outcome (`true` saved / `false` failed / `null` no host handler),
+  the 2–3 pixel-ratio clamp, the opaque-fill requirement and the browser
+  download fallback. Each is a bug found once that should not have to be found
+  again;
+- **the button**, `components/qr_payment_button.dart`. ⚠ Shared by
+  construction rather than by care: the two copies drifted within a day of the
+  second screen being written — same size, same colour, different corner
+  radius — which is the kind of difference nobody catches in review and
+  everybody sees on a device.
+
+The top-up page was refactored onto both; its layout is otherwise untouched.
+`lib/components/` exists for exactly this — a widget that is genuinely
+cross-feature, the way `lib/services/` and `lib/models/` already are.
 
 ⚠ Both pages carry **the same `⚠` on the barcode payload**: it is byte-for-byte
 the source's `genQRCodePayment`, trailing `.0` included. See **The interest-payment
