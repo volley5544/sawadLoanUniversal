@@ -1533,7 +1533,7 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `topup_product_icons` | product-code → SVG URL, for the top-up card's offer tiles | both (`…_uat` overrides) |
 | `topup_product_icon_default` | fallback icon URL | both (`…_uat` overrides) |
 | `api_url.contract_url` | `https://pt.swpfin.com/portal` | the loan detail screen's คู่สัญญา / คำขอออกตั๋ว button |
-| `api_url.check_application_status` | `https://dev.swpfin.com:5179/status` | the top-up flow's two status buttons |
+| `api_url.check_application_status` | `https://dev.swpfin.com:5179/status` | the top-up flow's two status buttons (prod's is `https://prd-proxy.swpfin.com:5178/status`) |
 | `comcode_config` | *(map)* | the loan detail screen's two visibility rules — see **Loan detail** |
 | `is_show_payButton` | `true` | whether the loan detail screen offers **ชำระเงิน**. ⚠ Defaults to false when absent |
 
@@ -2137,10 +2137,29 @@ The bearer is re-resolved through `AuthToken` rather than taken from the launch
 param — a top-up routinely outlives the hour a Firebase ID token is good for,
 and a stale one sends the customer to a page that cannot load.
 
-⚠ It needs the host's `openExternalUrl` handler **and** its allowlist:
-`https://dev.swpfin.com:5179/` was added alongside the contract portal, so this
-needs the same app release as Outstanding #34. Until one ships, both buttons
-report `เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร`.
+**The host differs per environment**, and unlike every other config-driven
+endpoint here it has a **compile-time fallback that actually matters**:
+
+| env | status host |
+| --- | --- |
+| prod | `https://prd-proxy.swpfin.com:5178/status` |
+| uat | `https://dev.swpfin.com:5179/status` |
+
+Resolution is config first (`api_url.check_application_status`),
+`AppEnvironment.checkApplicationStatusBase` as the degrade-to — the same order
+`SrisawadApi.baseUrl()` uses. ⚠ **On prod the fallback is currently the only
+source**: that project has no `application/public_config` document at all and
+no registered web app, so there is no anonymous identity to read one with
+(Outstanding #17 and #35). A config-only lookup would leave prod's status
+buttons dead. A test pins both values non-empty and `https://`, since the JWT
+rides in that URL.
+
+⚠ It needs the host's `openExternalUrl` handler **and** its allowlist, which
+now carries **both** hosts — the list ships in the app while the web build
+picks its host at runtime, so one binary has to cover both flavors or the
+missing one fails with `URL not allowed` until a new release. Same app release
+as Outstanding #34; until one ships, both buttons report
+`เวอร์ชันแอปนี้ยังไม่รองรับการเปิดเอกสาร`.
 
 ⚠ **`/topup/status` is now unreachable from inside this build** but is kept:
 it is URL-addressable, reload-safe, and the revert is one line in
@@ -2773,7 +2792,19 @@ not something a screenshot review catches. Worth knowing:
 #### `comcode_config` — what the screen offers, per company
 
 `models/comcode_config.dart`, read from the Firestore runtime config (see
-**Runtime config from Firestore**). It answers two questions:
+**Runtime config from Firestore**). Its values are copied verbatim from the
+srisawad mobile app's own `application/configs`, so the two clients cannot
+disagree about which company issues which document.
+
+⚠ Taken from the **QA** project, and later **diffed against the prod one**
+(2026-09-14): identical on all eight keys this build reads. Prod additionally
+carries `ticket_comcode_check_list`, `ticket_branch_check_list` and
+`contract_default_date2` — the LandAndHouseWeb ticket-branch condition this
+build deliberately does not reproduce. `api_url.contract_url` is the same on
+both (`https://pt.swpfin.com/portal`); `check_application_status` is **not**,
+which is why that one has a per-environment value.
+
+It answers two questions:
 
 | | Shown when |
 | --- | --- |
@@ -4278,9 +4309,16 @@ reason recorded.
     `services/native_bridge.dart`; allowlist the URL prefix host-side, since it
     is built from a Firestore value anyone can edit. Same release constraint as
     #10.
-35. **Seed `comcode_config`, `api_url.contract_url` and `is_show_payButton`
-    into the *prod* `public_config`.** uat was seeded 2026-09-14 and verified;
-    prod was not.
+35. **Create the *prod* `public_config` document.** ⚠ It does **not exist** —
+    confirmed 2026-09-14, `NOT_FOUND`. So prod has none of `comcode_config`,
+    `api_url.contract_url`, `is_show_payButton`, the top-up product icons or
+    `check_application_status`, and every screen that reads them falls back.
+    ⚠⚠ Seeding it is **necessary but not sufficient**: prod also has no
+    registered web app (#17), so there is no anonymous identity to read the
+    document with — the two have to be fixed together. The status buttons work
+    on prod today only because
+    `AppEnvironment.prod.checkApplicationStatusBase` is a compile-time
+    fallback. uat was seeded 2026-09-14 and verified.
     One command: `node tools/firestore-import/seed-loan-detail-config.mjs
     --project=sawad-loan-universal-prod`. Without it every rule answers false,
     so the screen ships with no contract-document button and no notice — safe,

@@ -3,8 +3,19 @@
 // `is_show_payButton`.
 //
 // Both are copied verbatim from the srisawad mobile app's own
-// `application/configs` (project `srisawad-mobile-app-qa-360402`), so the two
-// clients cannot disagree about which company issues which document.
+// `application/configs`, so the two clients cannot disagree about which company
+// issues which document.
+//
+// Taken from the QA project and diffed against the prod one on 2026-09-14:
+// `comcode_config` is identical on all eight keys this build reads, and
+// `contract_url` is the same on both. Prod additionally carries the
+// ticket_* keys and contract_default_date2, for the LandAndHouseWeb
+// ticket-branch condition this build does not reproduce.
+//
+// ⚠ `check_application_status` is NOT the same on both — prod is
+// https://prd-proxy.swpfin.com:5178/status, uat is
+// https://dev.swpfin.com:5179/status — which is why it lives on
+// AppEnvironment rather than being seeded here as one value.
 //
 //   node tools/firestore-import/seed-loan-detail-config.mjs --dry-run
 //   node tools/firestore-import/seed-loan-detail-config.mjs

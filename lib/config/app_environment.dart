@@ -275,6 +275,7 @@ enum AppEnvironment {
     // registered above — without an API key there is no anonymous identity,
     // and the rules require one.
     storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
+    checkApplicationStatusBase: 'https://prd-proxy.swpfin.com:5178/status',
     mobileApiBase: 'https://mobile-api.swpfin.com',
     srisawadHeader: 'x1',
     pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
@@ -285,6 +286,7 @@ enum AppEnvironment {
     firebaseProjectId: 'sawad-loan-universal-uat',
     firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
     storageBucket: 'sawad-loan-universal-uat.firebasestorage.app',
+    checkApplicationStatusBase: 'https://dev.swpfin.com:5179/status',
     // Matches `api_url.api_url_base` in the uat config document. Changed
     // 2026-09-11 from `https://dev.swpfin.com:7076`, which **no longer
     // serves** — that host had been the fallback for most of this project's
@@ -307,6 +309,7 @@ enum AppEnvironment {
     required this.firebaseProjectId,
     required this.firebaseApiKey,
     required this.storageBucket,
+    required this.checkApplicationStatusBase,
     required this.mobileApiBase,
     required this.srisawadHeader,
     required this.pdfLoanSrisawadHeader,
@@ -337,6 +340,17 @@ enum AppEnvironment {
   /// `storage.rules` grants no `get` or `list` for that reason. Empty disables
   /// the mirror.
   final String storageBucket;
+
+  /// Application-status web page — the top-up flow's ดูสถานะคำขอ and
+  /// ดูสถานะการขอเพิ่มวงเงิน buttons.
+  ///
+  /// Config first (`api_url.check_application_status`), this as the
+  /// degrade-to, exactly like [mobileApiBase]. ⚠ On **prod** it is currently
+  /// the only source: that project has no `application/public_config` document
+  /// and no registered web app, so there is no anonymous identity to read one
+  /// with (Outstanding #17 and #35). Without this value prod's status buttons
+  /// would report `ไม่พบ URL สำหรับติดตามสถานะ` and nothing else.
+  final String checkApplicationStatusBase;
 
   /// Base URL of the srisawad **mobile API** (customer profile + addresses —
   /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing

@@ -10,6 +10,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../config/app_environment.dart';
 import 'app_config_api.dart';
 import 'auth_token.dart';
 import 'diagnostics.dart';
@@ -51,10 +52,17 @@ Future<void> openExternalDocument(BuildContext context, String url) async {
 /// good for, and handing the status page a stale one sends the customer to a
 /// screen that cannot load.
 Future<void> openApplicationStatus(BuildContext context) async {
+  // Config first, compile-time value as the degrade-to — the same order
+  // `SrisawadApi.baseUrl()` uses. ⚠ On prod the fallback is currently the only
+  // source: that project has no config document and no web app key to read one
+  // with, so a config-only lookup would leave its status buttons dead.
   final config = await AppConfigApi.ensureLoaded();
-  final base = config.checkApplicationStatus;
-  if (base == null || base.isEmpty) {
-    // Without this the interpolation below would open a broken page with no
+  final base = config.checkApplicationStatus?.trim().isNotEmpty == true
+      ? config.checkApplicationStatus!
+      : AppEnvironment.current.checkApplicationStatusBase;
+  if (base.trim().isEmpty) {
+    // Only reachable if a future environment ships without either. Without
+    // this the interpolation below would open a broken page with no
     // explanation — the source guards it the same way.
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

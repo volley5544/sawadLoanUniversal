@@ -1109,4 +1109,32 @@ void main() {
       );
     });
   });
+
+  group('the status page host per environment', () {
+    test('each environment ships a working fallback', () {
+      // ⚠ On prod this is the ONLY source: that project has no
+      // application/public_config document and no registered web app, so there
+      // is no anonymous identity to read one with. A config-only lookup would
+      // leave prod's status buttons dead.
+      expect(AppEnvironment.prod.checkApplicationStatusBase,
+          'https://prd-proxy.swpfin.com:5178/status');
+      expect(AppEnvironment.uat.checkApplicationStatusBase,
+          'https://dev.swpfin.com:5179/status');
+      for (final env in AppEnvironment.values) {
+        expect(env.checkApplicationStatusBase, isNotEmpty,
+            reason: '${env.name} would report ไม่พบ URL สำหรับติดตามสถานะ');
+        expect(env.checkApplicationStatusBase, startsWith('https://'),
+            reason: 'the JWT rides in this URL, so it must not be cleartext');
+      }
+    });
+
+    test('the two hosts differ, so one allowlist entry is not enough', () {
+      // The srisawad host's _kOpenExternalUrlAllowedPrefixes matches on
+      // url.startsWith and ships in the app, while the web build picks its
+      // host at runtime — so both must be listed there or that flavor's
+      // buttons fail with `URL not allowed` until a new release.
+      expect(AppEnvironment.prod.checkApplicationStatusBase,
+          isNot(AppEnvironment.uat.checkApplicationStatusBase));
+    });
+  });
 }
