@@ -56,6 +56,17 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   /// screen: an unconfigured build, an unreachable gateway, or a contract with
   /// nothing outstanding. That is deliberate; see [TopupApi.recalculate].
   TopupRecalculation? _recal;
+
+  /// True while a settlement read is in flight — i.e. while [_recal] is null
+  /// but not yet *known* to be null.
+  ///
+  /// ⚠ **The primary button is disabled for exactly this window**, and that is
+  /// a correctness gate, not a spinner. [TopupFlow.outcome] upgrades ถัดไป to
+  /// ชำระเงิน only once there are rows to settle, so during the gap the button
+  /// says ถัดไป — and a customer who taps it walks past interest they owe. The
+  /// window is real on a re-price too, where [_loadSettlement] deliberately
+  /// clears the old rows *before* fetching the new ones.
+  bool _settlementPending = false;
   bool _submittingLead = false;
   String? _error;
 
@@ -105,12 +116,13 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       // contract's own `topup_detail.default_topup_amount` from `/loan/list`,
       // which the card has already loaded. The screen re-seeds from the
       // response immediately after.
+      final askedFor = _flow.requestedAmount > 0
+          ? _flow.requestedAmount
+          : contract.topupDetail.defaultTopupAmount;
       final first = await TopupApi.fetchRecal(
         dbName: contract.dbName,
         contractNo: contract.contractNo,
-        topupAmount: _flow.requestedAmount > 0
-            ? _flow.requestedAmount
-            : contract.topupDetail.defaultTopupAmount,
+        topupAmount: askedFor,
         token: _flow.authToken,
       );
       if (!mounted) return;
@@ -139,7 +151,18 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
         _amountController.text = formatWholeMoney(seeded);
         _loading = false;
       });
-      await _loadSettlement();
+      // ⚠ **No second settlement read here.** `fetchRecal` above already
+      // returned one, and calling `_loadSettlement()` again clears `_recal`
+      // and re-fetches it *after* `_loading` goes false — so the screen
+      // rendered complete, the ยอดที่ต้องชำระเพื่อเติมวงเงิน section then
+      // vanished for a round trip and came back. During that gap
+      // [TopupFlow.outcome] saw no rows and the button said **ถัดไป**, letting
+      // a customer walk past interest they owe. Reported 2026-09-14.
+      //
+      // The only case the first response does not cover is a seed that differs
+      // from the amount it was priced at — `_seedAmount` can return a purpose
+      // price or a previously-typed figure. Then, and only then, re-read.
+      if (seeded != askedFor) await _loadSettlement();
     } on SrisawadApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -257,7 +280,12 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   Future<void> _loadSettlement() async {
     final contract = _flow.contract;
     if (contract == null) return;
-    if (mounted) setState(() => _recal = null);
+    if (mounted) {
+      setState(() {
+        _recal = null;
+        _settlementPending = true;
+      });
+    }
     try {
       final res = await TopupApi.fetchRecal(
         dbName: contract.dbName,
@@ -269,7 +297,10 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
         token: _flow.authToken,
       );
       if (!mounted) return;
-      setState(() => _recal = res.recalculation);
+      setState(() {
+        _recal = res.recalculation;
+        _settlementPending = false;
+      });
     } on SrisawadApiException catch (e) {
       // ⚠ A re-read failing does **not** fail the screen, unlike the same call
       // in [_load]. By this point the limits are already on screen and still
@@ -280,7 +311,11 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       TopupApi.lastRecalFailure =
           'topup recal ${e.statusCode ?? ''} ${e.message}'.trim();
       Diagnostics.log(TopupApi.lastRecalFailure!);
-      setState(() => _recal = null);
+      // Known-absent, not unknown: the button is released.
+      setState(() {
+        _recal = null;
+        _settlementPending = false;
+      });
     }
   }
 
@@ -852,8 +887,15 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
           padding: gutter.copyWith(top: 10, bottom: 12),
           child: Text(
             '*สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ',
+            // Orange, not alert red (2026-09-14, on request) — the same
+            // reasoning as the card's `*เมื่อชำระยอดเพื่อเติมวงเงิน`: it
+            // qualifies *how* the payment is made rather than warning about
+            // the total above it, and in red under a total it read as a
+            // problem with the total.
             style: GoogleFonts.notoSansThai(
-                fontSize: 11.5, height: 1.4, color: TopupTheme.alert),
+                fontSize: 11.5,
+                height: 1.4,
+                color: LoanRegisterStyles.primary),
           ),
         ),
       ],
@@ -983,7 +1025,10 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   }
 
   Widget? _bottomBar() {
-    final busy = _recalculating || _submittingLead;
+    // `_settlementPending` is here for safety, not for feedback — see the
+    // field's doc. Without it the button reverts to ถัดไป while a re-price is
+    // in flight and lets the customer past a payment they still owe.
+    final busy = _recalculating || _submittingLead || _settlementPending;
     final editing = _amountFocus.hasFocus;
     final outcome = _outcome;
 
