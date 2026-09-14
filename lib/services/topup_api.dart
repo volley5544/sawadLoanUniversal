@@ -194,144 +194,95 @@ class TopupApi {
     return json;
   }
 
-  /// Base URL of `POST /GetRecalTopupData`, resolved like every other
-  /// endpoint: `api_url['recal_topup_url_base']` from the Firestore config
-  /// first, [kTopupRecalApiBase] as the degrade-to value.
-  static Future<String> recalBaseUrl() async {
-    final config = await AppConfigApi.ensureLoaded();
-    return config.urlFor('recal_topup_url_base') ?? kTopupRecalApiBase;
-  }
-
-  /// `POST /GetRecalTopupData` — re-prices [topupAmount] and returns the
-  /// **ยอดที่ต้องชำระเพื่อเติมวงเงิน** breakdown the amount screen shows.
+  /// `POST /topup/recal` — **the top-up flow's replacement for
+  /// `GET /topup/detail`** (2026-09-14, on instruction: *"we will use recal
+  /// api instead of /topup/detail"*).
   ///
-  /// The response is a superset of `GET /topup/detail`; only the parts that
-  /// call cannot supply are modelled — see [TopupRecalculation].
+  /// One call now answers both questions the amount screen asks. The body is a
+  /// superset of `/topup/detail`'s — the same limits, rate, duty,
+  /// `contract_details` and `car_details` — **plus** `settlement_items`, which
+  /// `/topup/detail` has no fields for. So [TopupRecalResult] carries a
+  /// [LoanAmountDetail] and a [TopupRecalculation] parsed from the *same*
+  /// body, and the screen can no longer show limits that disagree with the
+  /// settlement under them.
   ///
-  /// **Returns `null` when the section cannot be shown**, rather than
-  /// throwing, and that is the whole error policy of this call. The section is
-  /// driven entirely by `settlement_items`: no rows means no section, so a
-  /// build with no credential ([kTopupRecalConfigured]), a gateway that cannot
-  /// be reached from a browser (see [kTopupRecalApiBase]) and a contract with
-  /// nothing outstanding all render **the same screen**. A top-up amount is
-  /// still perfectly requestable without a settlement block, so a failure here
-  /// must not take the page down with it. Every null leaves a
-  /// [Diagnostics] breadcrumb, because otherwise "why is the section missing?"
-  /// is unanswerable from a device.
+  /// ⚠ **`GET /topup/detail` is not gone** — [fetchDetail] stays, because
+  /// [PLoanApi.fetchAmountDetail] delegates to it and the P-Loan flow is a
+  /// different product on a different submit endpoint. The instruction was
+  /// about the top-up flow. `topup_amount_page_old.dart` also still calls it,
+  /// which is the point of the `_old` pair.
   ///
-  /// ⚠ It takes **no `token`**, unlike every other method here: this endpoint
-  /// is off the mobile API base and authenticates with its own shared
-  /// credential, not the customer's bearer. When it moves behind the mobile
-  /// API (Outstanding #33) that becomes a `required String token` like the
-  /// rest, and [kTopupRecalApiAuth] goes away.
+  /// ⚠ **This one throws**, where the old test-host version returned null for
+  /// everything. That was right while the call only fed an optional section;
+  /// now it carries the limits the whole screen is built from, so a failure is
+  /// a failure — same contract as [fetchDetail], which it replaces. A
+  /// *successful* response with no `settlement_items` is still perfectly
+  /// normal and simply renders no section.
   ///
-  /// Each null also fills [lastRecalFailure] with the full reason, which the
-  /// amount screen offers behind a **non-prod** notice. Returning null and
-  /// saying nothing is right for a customer and useless for a tester: "the
-  /// section never appears" has at least five causes that look identical from
-  /// the screen, and chasing the wrong one cost most of 2026-09-13.
-  static Future<TopupRecalculation?> recalculate({
+  /// ⚠ **The response is flat, not wrapped in `results`.** The retired test
+  /// host (`GetRecalTopupData` on `34.142.213.42:8080`) wrapped it; this one
+  /// does not. Both shapes are accepted so a rollback needs no code change.
+  static Future<TopupRecalResult> fetchRecal({
     required String dbName,
     required String contractNo,
     required num topupAmount,
+    required String token,
   }) async {
-    lastRecalFailure = null;
-    if (kPLoanUseMockData) return _mock(mockRecalculation(topupAmount));
-    if (!kTopupRecalConfigured) {
-      return _recalFailed(
-        'topup recal not configured — settlement hidden',
-        detail: 'TOPUP_RECAL_API_AUTH is empty in this build, so no request '
-            'is made and dart2js folds the call out entirely. To confirm from '
-            'outside, grep the deployed main.dart.js for the endpoint HOST '
-            '(the IP or domain in kTopupRecalApiBase) — not for the path, '
-            'which this very sentence would match.',
+    if (kPLoanUseMockData) {
+      return _mock(TopupRecalResult(
+        detail: mockAmountDetail(contractNo),
+        recalculation: mockRecalculation(topupAmount),
+      ));
+    }
+    final base = await SrisawadApi.baseUrl();
+    final json = await SrisawadApi.send(
+      'POST',
+      Uri.parse('$base/topup/recal'),
+      token: token,
+      body: {
+        'contract_no': contractNo,
+        'db_name': dbName,
+        // The sample sends this as a number, not a string.
+        'topup_amount': topupAmount,
+      },
+    );
+    if (json is! Map<String, dynamic>) {
+      throw SrisawadApiException('Unexpected /topup/recal response: $json');
+    }
+    // Flat on the QA endpoint; `results`-wrapped on the retired test host.
+    final payload = json['results'] is Map<String, dynamic>
+        ? json['results'] as Map<String, dynamic>
+        : json;
+
+    final detail = LoanAmountDetail.fromJson(payload);
+    if (!detail.isOk) {
+      // Carries the API's own business-hours message outside 07:00–20:30, and
+      // `400 topup_amount out of range` when the amount exceeds this
+      // endpoint's ceiling — see TopupFlow.settlementPricingAmount.
+      throw SrisawadApiException(
+        detail.message.isNotEmpty ? detail.message : 'topup/recal ${detail.code}',
       );
     }
-    final base = await recalBaseUrl();
-    final url = Uri.parse('$base/GetRecalTopupData');
-    final body = jsonEncode({
-      'contract_no': contractNo,
-      'db_name': dbName,
-      // The sample sends this as a number, not a string.
-      'topup_amount': topupAmount,
-    });
-    try {
-      final res = await sendApiRequest(
-        'POST',
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': kTopupRecalApiAuth,
-        },
-        body: body,
-      );
-      final json = SrisawadApi.decode(res.body);
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        return _recalFailed(
-          'topup recal HTTP ${res.statusCode}',
-          detail: 'POST $url\nsent: $body\nHTTP ${res.statusCode}\n\n'
-              '${res.body}',
-        );
-      }
-      // Wrapped in `results`, like /user/detail rather than /topup/detail.
-      final results = (json is Map<String, dynamic>) ? json['results'] : null;
-      if (results is! Map<String, dynamic>) {
-        return _recalFailed(
-          'topup recal: unexpected body',
-          detail: 'POST $url\nsent: $body\n\nno `results` object in:\n'
-              '${res.body}',
-        );
-      }
-      final recal = TopupRecalculation.fromJson(results);
-      if (!recal.isOk) {
-        // The commonest one in practice, and it is **not** a transport
-        // problem: `400 topup_amount out of range` means the screen asked for
-        // more than this endpoint allows — see the amount-screen note about
-        // the M35 uplift, which the two endpoints disagree about.
-        return _recalFailed(
-          'topup recal ${recal.code} ${recal.message}',
-          detail: 'POST $url\nsent: $body\n\n'
-              'results.code ${recal.code}: ${recal.message}\n\n${res.body}',
-        );
-      }
-      if (!recal.itemsSumMatchesTotal) {
-        // Not corrected — the server's total is what the customer owes — but
-        // the screen is then showing a breakdown that does not explain the
-        // figure under it, which is worth being able to see from a device.
-        Diagnostics.log('topup settlement rows do not sum to '
-            '${recal.settlementTotalAmount}');
-      }
-      return recal;
-    } on ApiTransportException catch (e) {
-      return _recalFailed(
-        'topup recal transport: ${e.message}',
-        detail: 'POST $url\nsent: $body\n\ntransport error: ${e.message}\n\n'
-            'Inside the app this is usually `URL not allowed` — the host\'s '
-            '_kHttpRequestAllowedPrefixes ships in the app build. In a plain '
-            'browser it is mixed content or CORS: this endpoint is http on an '
-            'IP and sends no access-control-allow-* header, so a browser '
-            'cannot reach it at all.',
-      );
+
+    final recal = TopupRecalculation.fromJson(payload);
+    if (!recal.itemsSumMatchesTotal) {
+      // Not corrected — the server's total is what the customer owes — but the
+      // screen is then showing a breakdown that does not explain the figure
+      // under it, which is worth being able to see from a device.
+      Diagnostics.log(
+          'topup settlement rows do not sum to ${recal.settlementTotalAmount}');
     }
+    return TopupRecalResult(detail: detail, recalculation: recal);
   }
 
-  /// The reason the last [recalculate] returned null, or null after a success.
+  /// Why the settlement section is absent, or null when nothing went wrong.
   ///
-  /// Read by the amount screen's **non-prod** diagnostics notice. Deliberately
-  /// static rather than carried on a result object: every caller wants the
-  /// same "why is the section missing?" answer, and the call is only ever made
-  /// from one screen at a time.
+  /// Read by the amount screen's **non-prod** notice. A failure inside
+  /// [fetchRecal] now *throws* — it carries the screen's limits — so the only
+  /// thing that writes this is the screen's own re-read, which deliberately
+  /// swallows. Kept because "the section vanished after I changed the amount"
+  /// is otherwise unanswerable from a device, which cost most of 2026-09-13.
   static String? lastRecalFailure;
-
-  /// Records [summary] as a breadcrumb, keeps [detail] for the on-screen
-  /// report, and returns null — the value every failure path here answers
-  /// with.
-  static TopupRecalculation? _recalFailed(String summary,
-      {required String detail}) {
-    Diagnostics.log(summary);
-    lastRecalFailure = '$summary\n\n$detail';
-    return null;
-  }
 
   /// Base URL of the lead service, resolved like every other endpoint:
   /// `api_url['lead_url_base']` from the Firestore config first, the
@@ -447,4 +398,19 @@ class TopupApi {
     required String token,
   }) =>
       PLoanApi.validateThaiIdCard(imageBytes: imageBytes, token: token);
+}
+
+/// What `POST /topup/recal` answers with: the limits the amount screen is
+/// built from **and** the settlement breakdown under them, parsed from one
+/// body.
+///
+/// They are deliberately kept as the two existing models rather than merged
+/// into a third: [LoanAmountDetail] is shared with the P-Loan flow (which
+/// still reads it from `GET /topup/detail`), and [TopupRecalculation] owns the
+/// `settlement_items` shape. One response, two views, no new wire model.
+class TopupRecalResult {
+  const TopupRecalResult({required this.detail, required this.recalculation});
+
+  final LoanAmountDetail detail;
+  final TopupRecalculation recalculation;
 }

@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sawad_loan_universal/config/app_environment.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 import 'package:sawad_loan_universal/topup/models/topup_settlement.dart';
@@ -75,6 +74,44 @@ Map<String, dynamic> _mloanResponse() => {
       ],
       'settlement_total_amount': 11.00,
       'campaign_code': '',
+    };
+
+/// The QA endpoint's sample (`etc/recal_api.txt`, 2026-09-14) — **flat**,
+/// where the retired test host wrapped the same shape in `results`.
+Map<String, dynamic> _qaRecalResponse() => {
+      'code': '200',
+      'message': 'success',
+      'db_name': 'MLOAN',
+      'contract_no': '1สM681102002NF63C',
+      'default_topup_amount': 38900,
+      'min_topup_amount': 16400,
+      'max_topup_amount': 38900,
+      'max_transfer_amount': 0,
+      'interest_rate': 1.09,
+      'fee_amount': 20,
+      'closing_balance': 16124,
+      'topup_extra': 0,
+      'yield': 21,
+      'collection_fee': 0,
+      'penalty_fee': 0,
+      'interest_paid_flag': '',
+      'due_day': 14,
+      'overdue_day': 0,
+      'overdue_principal_amount': 0,
+      'topup_discount_amount': 0,
+      'payoff_before_settlement_amount': 22776,
+      'default_transfer_amount': 22776,
+      'settlement_items': [
+        {
+          'seq': 1,
+          'field_name': 'yield',
+          'description': 'ดอกเบี้ย',
+          'amount': 21,
+        },
+      ],
+      'settlement_total_amount': 21,
+      'campaign_code': '',
+      'topup_actual': 38900,
     };
 
 void main() {
@@ -179,12 +216,33 @@ void main() {
     expect(r.defaultTopupAmount, 88500);
   });
 
-  // The supplied curl carries a shared `Basic` service account. Baking one
-  // into a web bundle is the finding deleting `kPLoanSaveApiAuth` closed —
-  // anyone who opens the app can read it. Same rule as the lead fallback.
-  test('no recalculation credential ships in the bundle', () {
-    expect(kTopupRecalApiAuth, isEmpty);
-    expect(kTopupRecalConfigured, isFalse);
+  // The old test host wanted a shared `Basic` service account, and a test
+  // pinned that it never shipped. `POST /topup/recal` authenticates with the
+  // customer's own bearer instead, so there is no credential left to pin —
+  // which is why that test is gone rather than relaxed.
+
+  group('POST /topup/recal — the QA endpoint that replaced /topup/detail', () {
+    // The supplied sample (etc/recal_api.txt) is FLAT: no `results` wrapper,
+    // unlike the retired GetRecalTopupData test host. One body has to satisfy
+    // both models, since fetchRecal parses it twice.
+    test('one flat body feeds both LoanAmountDetail and TopupRecalculation',
+        () {
+      final body = _qaRecalResponse();
+      final detail = LoanAmountDetail.fromJson(body);
+      final recal = TopupRecalculation.fromJson(body);
+
+      expect(detail.isOk, isTrue);
+      expect(detail.defaultTopupAmount, 38900);
+      expect(detail.maxTopupAmount, 38900);
+      expect(detail.minTopupAmount, 16400);
+      expect(detail.interestRate, 1.09);
+      expect(detail.feeAmount, 20);
+
+      expect(recal.hasSettlement, isTrue);
+      expect(recal.settlementItems.single.description, 'ดอกเบี้ย');
+      expect(recal.settlementTotalAmount, 21);
+      expect(recal.itemsSumMatchesTotal, isTrue);
+    });
   });
 
   group('settlementPricingAmount — what the breakdown is priced at', () {

@@ -253,10 +253,11 @@ which is the real reason CI had been shipping every uat build, and why the live
 `firebase login` credentials from `~/.config/configstore`. Fixing the global
 install (`npm i -g firebase-tools`) would also do it.
 
-It also passes **`--dart-define=TOPUP_RECAL_API_AUTH`**, read from the
-git-ignored `etc/deploy-secrets.txt` (or the environment). An absent file is
-the normal state and simply builds without it — see Outstanding #33 for what
-that credential is and why it must come back out.
+⚠ It briefly also passed `--dart-define=TOPUP_RECAL_API_AUTH` (2026-09-13),
+which made the hook's builds differ from CI's and let a CI run silently replace
+a working uat deploy — twice, once at a *lower* version number. **Removed
+2026-09-14**: `POST /topup/recal` uses the customer's own bearer, so no build
+carries a credential and the two paths produce identical bundles again.
 
 **Still manual:** bumping `sawad_loan_universal_version_uat` in the host's
 appConfig to match. Until that is raised, the host's stale-cache auto-reload
@@ -2039,7 +2040,7 @@ silently: typing `96,050` and being handed `96,000` back is otherwise
 indistinguishable from the app losing the input.
 
 **`ยอดที่ต้องชำระเพื่อเติมวงเงิน` is the server's breakdown**, from
-`POST /GetRecalTopupData` — see that section. It is re-read on every calculator
+`POST /topup/recal` — see that section. It is re-read on every calculator
 run (it is priced per `topup_amount`), and the previous rows are cleared
 **before** the call, never after: leaving the old amount's settlement under a
 new figure would explain the wrong number.
@@ -2210,11 +2211,37 @@ its iOS equivalent) rather than the camera handler. That path is already
 exercised by `p_loan/submit_form`'s attachment groups, so it is not new ground
 — but it is the first thing to check if the button does nothing on a device.
 
-#### `POST /GetRecalTopupData` — the settlement breakdown
+#### `POST /topup/recal` — the settlement breakdown, and the limits with it
 
-**ยอดที่ต้องชำระเพื่อเติมวงเงิน on the redesigned amount screen comes from the
-backend**, not from `/topup/detail` (added 2026-09-12; sample in the
-git-ignored `etc/new_topup_api.txt`). It re-prices a chosen `topup_amount` and
+⚠ **This endpoint has replaced `GET /topup/detail` in the top-up flow**
+(2026-09-14, on instruction: *"we will use recal api instead of
+/topup/detail"*). It answers both questions at once — the limits the amount
+screen is built from **and** the settlement under them — so `TopupApi.fetchRecal`
+parses one body into a `LoanAmountDetail` **and** a `TopupRecalculation`
+(`TopupRecalResult`), and the two can no longer disagree on screen.
+
+**`GET /topup/detail` is not gone.** `TopupApi.fetchDetail` stays for
+`PLoanApi.fetchAmountDetail` — the P-Loan flow is a different product on a
+different submit endpoint, and the instruction was about the top-up flow — and
+for `topup_amount_page_old.dart`, which is the point of the `_old` pair.
+
+⚠ **It throws where the old one never did.** While this call only fed an
+optional section, returning `null` for every failure was right. It now carries
+the limits the whole screen depends on, so a failure is a failure — the same
+contract `fetchDetail` had. A *successful* response with no `settlement_items`
+is still normal and simply renders no section. The **re-read** on a re-price
+still swallows (the limits are already on screen and still valid); it records
+the reason in `TopupApi.lastRecalFailure` for the non-prod notice instead.
+
+⚠ **The QA response is flat; the retired test host wrapped it in `results`.**
+Both shapes are accepted, so a rollback needs no code change.
+
+⚠ **The first call is a chicken-and-egg**: it wants a `topup_amount` before it
+will state the limits the seed would come from. The amount screen's first call
+uses the contract's own `topup_detail.default_topup_amount` from `/loan/list`,
+which the card has already loaded, then re-seeds from the response.
+
+It re-prices a chosen `topup_amount` and
 returns a superset of `/topup/detail` plus the parts that call has no fields
 for: `settlement_items[]`, `settlement_total_amount`,
 `overdue_principal_amount`, `topup_discount_amount`,
@@ -2240,44 +2267,34 @@ told what to pay, and a client that re-adds them can disagree with the server.
 override the total. A test pins that a total with no rows still hides the
 section: the rows decide, not the total.
 
-⚠ **It is not callable from a browser, and that is why the client never
-throws.** Verified 2026-09-12 against the sample host
-`http://34.142.213.42:8080`:
+✅ **The QA endpoint closed every objection the test host raised** (2026-09-14,
+sample in the git-ignored `etc/recal_api.txt`). `POST /topup/recal` is on the
+**mobile API base** — HTTPS, `access-control-allow-origin: *`, `x-srisawad: x1`
+and the customer's **own bearer token**. So:
 
-| | |
-| --- | --- |
-| `POST` with the sample's `Basic` header | **200** with the full body — so the earlier 401s were auth, not the payload |
-| any response | **no `access-control-allow-*` header** |
-| `OPTIONS` preflight | **401** — a browser never sends `Authorization` on a preflight, so it can't get past it |
-| the URL itself | plain **HTTP on an IP** — mixed content from this HTTPS build |
+- it works in a plain browser and in the host alike, with no bridge;
+- **no credential ships.** `kTopupRecalApiBase`, `kTopupRecalApiAuth` and
+  `kTopupRecalConfigured` are **deleted**, along with the `--dart-define` the
+  uat deploy script briefly passed. The shared `…prod` `Basic` account that
+  reached uat builds 124–126 on 2026-09-13 is no longer used by anything here
+  — ⚠ **it should still be rotated**, since it was readable in those bundles;
+- the uat build paths agree again, so a CI deploy can no longer silently
+  replace a hook deploy with a build that cannot make the call.
 
-So it works only **inside the host**, through its `httpRequest` bridge, and
-only once `http://34.142.213.42:8080/` is added to
-`_kHttpRequestAllowedPrefixes` in the srisawad app — an app release, exactly
-like the retired `<:8082>/SavePloanContract`. `POST /GetRecalTopupData` is
-**not** on the mobile API base (it 404s there).
+⚠ **Two things in the srisawad host were only ever for the old test host and
+should come out**: `http://34.142.213.42:8080/` in
+`_kHttpRequestAllowedPrefixes`, and the `<domain-config>` block for that IP in
+`network_security_config.xml` (commit `4ea8f79` on `pentest_resolved`, never
+released). That is the removal checklist Outstanding #33 always carried; the
+condition for it has now been met.
 
-`TopupApi.recalculate` therefore returns **`TopupRecalculation?` and returns
-`null` on every failure** instead of throwing. An unconfigured build, an
-unreachable gateway and a contract with nothing outstanding then render the
-*same* screen — the section is simply absent — which is what the rule above
-already says. A top-up amount is perfectly requestable without a settlement
-block, so a failure here must not take the page down with it. Every null leaves
-a `Diagnostics.log` breadcrumb, readable from the `(UAT ver…)` tag, because
-otherwise "why is the section missing?" is unanswerable from a device.
-
-⚠ **The sample's credential does not ship.** It is a shared `Basic` service
-account (a `…prod` user), and baking one into a web bundle is the
-high-severity pentest finding this repo closed on 2026-08-04 by deleting
-`kPLoanSaveApiAuth`. `kTopupRecalApiAuth` is a `--dart-define`
-(`TOPUP_RECAL_API_AUTH`) defaulting to **empty**, pinned by
-`test/topup_recalculation_test.dart`, and unset the call is skipped entirely.
-Same rule, same shape as the lead fallback below. The real fix is for this call
-to move behind the mobile API with the customer's own bearer token — see
-Outstanding #33. The base URL follows the usual order:
-`api_url['recal_topup_url_base']` from the Firestore config, then
-`kTopupRecalApiBase` (`TOPUP_RECAL_API_BASE`) as the degrade-to value, so
-moving the endpoint is a config edit rather than a rebuild.
+⚠ **The M35 disagreement is not resolved by this.** `TopupFlow`
+`settlementPricingAmount` still strips the uplift before calling, because
+`/loan/list` grants `topup_extra` 5,000 on a contract whose recalculation
+reports `topup_extra` 0 and `max_topup_amount` 38,900 — asking for 43,900 is
+refused `400 topup_amount out of range`. Verified against the QA endpoint's own
+sample, which reports the same ceiling. **The customer is offered a limit the
+settlement is not priced at**; that needs a backend answer.
 
 #### The lead fallback (`TopupApi.saveLead`)
 
@@ -3542,65 +3559,26 @@ reason recorded.
     already-guarded `PLoanApi`. A test asserts every one of them still has it —
     don't add a `/topup/*` write without one.
 
-33. **`POST /GetRecalTopupData` is on a temporary test host.** `34.142.213.42:8080`
-    is what the API team stood up while the real endpoint is built; **the QA
-    endpoint follows**, and when it lands this all gets simpler. Today the test
-    host is plain HTTP on an IP, sends no CORS headers, 401s the preflight and
-    authenticates with a **shared `Basic` service account** — so a browser
-    cannot reach it, and the credential that would make it reachable must not
-    ship in the bundle.
+33. ~~**`POST /GetRecalTopupData` is on a temporary test host.**~~
+    **✅ Resolved 2026-09-14** — the QA endpoint landed as **`POST /topup/recal`
+    on the mobile API base**, which is exactly what this item asked for: HTTPS,
+    CORS, and the customer's own bearer token. The top-up flow now calls it
+    **instead of `GET /topup/detail`**, one response carrying both the limits
+    and the settlement. See **`POST /topup/recal`**.
 
-    **The host allowlist half is done** (2026-09-12, on request):
-    `http://34.142.213.42:8080/` is in `_kHttpRequestAllowedPrefixes` plus a
-    scoped Android cleartext exception, committed as `4ea8f79` on
-    `pentest_resolved` in the srisawad repo — **local only, the push needs
-    VPN** — and ⚠ still needs an app release to reach a device (same constraint
-    as #10). Both edits carry a removal checklist; the host repo's CLAUDE.md
-    has it under **Temporary top-up recalculation host**. **Delete them when
-    the QA API is ready** — that is the explicit instruction, not a nice-to-have.
+    Three things remain, none of them blocking:
 
-    ⚠ **The credential now ships on uat** (2026-09-13, on request — it had been
-    deliberately withheld). `kTopupRecalApiAuth` still **defaults to empty** and
-    a test pins that, so nothing changed about the source; what changed is that
-    the uat *builds* pass it:
-
-    | Path | Where the value comes from | State |
-    | --- | --- | --- |
-    | `tools/deploy-uat.sh` | `etc/deploy-secrets.txt` (git-ignored) | **done** |
-    | `.github/workflows/deploy-uat.yml` | a `TOPUP_RECAL_API_AUTH` repo secret | **not applied** |
-
-    ⚠ **CI still builds without it, so the next push to `uat` puts the section
-    back into the dark** at a higher version number than the hook's. The
-    workflow edit could not be pushed — GitHub refuses a token without
-    `workflow` scope — so it needs doing by hand, alongside creating the
-    secret:
-
-    ```yaml
-    run: flutter build web --release --pwa-strategy=none --dart-define=ENV=uat --dart-define=WEB_VERSION=${{ github.run_number }} --dart-define=TOPUP_RECAL_API_AUTH="$TOPUP_RECAL_API_AUTH"
-    env:
-      TOPUP_RECAL_API_AUTH: ${{ secrets.TOPUP_RECAL_API_AUTH }}
-    ```
-
-    ⚠ **This is a shared `…prod` service account readable by anyone who opens
-    the uat site** — `--dart-define` values sit in `main.dart.js` in clear.
-    That is the finding deleting `kPLoanSaveApiAuth` closed on 2026-08-04,
-    reopened knowingly and only on uat. **Rotate it and delete
-    `etc/deploy-secrets.txt` when the QA endpoint lands.** Never add it to a
-    prod build.
-
-    How to tell whether a given deploy carries it, without the source: grep the
-    live bundle for **`GetRecalTopupData`**. Absent means the const folded and
-    the call was compiled out entirely — that is what "the section never shows"
-    looked like on ver 121/122, and it reads identically to a failing call from
-    the screen. Present since **ver 123**.
-
-    **The real fix is the QA endpoint being on the mobile API base** — HTTPS,
-    `access-control-allow-origin: *`, the customer's own bearer token, the way
-    `POST /ploan` went in 2026-08-04. That closes the credential question, the
-    CORS question and the cleartext question at once, and lets the host
-    allowlist shrink back. Until then the ยอดที่ต้องชำระเพื่อเติมวงเงิน section
-    is simply hidden — the client returns `null` rather than failing the
-    screen. See **`POST /GetRecalTopupData`**.
+    - ⚠ **Rotate the `…prod` `Basic` account** from the old sample. It shipped
+      readable in uat builds 124–126 on 2026-09-13 and is now used by nothing.
+    - ⚠ **Take the test host out of the srisawad app**:
+      `http://34.142.213.42:8080/` in `_kHttpRequestAllowedPrefixes` plus the
+      matching `network_security_config.xml` block (`4ea8f79`,
+      `pentest_resolved`, never released). This was always the removal
+      checklist; its condition is now met.
+    - ⚠ **The M35 ceiling disagreement is still open** — `/loan/list` grants
+      `topup_extra` 5,000 that `/topup/recal` does not recognise, so the
+      customer is offered a limit the settlement is not priced at. See
+      `TopupFlow.settlementPricingAmount`.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

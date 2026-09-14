@@ -67,28 +67,10 @@ if ! [[ "$LIVE" =~ ^[0-9]+$ ]]; then
 fi
 NEXT=$((LIVE + 1))
 
-# ── 3b. optional build-time secrets ───────────────────────────────────
-# etc/deploy-secrets.txt is git-ignored (/etc/*.txt) and holds KEY=value
-# lines. Today that is only TOPUP_RECAL_API_AUTH, the Basic credential for
-# POST /GetRecalTopupData, without which the client skips the call and the
-# ยอดที่ต้องชำระเพื่อเติมวงเงิน section never renders.
-#
-# ⚠ A --dart-define lands in the bundle in clear, so this puts a shared
-# service account on a public URL for as long as the build is deployed. It is
-# here because uat testing needs the section live and the endpoint has no
-# other auth yet. Delete the file (and rotate the credential) when the QA
-# endpoint moves behind the mobile API — Outstanding #33. An absent file is
-# the normal, safe state: the build just goes out without it.
-SECRETS="etc/deploy-secrets.txt"
-RECAL_AUTH="${TOPUP_RECAL_API_AUTH:-}"
-if [ -z "$RECAL_AUTH" ] && [ -f "$SECRETS" ]; then
-  RECAL_AUTH="$(grep -m1 '^TOPUP_RECAL_API_AUTH=' "$SECRETS" | cut -d= -f2- | tr -d '\r\n')"
-fi
-
 # ── 4. build + deploy ─────────────────────────────────────────────────
 if ! flutter build web --release --pwa-strategy=none \
   --dart-define=ENV="$ALIAS" --dart-define=WEB_VERSION="$NEXT" \
-  --dart-define=TOPUP_RECAL_API_AUTH="$RECAL_AUTH" >/tmp/uat-build.log 2>&1; then
+  >/tmp/uat-build.log 2>&1; then
   say "uat deploy failed during build — see /tmp/uat-build.log"
   exit 0
 fi

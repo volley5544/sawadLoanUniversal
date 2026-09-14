@@ -8,6 +8,7 @@ import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
 import '../p_loan/application/models/loan_amount_detail.dart';
+import '../services/diagnostics.dart';
 import '../services/srisawad_api.dart';
 import '../services/topup_api.dart';
 import 'components/topup_components.dart';
@@ -95,16 +96,29 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       _error = null;
     });
     try {
-      final detail = await TopupApi.fetchDetail(
+      // `POST /topup/recal`, not `GET /topup/detail` (2026-09-14, on
+      // instruction). One call carries the limits *and* the settlement, so
+      // the two can no longer disagree on screen.
+      //
+      // ⚠ It has to be asked for an amount before it will tell us the limits,
+      // which the seed would normally come from — so the first call uses the
+      // contract's own `topup_detail.default_topup_amount` from `/loan/list`,
+      // which the card has already loaded. The screen re-seeds from the
+      // response immediately after.
+      final first = await TopupApi.fetchRecal(
         dbName: contract.dbName,
         contractNo: contract.contractNo,
+        topupAmount: _flow.requestedAmount > 0
+            ? _flow.requestedAmount
+            : contract.topupDetail.defaultTopupAmount,
         token: _flow.authToken,
       );
       if (!mounted) return;
-      _flow.amountDetail = detail;
+      _flow.amountDetail = first.detail;
       _flow.applySpecialLimit();
       final seeded = _seedAmount();
       _flow.requestedAmount = seeded;
+      _recal = first.recalculation;
       final plan = await TopupApi.calculateInstallments(
         dbName: contract.dbName,
         contractNo: contract.contractNo,
@@ -244,15 +258,30 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     final contract = _flow.contract;
     if (contract == null) return;
     if (mounted) setState(() => _recal = null);
-    final recal = await TopupApi.recalculate(
-      dbName: contract.dbName,
-      contractNo: contract.contractNo,
-      // The contract's base limit, not what the customer asked for — see
-      // TopupFlow.settlementPricingAmount for why the requested figure is
-      // refused on a contract carrying an M35 uplift.
-      topupAmount: _flow.settlementPricingAmount,
-    );
-    if (mounted) setState(() => _recal = recal);
+    try {
+      final res = await TopupApi.fetchRecal(
+        dbName: contract.dbName,
+        contractNo: contract.contractNo,
+        // The contract's base limit, not what the customer asked for — see
+        // TopupFlow.settlementPricingAmount for why the requested figure is
+        // refused on a contract carrying an M35 uplift.
+        topupAmount: _flow.settlementPricingAmount,
+        token: _flow.authToken,
+      );
+      if (!mounted) return;
+      setState(() => _recal = res.recalculation);
+    } on SrisawadApiException catch (e) {
+      // ⚠ A re-read failing does **not** fail the screen, unlike the same call
+      // in [_load]. By this point the limits are already on screen and still
+      // valid; only the settlement is stale, and a top-up amount is
+      // requestable without one. The reason is kept for the non-prod notice
+      // rather than shown to the customer.
+      if (!mounted) return;
+      TopupApi.lastRecalFailure =
+          'topup recal ${e.statusCode ?? ''} ${e.message}'.trim();
+      Diagnostics.log(TopupApi.lastRecalFailure!);
+      setState(() => _recal = null);
+    }
   }
 
   /// Whether the **ยอดที่ต้องชำระเพื่อเติมวงเงิน** block is on screen.
