@@ -14,10 +14,12 @@
 /// `PLoanFlow.payoutAmount` for the other half of that story.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../models/customer_address.dart';
+import '../../services/firebase_storage_rest.dart';
 import '../../models/customer_detail.dart';
 import '../../p_loan/application/models/installment_plan.dart';
 import '../../p_loan/application/models/loan_amount_detail.dart';
@@ -537,6 +539,35 @@ class TopupFlow {
       };
 
   bool hasPhoto(TopupPhoto slot) => (photos[slot]?.isNotEmpty ?? false);
+
+  /// Records a capture **and** mirrors it to Cloud Storage.
+  ///
+  /// The single place a photo enters the flow, so no screen can store one and
+  /// forget the mirror — which is exactly what would happen if each of the
+  /// three capture sites called `photos[slot] = bytes` itself.
+  ///
+  /// ⚠ The mirror is **un-awaited and best-effort**. The bytes that file the
+  /// request go out in `POST /topup`; Storage is a copy for the branch. So a
+  /// failed, slow or unauthenticated upload must not delay the customer or
+  /// block the next screen — it records a breadcrumb and nothing else. Same
+  /// reasoning as the P-Loan submit screen's GPS capture.
+  void setPhoto(TopupPhoto slot, Uint8List bytes) {
+    photos[slot] = bytes;
+    if (bytes.isEmpty) return;
+    final hash = hashThaiId.trim();
+    final contractNo = contract?.contractNo.trim() ?? '';
+    // The path is keyed on the customer and the contract; without either there
+    // is nowhere meaningful to file it, and a guessed path is worse than none.
+    if (hash.isEmpty || contractNo.isEmpty) return;
+    unawaited(FirebaseStorageRest.uploadJpeg(
+      objectPath: FirebaseStorageRest.topupObjectPath(
+        hashThaiId: hash,
+        loanTypeCode: contract?.contractDetails.loanTypeCode ?? '',
+        contractNo: contractNo,
+      ),
+      bytes: bytes,
+    ));
+  }
 
   /// The first required collateral photo still missing, or null.
   TopupPhoto? get missingCollateralPhoto {

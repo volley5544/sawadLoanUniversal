@@ -12,6 +12,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart'
 import 'package:sawad_loan_universal/p_loan/application/p_loan_topup_card_resume_page.dart';
 import 'package:sawad_loan_universal/topup/models/topup_card_variant.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
+import 'package:sawad_loan_universal/services/firebase_storage_rest.dart';
 import 'package:sawad_loan_universal/topup/models/topup_photo.dart';
 import 'package:sawad_loan_universal/topup/models/topup_purpose.dart';
 import 'package:sawad_loan_universal/topup/models/topup_status.dart';
@@ -1004,6 +1005,65 @@ void main() {
       expect(kTopupLeadApiKey, isEmpty);
       expect(kTopupLeadApiAuth, isEmpty);
       expect(kTopupLeadApiConfigured, isFalse);
+    });
+  });
+
+  group('the Cloud Storage mirror', () {
+    // Path shape is LandAndHouseWeb's uploadFileFirebaseStorage, verbatim —
+    // it is what the back office's tooling matches on. Only the bucket
+    // differs, because this build's anonymous identity is its own project's.
+    test('is the source path shape', () {
+      final path = FirebaseStorageRest.topupObjectPath(
+        hashThaiId: 'HASH123',
+        loanTypeCode: 'M',
+        contractNo: 'C-6701002',
+        now: DateTime.fromMillisecondsSinceEpoch(1757831234567),
+      );
+      expect(path, 'users/HASH123/TopupM/C-6701002/1757831234567.jpg');
+    });
+
+    test('an empty loan type yields bare Topup, as the source does', () {
+      // The source interpolates the code straight in; an absent one must not
+      // become a made-up placeholder the back office does not recognise.
+      expect(
+        FirebaseStorageRest.topupObjectPath(
+          hashThaiId: 'H',
+          loanTypeCode: '',
+          contractNo: 'C',
+          now: DateTime.fromMillisecondsSinceEpoch(1),
+        ),
+        'users/H/Topup/C/1.jpg',
+      );
+    });
+
+    test('a Thai contract number survives into the path', () {
+      // Real contract numbers carry Thai characters, which is why the uploader
+      // percent-encodes the object name rather than pasting it into the URL.
+      final path = FirebaseStorageRest.topupObjectPath(
+        hashThaiId: 'H',
+        loanTypeCode: 'C',
+        contractNo: '000จYC69020100002NFX',
+        now: DateTime.fromMillisecondsSinceEpoch(2),
+      );
+      expect(path, contains('000จYC69020100002NFX'));
+    });
+
+    test('setPhoto stores the bytes whatever the mirror does', () {
+      // ⚠ The mirror is best-effort and un-awaited: POST /topup carries the
+      // bytes that file the request, so a failed copy must never cost the
+      // customer their photo. Here there is no contract, so no upload is even
+      // attempted — and the photo is still recorded.
+      final flow = TopupFlow(hashThaiId: 'HASH', authToken: 'T');
+      final bytes = Uint8List.fromList([1, 2, 3]);
+      flow.setPhoto(TopupPhoto.taxDisc, bytes);
+      expect(flow.hasPhoto(TopupPhoto.taxDisc), isTrue);
+      expect(flow.photos[TopupPhoto.taxDisc], bytes);
+    });
+
+    test('an empty capture is not stored as a photo', () {
+      final flow = TopupFlow(hashThaiId: 'HASH', authToken: 'T');
+      flow.setPhoto(TopupPhoto.taxDisc, Uint8List(0));
+      expect(flow.hasPhoto(TopupPhoto.taxDisc), isFalse);
     });
   });
 }

@@ -154,7 +154,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
         return;
       }
       setState(() {
-        _flow.photos[TopupPhoto.idCard] = bytes;
+        _flow.setPhoto(TopupPhoto.idCard, bytes);
         _busy = false;
       });
     } on SrisawadApiException catch (e) {
@@ -177,7 +177,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
       if (!mounted) return;
       setState(() {
         if (bytes != null && bytes.isNotEmpty) {
-          _flow.photos[TopupPhoto.selfieWithIdCard] = bytes;
+          _flow.setPhoto(TopupPhoto.selfieWithIdCard, bytes);
         }
         _busy = false;
       });

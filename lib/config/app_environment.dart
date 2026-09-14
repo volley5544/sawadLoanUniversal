@@ -270,6 +270,11 @@ enum AppEnvironment {
     // to enable the anonymous read of the runtime config. Empty means the app
     // skips sign-in and uses the compile-time endpoint below.
     firebaseApiKey: '',
+    // Default Cloud Storage bucket, for the top-up photo mirror. Prod's is
+    // named here but the mirror stays inert there until a web app is
+    // registered above — without an API key there is no anonymous identity,
+    // and the rules require one.
+    storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
     mobileApiBase: 'https://mobile-api.swpfin.com',
     srisawadHeader: 'x1',
     pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
@@ -279,6 +284,7 @@ enum AppEnvironment {
     firebaseProjectAlias: 'uat',
     firebaseProjectId: 'sawad-loan-universal-uat',
     firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
+    storageBucket: 'sawad-loan-universal-uat.firebasestorage.app',
     // Matches `api_url.api_url_base` in the uat config document. Changed
     // 2026-09-11 from `https://dev.swpfin.com:7076`, which **no longer
     // serves** — that host had been the fallback for most of this project's
@@ -300,6 +306,7 @@ enum AppEnvironment {
     required this.firebaseProjectAlias,
     required this.firebaseProjectId,
     required this.firebaseApiKey,
+    required this.storageBucket,
     required this.mobileApiBase,
     required this.srisawadHeader,
     required this.pdfLoanSrisawadHeader,
@@ -322,6 +329,14 @@ enum AppEnvironment {
   /// decided entirely by the Firestore rules. Empty disables sign-in, in which
   /// case the config read is skipped and [mobileApiBase] is used.
   final String firebaseApiKey;
+
+  /// Default Cloud Storage bucket for this project.
+  ///
+  /// Written to only — the top-up flow mirrors its photos there for the branch
+  /// and back office; nothing in this app ever reads them back, and
+  /// `storage.rules` grants no `get` or `list` for that reason. Empty disables
+  /// the mirror.
+  final String storageBucket;
 
   /// Base URL of the srisawad **mobile API** (customer profile + addresses —
   /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing

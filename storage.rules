@@ -4,27 +4,16 @@ rules_version = '2';
 //
 // Deploy:  firebase deploy --only storage -P uat
 //
-// ## Nothing is granted, and that is the finished state — not a placeholder
+// ## One write path, and nothing else
 //
-// This build **has no Firebase SDK** and never touches Cloud Storage. Every
-// file it handles — the ID card and selfie, the three contract PDFs, the
-// collateral photos, the QR image — travels one of two ways:
+// Everything is denied except a single create-only rule for the **top-up photo
+// mirror** (added 2026-09-14). Every other file this build handles — the
+// P-Loan photos, the three contract PDFs, the QR image — still travels to the
+// mobile API or to the customer's own device and never touches this bucket.
 //
-//   * to the mobile API, as `multipart/form-data` on `POST /ploan` and as
-//     base64 inside `POST /topup`;
-//   * to the customer's own device, through the host's `saveImageToGallery`
-//     bridge handler or a browser download.
-//
-// So a bucket rule that granted anything would be granting it to nobody. The
-// deny below is the correct permanent posture, and this file exists mainly so
-// that fact is reviewable and reproducible instead of living only in a console
-// someone has to be given access to.
-//
-// ⚠ This build deliberately does **not** mirror uploads to Storage the way the
-// FlutterFlow source did — see CLAUDE.md, "Deliberate deviations from the
-// source". The Storage copy was never read back; the bytes the API wants are
-// the ones that get sent. Re-introducing that mirror would mean re-opening
-// this file, which is the point at which the notes below matter.
+// This build has **no Firebase SDK**; the upload speaks the Storage REST API
+// with the anonymous identity from `services/firebase_auth_rest.dart`. See
+// `services/firebase_storage_rest.dart`.
 //
 // ## Shaped by the SAWAD/MFEC mobile pentest, finding 1 (Critical)
 //
@@ -54,11 +43,62 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // A catch-all **deny** is safe, where a catch-all grant would not be:
-    // denials grant nothing, so this cannot widen any rule added later. It is
-    // both the operative rule today and the baseline that makes an accidental
+    // denials grant nothing, so this cannot widen the rule below, whichever
+    // order they appear in. It is the baseline that makes an accidental
     // "open everything" edit obvious in review.
     match /{allPaths=**} {
       allow read, write: if false;
+    }
+
+    // ── The top-up photo mirror ────────────────────────────────────────────
+    //
+    // users/{hashThaiId}/Topup{loanTypeCode}/{contractNo}/{millis}.jpg
+    //
+    // The seven collateral shots plus the ID card and selfie, copied here for
+    // the branch and back office. The bytes that actually file the request go
+    // to the mobile API in `POST /topup`; this is a copy.
+    //
+    // ⚠ **Write-only, and deliberately more restrictive than the srisawad
+    // app's equivalent rule**, which grants `get: if isSignedIn()`. Nothing in
+    // this build ever reads an object back, so `get` would be granting a
+    // capability no caller needs — and see the next note for why that matters
+    // more here than it looks.
+    //
+    // ⚠ **This cannot be owner-scoped, and that is the honest limitation.**
+    // The app signs in ANONYMOUSLY, so `request.auth.uid` is a random Firebase
+    // uid with no relationship to the `hashThaiId` naming the folder. There is
+    // no backend minting custom tokens for this build, so `isOwner(userId)`
+    // would refuse every upload. The consequence: any signed-in caller — and
+    // anyone can mint an anonymous identity with the public web API key — can
+    // write an object under *any* customer's folder.
+    //
+    // What that is worth, and why it is acceptable here:
+    //   * `create` only, never `write`. An existing object cannot be
+    //     overwritten or deleted, so nobody can tamper with or destroy a real
+    //     customer's photo. The damage ceiling is junk *added* alongside.
+    //   * no `get` and no `list` anywhere, so nothing written here can be read
+    //     back out — not by another customer, not by the writer. This is the
+    //     control that makes the missing owner-scope survivable: an attacker
+    //     who can write but never read cannot use the bucket to exfiltrate.
+    //   * nothing downstream trusts these files. The request is filed from the
+    //     API payload, so a planted object changes no decision.
+    //
+    // Tightening to `isOwner(userId)` needs a backend endpoint issuing custom
+    // tokens whose uid is the hashThaiId — the same phase-2 work the srisawad
+    // app's rules describe for LandAndHouseWeb.
+    match /users/{hashThaiId}/{folder}/{contractNo}/{fileName} {
+      allow create: if request.auth != null
+                    // ⚠ `resource == null` is explicit on purpose. `create`
+                    // alone does NOT stop an overwrite here — verified against
+                    // the live bucket on 2026-09-14: three POSTs to the same
+                    // object path through the REST media-upload endpoint all
+                    // returned 200 under a create-only rule. Whatever the
+                    // engine considers a new generation, this predicate is
+                    // what actually makes "cannot overwrite" true, and it is
+                    // the property the missing owner-scope leans on.
+                    && resource == null
+                    && request.resource.contentType == 'image/jpeg'
+                    && request.resource.size < 20 * 1024 * 1024;
     }
   }
 }

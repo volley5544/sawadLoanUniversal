@@ -2207,12 +2207,12 @@ Each of these is a behaviour change, not a port artefact:
   required and gates `canSubmit`, ยินยอมการตลาด is a genuine opt-in that gates
   nothing. `N` is a real answer, so neither is ever reported as unresolved.
 - **No baked-in lead credential.** See **The lead fallback** below.
-- **No Firebase Storage mirror.** The source uploaded every photo to Storage
-  and threaded three parallel URL/file/base64 fields per slot through the page
-  model — 21 fields for 7 photos, and a Firebase Storage dependency this app
-  does not have. The bytes are what `POST /topup` wants; the Storage copy was
-  never read back. Photos are held as raw bytes and base64-encoded once, at
-  submit.
+- ~~**No Firebase Storage mirror.**~~ **Reversed 2026-09-14 on request** — see
+  **The Cloud Storage mirror** below. What is *not* reproduced is the source's
+  bookkeeping: it threaded three parallel URL/file/base64 fields per slot
+  through its page model, 21 fields for 7 photos. Photos here are still held as
+  raw bytes and base64-encoded once at submit; the mirror is a fire-and-forget
+  copy that no screen state depends on.
 - **The purpose list is rebuilt, not appended to.** The source's
   `generateTopupProductListNew` appended "อื่นๆ" straight onto the contract's
   own `topup_detail.products`, so the list grew by one every time the screen
@@ -2565,6 +2565,66 @@ the shipped app prints and what the bank's scanner is known to accept, so it is
 reproduced rather than "fixed" — changing a live payment reference on a hunch is
 not a change to make from here. Confirm the intended format with the payments
 team before touching it (Outstanding #29).
+
+#### The Cloud Storage mirror
+
+Every top-up capture — step 4's seven collateral shots **and** step 6's ID card
+and selfie — is also copied to Cloud Storage, for the branch and back office
+(added 2026-09-14).
+
+`users/{hashThaiId}/Topup{loanTypeCode}/{contractNo}/{millis}.jpg`, which is
+LandAndHouseWeb's `uploadFileFirebaseStorage` path **verbatim** — that shape is
+what the back office's tooling matches on.
+
+⚠ **The bucket is this project's, not srisawad's.** The source writes to
+`srisawad-mobile-app-qa-360402.appspot.com`; this build writes to its own,
+because its anonymous identity is issued by its own Firebase project and would
+not authenticate against theirs. So the *path* matches and the *bucket* does
+not — worth knowing before someone goes looking for these files beside
+LandAndHouseWeb's.
+
+⚠ **It is a copy, and best-effort.** `POST /topup` carries every photo base64
+in its body and that is what files the request. `TopupFlow.setPhoto` fires the
+upload **un-awaited** and swallows every failure to a `Diagnostics.log`
+breadcrumb: a customer must never be blocked, delayed or warned because a copy
+did not land. Same reasoning as the P-Loan submit screen's GPS capture.
+
+`setPhoto` is also the **single** place a photo enters the flow — all three
+capture sites go through it, so none can store a photo and forget the mirror.
+
+**No Firebase SDK**: `services/firebase_storage_rest.dart` speaks the Storage
+REST upload endpoint with the anonymous token from `firebase_auth_rest.dart`,
+the same identity that reads the config document.
+
+⚠ **The rule cannot be owner-scoped, and the compensating control is that
+nothing can be read back.** Anonymous sign-in means `request.auth.uid` is a
+random uid with no relation to the `hashThaiId` in the path, so
+`isOwner(userId)` would refuse every upload — the same position the srisawad
+app's rules describe for LandAndHouseWeb. What bounds it:
+
+| Granted | Withheld |
+| --- | --- |
+| `create`, **and only when `resource == null`** | `get`, `list` — anywhere in the bucket |
+| `image/jpeg` under 20 MB only | `update`, `delete` |
+| only at `users/{hash}/{folder}/{contract}/{file}` | every other path depth |
+
+So the worst an attacker can do is *add* junk beside a real photo; they cannot
+overwrite one, delete one, or read any back out. Nothing downstream trusts
+these files — the request is filed from the API payload — so a planted object
+changes no decision.
+
+⚠⚠ **`allow create` alone does NOT prevent an overwrite**, which is the trap
+here. Verified against the live bucket: three POSTs to the same object path
+through the REST media-upload endpoint all returned **200** under a create-only
+rule. The explicit `resource == null` predicate is what actually makes "cannot
+overwrite" true, and it is the property the missing owner-scope leans on — so
+do not remove it as redundant. All six properties in the table were re-probed
+after adding it (`200` on first create, `403` on overwrite, delete, read, list
+and unauthenticated write).
+
+Tightening to owner-scope needs a backend endpoint issuing custom tokens whose
+uid is the `hashThaiId` — phase 2, and shared with the srisawad app's own
+tracking of it.
 
 #### Payload (`models/topup_submission.dart`)
 
@@ -3771,12 +3831,17 @@ posture. Verified against uat on 2026-09-14 by probing it as an attacker would:
 | **anonymous-signed-in** `GET application/public_config` | **200** — the app's own path |
 | the same anonymous identity on `application/config` / the bucket | **403** |
 
-`storage.rules` **denies everything, permanently**, and that is a finished
-state rather than a placeholder: this build has no Firebase SDK and never
-touches Cloud Storage. Every file it handles goes to the mobile API
+`storage.rules` denies everything **except one create-only path**, the top-up
+photo mirror (opened 2026-09-14 — see **The Cloud Storage mirror**). Every
+other file this build handles still goes to the mobile API
 (`multipart/form-data` on `/ploan`, base64 in `POST /topup`) or to the
-customer's own device (`saveImageToGallery`, a browser download). A grant here
-would be granting to nobody.
+customer's own device (`saveImageToGallery`, a browser download) and never
+touches the bucket.
+
+⚠ That one rule is not owner-scoped — it cannot be, with anonymous sign-in —
+and what makes it safe is that **nothing can be read back**: no `get` and no
+`list` anywhere, so the bucket cannot be used to exfiltrate. Read the ⚠⚠ note
+in that section about `allow create` not preventing overwrites on its own.
 
 ⚠ It was **live only in the console** until 2026-09-14 — correct (`if false`),
 but unmanaged: not in the repo, not in `firebase.json`, no recorded reasoning,

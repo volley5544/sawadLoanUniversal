@@ -93,7 +93,7 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
       if (!mounted) return;
       setState(() {
         _capturing = null;
-        if (bytes.isNotEmpty) _flow.photos[slot] = bytes;
+        if (bytes.isNotEmpty) _flow.setPhoto(slot, bytes);
       });
     } catch (e) {
       if (!mounted) return;
