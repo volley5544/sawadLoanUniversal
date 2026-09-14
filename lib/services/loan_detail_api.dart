@@ -18,12 +18,29 @@ class LoanDetailApi {
   /// `POST /payment/history_new` — payments already made against a contract,
   /// newest first as the server orders them.
   ///
-  /// ⚠ **[dbName] is sent whole** (`MLOAN`), matching the srisawad mobile app.
-  /// The LandAndHouseWeb client sends `dbName.substring(0, 2)` (`ML`) to this
-  /// same endpoint, so one of the two is being tolerated rather than honoured
-  /// and there is no documentation saying which. [dbNamePrefixLength] is the
-  /// single place to change it if the tab comes back empty on a contract that
-  /// demonstrably has payments.
+  /// ⚠ **[dbName] is truncated to its first two characters** — `MLOAN` goes
+  /// out as `ML` — and that is not a typo.
+  ///
+  /// The two reference clients disagree: the srisawad mobile app sends the
+  /// whole name, LandAndHouseWeb sends `dbName.substring(0, 2)`. This build
+  /// shipped the whole name first (2026-09-14) and the ประวัติการชำระ tab came
+  /// back **empty on a contract that demonstrably has payments** — a `200`
+  /// with an empty `data`, not an error, which is exactly what a well-formed
+  /// request for a database that does not exist looks like.
+  ///
+  /// What settles it: `substring(0, 2)` occurs **exactly once** in the whole
+  /// LandAndHouseWeb codebase, on this endpoint. Every other call there — and
+  /// there are many — passes `db_name` whole. A truncation applied to one
+  /// endpoint out of a dozen is a deliberate accommodation of that endpoint,
+  /// not a copy-paste artefact. And LandAndHouseWeb's loan detail page is the
+  /// client the QA app has been opening all along, so it is the one whose
+  /// history tab is known to populate.
+  ///
+  /// The srisawad app's whole-name call is left unexplained: it may reach a
+  /// different gateway, or its own history tab may be quietly empty too.
+  /// Worth an ask — but not worth blocking on, since this direction is the
+  /// one with evidence behind it. [useDbNamePrefix] flips it back in one
+  /// line.
   static Future<List<PaymentHistoryEntry>> fetchPaymentHistory({
     required String contractNo,
     required String dbName,
@@ -64,9 +81,10 @@ class LoanDetailApi {
         : name.substring(0, dbNamePrefixLength);
   }
 
-  /// `false` sends `MLOAN` (the srisawad mobile app); `true` sends `ML` (the
-  /// LandAndHouseWeb client).
-  static const bool useDbNamePrefix = false;
+  /// `true` sends `ML` (the LandAndHouseWeb client, whose history tab
+  /// populates); `false` sends `MLOAN` (the srisawad mobile app). See
+  /// [fetchPaymentHistory] for the evidence.
+  static const bool useDbNamePrefix = true;
   static const int dbNamePrefixLength = 2;
 
   /// Fixtures for `--dart-define=P_LOAN_MOCK=true`, built through the real

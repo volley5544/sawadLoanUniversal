@@ -2583,6 +2583,7 @@ httpRequest bridge handler)"*. Same trap the P-Loan Extra deep link carries.
 | # | Tab | Source | Rows |
 | --- | --- | --- | --- |
 | 1 | ข้อมูลสินเชื่อ | `/loan/list` | ค่างวด, จำนวนงวด, สาขาที่ทำสัญญา, วันที่ทำสัญญา, กลุ่มสินค้า, ยี่ห้อ/รุ่น/รายละเอียดสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันงวดสุดท้าย |
+|  |  |  | ⚠ รุ่นสินค้า and รายละเอียดสินค้า fall back to `-`; the latter takes a **`cc`** suffix (engine displacement) **only when it has a value**, since `- cc` would claim a measurement that isn't there |
 | 2 | ข้อมูลการชำระ | `/loan/list` | ชำระค่างวดแล้ว, จำนวนวันที่ค้าง, จำนวนงวดที่ค้าง, วันชำระครั้งล่าสุด |
 | 3 | ประวัติการชำระ | `POST /payment/history_new` | one card per payment |
 
@@ -2713,13 +2714,21 @@ which works there and nowhere else.
 Body `{contract_no, db_name}`, rows under **`data`** — not the `results`
 envelope the rest of the mobile API uses.
 
-⚠ **The two references disagree about `db_name`.** The srisawad app sends it
-whole (`MLOAN`); LandAndHouseWeb sends `dbName.substring(0, 2)` (`ML`) to the
-same endpoint, so one of the two is being tolerated rather than honoured and
-there is no documentation saying which. This build sends it **whole**, matching
-the shipped native app. `LoanDetailApi.useDbNamePrefix` is the one place to
-flip it if the tab comes back empty on a contract that demonstrably has
-payments; a test pins the current choice so it stays visible.
+⚠ **`db_name` is truncated to two characters** — `MLOAN` goes out as `ML` —
+and that is not a typo. This build shipped the whole name first and the
+ประวัติการชำระ tab came back **empty on a contract that has payments**: a
+`200` with an empty `data`, not an error, which is exactly what a well-formed
+request for a database that doesn't exist looks like.
+
+What settles it: `substring(0, 2)` occurs **exactly once** in the whole
+LandAndHouseWeb codebase, on this endpoint. Every other call there passes
+`db_name` whole. A truncation applied to one endpoint out of a dozen is a
+deliberate accommodation of that endpoint, not a copy-paste artefact — and
+LandAndHouseWeb's loan detail page is the client the QA app had been opening
+all along, so it is the one whose history tab is known to populate. The
+srisawad app's whole-name call stays unexplained (a different gateway, or its
+own tab is quietly empty too); worth an ask, not worth blocking on.
+`LoanDetailApi.useDbNamePrefix` flips it back in one line; a test pins it.
 
 ⚠ **`date` is `dd-MM-yyyy HH:mm` — day first.** The source builds an ISO string
 by reversing the three parts, which only parses if the wire format is day-first.
@@ -3897,12 +3906,15 @@ reason recorded.
     the WebView closes. If a durable record is wanted, that endpoint is what is
     missing; the call site is the one `Diagnostics.log` in
     `_onContractDocumentPressed`. Same shape as #23.
-38. **Confirm `db_name` for `POST /payment/history_new`.** The two reference
-    clients send different values to it (`MLOAN` vs `ML`) and only one can be
-    what the API means. This build sends the whole name, matching the shipped
-    srisawad app; `LoanDetailApi.useDbNamePrefix` flips it. Worth one live
-    check on a contract that has payments — an empty ประวัติการชำระ tab is the
-    symptom.
+38. **Ask why the srisawad app sends `db_name` whole to
+    `POST /payment/history_new`.** ~~Confirm which spelling the API wants~~ —
+    **settled 2026-09-14 on a device**: the whole name returns `200` with an
+    empty `data`, the two-character prefix (`ML`) returns the rows, so this
+    build now truncates like LandAndHouseWeb does. What is still unexplained is
+    the *native* app, which sends the whole name and is presumably not broken —
+    either it reaches a different gateway, or its own ประวัติการชำระ tab has
+    been quietly empty. Not blocking; worth one question to the API team, since
+    whichever answer is true means one of the three clients has a bug.
 39. **No live loan-detail screen has been opened against a real contract.**
     Every rule is unit-tested and the build compiles, but nothing here has been
     seen on a device — in particular the `loan_type_icon` SVG (an inline data

@@ -21,6 +21,8 @@ LoanContract _contract({
   String overdueTo = '0',
   num contractInstallmentAmount = 3250,
   num currentDueAmount = 3250,
+  String carSeries = 'WAVE 110i',
+  String carCc = '110',
   List<Map<String, dynamic>> insurances = const [],
 }) =>
     LoanContract.fromJson({
@@ -42,6 +44,7 @@ LoanContract _contract({
         'overdue_to': overdueTo,
         'current_due_amount': currentDueAmount,
       },
+      'car_details': {'car_series': carSeries, 'car_cc': carCc},
       'insurances': insurances,
     });
 
@@ -252,6 +255,32 @@ void main() {
     });
   });
 
+  group('รายละเอียดสินค้า carries its unit only when there is a value', () {
+    test('a real displacement gets the cc unit', () {
+      final summary = LoanDetailSummary(_contract(carCc: '1500'));
+      expect(summary.productDetail, '1500');
+      expect(summary.productDetailSuffix, 'cc');
+      expect(LoanDetailSummary(_contract(carCc: ' 125 ')).productDetailSuffix,
+          'cc');
+    });
+
+    test('an absent one renders as - with no unit', () {
+      // `- cc` would claim a measurement that isn't there.
+      for (final blank in ['', '   ']) {
+        final summary = LoanDetailSummary(_contract(carCc: blank));
+        expect(summary.productDetail, '-');
+        expect(summary.productDetailSuffix, '');
+      }
+    });
+
+    test('รุ่นสินค้า falls back to - and never takes a unit', () {
+      expect(LoanDetailSummary(_contract(carSeries: '')).productModel, '-');
+      expect(
+          LoanDetailSummary(_contract(carSeries: 'CLICK 125i')).productModel,
+          'CLICK 125i');
+    });
+  });
+
   group('formatting', () {
     test('the data-date footer uses a dot for the time, as the source does',
         () {
@@ -313,11 +342,19 @@ void main() {
       );
     });
 
-    test('db_name is sent whole, matching the srisawad mobile app', () {
-      // LandAndHouseWeb sends `ML` to the same endpoint. Pinned so the choice
-      // is visible if the tab ever comes back empty — see LoanDetailApi.
-      expect(LoanDetailApi.useDbNamePrefix, isFalse);
-      expect(LoanDetailApi.wireDbName('MLOAN'), 'MLOAN');
+    test('db_name is truncated to two characters for this endpoint', () {
+      // Not a typo: `MLOAN` -> `ML`. Sending it whole returned a 200 with an
+      // empty `data` on a contract that has payments. `substring(0, 2)` occurs
+      // exactly once in all of LandAndHouseWeb — on this endpoint — so the
+      // truncation is deliberate there, and that client is the one whose
+      // history tab is known to populate. See LoanDetailApi.
+      expect(LoanDetailApi.useDbNamePrefix, isTrue);
+      expect(LoanDetailApi.wireDbName('MLOAN'), 'ML');
+      expect(LoanDetailApi.wireDbName('LLOAN'), 'LL');
+      // Shorter than the prefix, or padded — neither may throw or pad.
+      expect(LoanDetailApi.wireDbName('M'), 'M');
+      expect(LoanDetailApi.wireDbName(''), '');
+      expect(LoanDetailApi.wireDbName('  MLOAN  '), 'ML');
     });
   });
 }

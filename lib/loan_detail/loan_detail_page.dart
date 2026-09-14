@@ -704,11 +704,7 @@ class _LoanInfoTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = contract.contractDetails;
-    final car = contract.carDetails;
-    // `-` rather than a blank cell for the two collateral fields the source
-    // guards, so an empty value reads as "not recorded" rather than as a
-    // rendering fault.
-    String orDash(String value) => value.trim().isEmpty ? '-' : value.trim();
+    final summary = LoanDetailSummary(contract);
 
     return Column(
       children: [
@@ -719,7 +715,7 @@ class _LoanInfoTab extends StatelessWidget {
         ),
         LoanDetailFieldRow(
           label: 'จำนวนงวด',
-          value: '${LoanDetailSummary(contract).totalInstallmentNumber}',
+          value: '${summary.totalInstallmentNumber}',
           suffix: 'งวด',
         ),
         LoanDetailFieldRow(
@@ -734,8 +730,12 @@ class _LoanInfoTab extends StatelessWidget {
             label: 'กลุ่มสินค้า', value: details.loanTypeName.trim()),
         LoanDetailFieldRow(
             label: 'ยี่ห้อสินค้า', value: details.vehicleBrand.trim()),
-        LoanDetailFieldRow(label: 'รุ่นสินค้า', value: orDash(car.series)),
-        LoanDetailFieldRow(label: 'รายละเอียดสินค้า', value: orDash(car.cc)),
+        LoanDetailFieldRow(label: 'รุ่นสินค้า', value: summary.productModel),
+        LoanDetailFieldRow(
+          label: 'รายละเอียดสินค้า',
+          value: summary.productDetail,
+          suffix: summary.productDetailSuffix,
+        ),
         LoanDetailFieldRow(
             label: 'เลขทะเบียน', value: details.collateralInformation.trim()),
         // `first_due_date` / `last_due_date` from the contract row. The second

@@ -156,6 +156,25 @@ class LoanDetailSummary {
   static const String notAClosingBalanceNote =
       '(ยอดดังกล่าวไม่ไช่ยอดปิดบัญชี กรุณาติดต่อสาขาเพื่อขอยอดปิดบัญชี หรือต่อสัญญา)';
 
+  // ── รุ่นสินค้า / รายละเอียดสินค้า ────────────────────────────────────
+
+  /// `-` rather than a blank cell, so an unrecorded value reads as "not
+  /// recorded" instead of as a rendering fault. The source guards both of
+  /// these the same way.
+  static String _orDash(String value) =>
+      value.trim().isEmpty ? '-' : value.trim();
+
+  String get productModel => _orDash(contract.carDetails.series);
+
+  /// Engine displacement, `car_cc`.
+  String get productDetail => _orDash(contract.carDetails.cc);
+
+  /// `cc` — the unit for [productDetail], and **only when there is a value**.
+  /// A missing displacement renders as `-`, and `- cc` would claim a
+  /// measurement that isn't there.
+  String get productDetailSuffix =>
+      contract.carDetails.cc.trim().isEmpty ? '' : 'cc';
+
   // ── กรมธรรม์ ────────────────────────────────────────────────────────
 
   bool get showsInsuranceRow => contract.insurances.isNotEmpty;
