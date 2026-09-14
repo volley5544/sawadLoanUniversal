@@ -111,23 +111,50 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
   /// customer cannot change it from here — a correction goes through the
   /// branch, the same as their personal data on step 6.
   ///
-  /// Sourced from `/topup/detail` rather than `/loan/list`, matching the
-  /// source: the detail call is the one keyed to this contract's collateral.
-  /// The contract is the fallback for a field the detail call omits.
+  /// Prefers the priced detail call, falling back to `/loan/list`'s row
+  /// **field by field**.
+  ///
+  /// ⚠ The fallback must be per field, not per object. `/topup/recal` — which
+  /// replaced `/topup/detail` in this flow on 2026-09-14 — returns
+  /// `car_details` and `contract_details` as **present but entirely blank**
+  /// blocks, so `detail?.carDetails ?? contract?.carDetails` never falls
+  /// through: the left side is non-null, and every row rendered empty. That is
+  /// what left this section blank, and it is the same defect as the five other
+  /// top-up reads fixed on 2026-09-14 — this was the sixth, found on a device.
+  /// A `??` against a sub-object of either response is always wrong here.
   Widget _vehicleDetails() {
     final detail = _flow.amountDetail;
     final contract = _flow.contract;
-    final car = detail?.carDetails ?? contract?.carDetails;
-    final contractDetails = detail?.contractDetails ?? contract?.contractDetails;
+    final detailCar = detail?.carDetails;
+    final contractCar = contract?.carDetails;
+    final detailContract = detail?.contractDetails;
+    final contractContract = contract?.contractDetails;
+
+    String pick(List<String?> candidates) => candidates
+        .map((c) => c?.trim() ?? '')
+        .firstWhere((c) => c.isNotEmpty, orElse: () => '');
 
     final rows = <(String, String)>[
-      ('ทะเบียนจังหวัด', car?.province ?? ''),
+      ('ทะเบียนจังหวัด', pick([detailCar?.province, contractCar?.province])),
       (
         'วันหมดอายุทะเบียน',
-        formatThaiDate(contractDetails?.licensePlateExpireDate),
+        formatThaiDate(pick([
+          detailContract?.licensePlateExpireDate,
+          contractContract?.licensePlateExpireDate,
+        ])),
       ),
-      ('ยี่ห้อสินค้า', contractDetails?.vehicleBrand ?? ''),
-      ('รุ่นสินค้า', car?.series ?? ''),
+      (
+        'ยี่ห้อสินค้า',
+        // `vehicle_brand` on contract_details and `car_brand` on car_details
+        // are the same fact from two blocks; whichever arrives is right.
+        pick([
+          detailContract?.vehicleBrand,
+          contractContract?.vehicleBrand,
+          detailCar?.brand,
+          contractCar?.brand,
+        ]),
+      ),
+      ('รุ่นสินค้า', pick([detailCar?.series, contractCar?.series])),
     ];
 
     return Column(

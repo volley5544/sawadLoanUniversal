@@ -2360,9 +2360,17 @@ broke the moment the flow switched (all fixed 2026-09-14, each with a test):
 | `TopupFlow.hasUnpaidInterest` | `''` → the amount stayed **editable** and the slider stayed on a contract that owes interest |
 | `TopupFlow.closingBalance` | **0** → payout overstated by the whole principal, on screen *and* in `transfer_amount` |
 | amount screen `collateralInformation` | an empty line under the contract number |
+| step 4 `_vehicleDetails` (found 2026-09-14) | **the whole ข้อมูลการต่อภาษี collateral section blank** |
 | `topup_submission` `credit_limit` | **0** filed on every top-up |
 
 Each now falls through to `/loan/list`'s copy, which the flow already holds.
+
+⚠ **Fall through per *field*, never per object.** The step-4 section was the
+sixth to break and the easiest to get wrong: it read
+`detail?.carDetails ?? contract?.carDetails`, and `??` never fires because
+`/topup/recal`'s `car_details` is **present and blank**, not absent. The left
+side is non-null, so every row rendered empty. A `??` against a sub-object of
+either response is always wrong here — pick the first non-empty *value*.
 ⚠ **`can_topup` and `interest_paid_flag` check the detail first and the
 contract second**, not the reverse: a refusal — or a `'Y'` — arriving *after*
 the list said otherwise still has to stand. Blank is silence, not an answer. `LoanAmountDetail.closingBalance` was added

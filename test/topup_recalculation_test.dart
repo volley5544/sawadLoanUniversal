@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
+import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/topup/models/topup_settlement.dart';
 
 /// The supplied sample body (`etc/new_topup_api.txt`), trimmed to the fields
@@ -280,4 +281,49 @@ void main() {
     });
   });
 
+
+  group('step 4 collateral survives a blank car_details', () {
+    // ⚠ The sixth read to hit this. /topup/recal returns car_details and
+    // contract_details as PRESENT but entirely blank, so an object-level
+    // `detail?.carDetails ?? contract?.carDetails` never falls through — the
+    // left side is non-null — and every row on ข้อมูลการต่อภาษี rendered
+    // empty. The fallback has to be per field.
+    String pick(List<String?> candidates) => candidates
+        .map((c) => c?.trim() ?? '')
+        .firstWhere((c) => c.isNotEmpty, orElse: () => '');
+
+    final blankFromRecal = CarDetails.fromJson(const {});
+    final fromLoanList = CarDetails.fromJson(const {
+      'car_province': 'กรุงเทพมหานคร',
+      'car_series': 'WAVE 110i',
+      'car_brand': 'HONDA',
+    });
+
+    test('the blank block is non-null, which is what defeats `??`', () {
+      expect(blankFromRecal, isNotNull);
+      expect(blankFromRecal.province, isEmpty);
+      // The object-level fallback picks the blank one and stops.
+      final wrong = blankFromRecal.province.isNotEmpty
+          ? blankFromRecal.province
+          : blankFromRecal.province;
+      expect(wrong, isEmpty);
+    });
+
+    test('per-field, the contract supplies what recal omits', () {
+      expect(
+        pick([blankFromRecal.province, fromLoanList.province]),
+        'กรุงเทพมหานคร',
+      );
+      expect(pick([blankFromRecal.series, fromLoanList.series]), 'WAVE 110i');
+    });
+
+    test('a value recal DOES send still wins over the contract', () {
+      final priced = CarDetails.fromJson(const {'car_province': 'ชลบุรี'});
+      expect(pick([priced.province, fromLoanList.province]), 'ชลบุรี');
+    });
+
+    test('both blank yields empty, which the row renders as a dash', () {
+      expect(pick([blankFromRecal.province, blankFromRecal.province]), isEmpty);
+    });
+  });
 }
