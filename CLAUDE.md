@@ -2300,14 +2300,15 @@ broke the moment the flow switched (all fixed 2026-09-14, each with a test):
 | Reader | What a blank block did |
 | --- | --- |
 | `TopupFlow.outcome` → `can_topup` | `''` → **every contract filed a lead** |
+| `TopupFlow.hasUnpaidInterest` | `''` → the amount stayed **editable** and the slider stayed on a contract that owes interest |
 | `TopupFlow.closingBalance` | **0** → payout overstated by the whole principal, on screen *and* in `transfer_amount` |
 | amount screen `collateralInformation` | an empty line under the contract number |
 | `topup_submission` `credit_limit` | **0** filed on every top-up |
 
 Each now falls through to `/loan/list`'s copy, which the flow already holds.
-⚠ **`can_topup` checks the detail first and the contract second**, not the
-reverse: a refusal arriving *after* the list said `Y` still has to stand —
-blank is silence, not a refusal. `LoanAmountDetail.closingBalance` was added
+⚠ **`can_topup` and `interest_paid_flag` check the detail first and the
+contract second**, not the reverse: a refusal — or a `'Y'` — arriving *after*
+the list said otherwise still has to stand. Blank is silence, not an answer. `LoanAmountDetail.closingBalance` was added
 for the top-level field; it defaults to 0, so the P-Loan flow reading the
 nested block is untouched.
 

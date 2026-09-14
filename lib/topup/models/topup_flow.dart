@@ -261,9 +261,26 @@ class TopupFlow {
       hasUnpaidInterest ? (amountDetail?.interestYield ?? 0) : 0;
 
   /// `'Y'` means the accrued interest is still owed, and it must be paid
-  /// before a top-up can be raised — the amount field locks and the primary
-  /// button becomes ชำระเงิน.
-  bool get hasUnpaidInterest => amountDetail?.interestPaidFlag == 'Y';
+  /// before a top-up can be raised — the amount field locks, the
+  /// เลื่อนเพื่อปรับลดวงเงิน slider disappears, and the primary button becomes
+  /// ชำระเงิน.
+  ///
+  /// ⚠ **Falls back to `/loan/list`** (2026-09-14, on instruction), the same
+  /// ordering and the same reason as `can_topup` in [outcome]:
+  /// `POST /topup/recal` sends `interest_paid_flag` **empty**, so reading only
+  /// the amount detail made every contract look settled — the amount stayed
+  /// editable and the slider stayed on a contract that owes interest. It was
+  /// only the settlement rows, via [TopupOutcome] upgrading ถัดไป, that made
+  /// the screen look right at all.
+  ///
+  /// Detail first, contract second: a `'Y'` arriving *after* the list said
+  /// otherwise has to stand. Blank is silence, not an answer.
+  bool get hasUnpaidInterest => _interestPaidFlag == 'Y';
+
+  String get _interestPaidFlag => _firstNonEmpty([
+        amountDetail?.interestPaidFlag,
+        contract?.topupDetail.interestPaidFlag,
+      ]);
 
   /// **`transfer_amount` on the submit body**: what reaches the customer's
   /// account once the old contract is closed out and duty taken.

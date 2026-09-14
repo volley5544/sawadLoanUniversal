@@ -148,6 +148,40 @@ void main() {
       expect(flow.outcome, TopupOutcome.lead);
     });
 
+    test('interest_paid_flag falls back to the contract when recal sends it '
+        'blank', () {
+      // Same shape as can_topup: /topup/recal sends '' and the contract says
+      // 'Y'. Without the fallback the amount stayed editable and the slider
+      // stayed on a contract that owes interest.
+      final contract = LoanContract.fromJson({
+        ...mockContracts().first.rawJson,
+        'topup_detail': {
+          ...(mockContracts().first.rawJson['topup_detail']
+              as Map<String, dynamic>),
+          'interest_paid_flag': 'Y',
+        },
+      });
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = contract
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'interest_paid_flag': '',
+        });
+      expect(flow.hasUnpaidInterest, isTrue);
+      expect(flow.isAmountEditable, isFalse);
+      expect(flow.outcome, TopupOutcome.payInterest);
+    });
+
+    test('an explicit flag on the detail still wins over the contract', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = mockContracts().first
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'interest_paid_flag': 'N',
+        });
+      expect(flow.hasUnpaidInterest, isFalse);
+    });
+
     test('closing balance is read from the top level, not the blank block', () {
       final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
         ..contract = mockContracts().first
