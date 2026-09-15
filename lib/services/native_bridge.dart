@@ -220,6 +220,44 @@
 /// );
 /// ```
 ///
+/// ## `ensureCameraPermission` — why a camera request opens the gallery
+///
+/// Added 2026-09-15 for the top-up flow's ข้อมูลการต่อภาษี step, the one
+/// screen that uses `image_picker` rather than `openCamera` (deliberately —
+/// the host's mask is an ID-card frame, wrong for a whole vehicle).
+///
+/// ⚠ **The bug this fixes is silent.** `image_picker` sets
+/// `capture="environment"` on its file input, and `flutter_inappwebview`'s
+/// Android chooser honours it — `InAppWebViewChromeClient.startPickerIntent`
+/// goes straight to `getPhotoIntent()`. But it does that only
+/// `if (!needsCameraPermission())`, and that returns **true** whenever the app
+/// *declares* `CAMERA` in its manifest and has not been *granted* it. This app
+/// declares it. So an ungranted permission makes the plugin drop to the
+/// ordinary file chooser and the customer gets the **gallery**, with no error
+/// raised anywhere.
+///
+/// Return a plain **bool**: `true` granted, `false` denied. Returning nothing
+/// is how an old build identifies itself, and the web treats that as "carry
+/// on" rather than as a denial — so return a real `false`.
+///
+/// ```dart
+/// webViewController.addJavaScriptHandler(
+///   handlerName: 'ensureCameraPermission',
+///   callback: (args) async {
+///     try {
+///       var status = await Permission.camera.status;
+///       if (!status.isGranted) status = await Permission.camera.request();
+///       return status.isGranted;
+///     } catch (_) {
+///       return false; // NOT null — that means "no handler here"
+///     }
+///   },
+/// );
+/// ```
+///
+/// ⚠ A permanently-denied permission keeps returning `false`; the web says so
+/// and points at Settings rather than silently handing over the gallery.
+///
 /// ## `openExternalUrl` — leaving the WebView for a document
 ///
 /// Added for the **loan detail** screen's คู่สัญญา / คำขอออกตั๋ว button and

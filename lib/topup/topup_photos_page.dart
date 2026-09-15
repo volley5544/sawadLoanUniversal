@@ -7,6 +7,7 @@ import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
 import '../services/image_downscale.dart';
+import '../services/native_bridge.dart';
 import 'components/topup_components.dart';
 import 'models/topup_flow.dart';
 import 'models/topup_photo.dart';
@@ -78,6 +79,27 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
     if (_capturing != null) return;
     setState(() => _capturing = slot);
     try {
+      // ⚠ Ask the host for the CAMERA permission **first**, or this screen
+      // silently opens the gallery instead. `image_picker` sets
+      // `capture="environment"`, and the WebView's chooser honours it only
+      // while the app is not missing a permission it declares — otherwise it
+      // drops to the ordinary file chooser with no error. See
+      // `NativeCameraBridge.ensureCameraPermission`.
+      //
+      // `null` means an app build without the handler: carry on, because
+      // blocking would break every build already in the field. `false` is a
+      // real denial and stops here — this step is camera-only, so handing over
+      // the gallery would quietly file the wrong kind of photo.
+      final granted = await NativeCameraBridge.ensureCameraPermission();
+      if (granted == false) {
+        if (!mounted) return;
+        setState(() => _capturing = null);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('กรุณาอนุญาตการใช้กล้องในการตั้งค่าแอป '
+              'เพื่อถ่ายรูปในขั้นตอนนี้'),
+        ));
+        return;
+      }
       final file = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1920,

@@ -464,8 +464,15 @@ void main() {
       // value — and it is the kind of thing a later "tidy up the two capture
       // paths" would quietly undo.
       final photos = File('lib/topup/topup_photos_page.dart').readAsStringSync();
-      expect(photos.contains('NativeCameraBridge'), isFalse,
+      // ⚠ The check is on `captureDocument`, not on the class name. The screen
+      // legitimately calls `NativeCameraBridge.ensureCameraPermission` before
+      // opening the picker — without it the WebView silently offers the
+      // gallery — and banning the whole class would forbid that too. What must
+      // never appear is the bridge's *capture*, which is what brings the mask.
+      expect(photos.contains('captureDocument'), isFalse,
           reason: 'step 5 must not capture through the host camera bridge');
+      expect(photos.contains('ImageSource.camera'), isTrue,
+          reason: 'step 5 captures with the plain image_picker camera');
       expect(photos.contains('ImageDownscale.jpeg'), isTrue,
           reason: 'image_picker_for_web ignores maxWidth/imageQuality, so the '
               'capture has to be downscaled before it reaches the payload');

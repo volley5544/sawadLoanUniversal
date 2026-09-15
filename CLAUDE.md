@@ -2333,6 +2333,27 @@ The difference that matters: `callHandler` returns a promise, so a capture is
 just an awaited result. There is no global listener, no correlation by action
 name, and a cancel is `null` rather than silence.
 
+⚠ **Step 4 asks the host for the CAMERA permission before it opens the
+picker** (`ensureCameraPermission`, added 2026-09-15), and without that it
+**silently opens the gallery**. `image_picker` sets `capture="environment"` on
+its file input and `flutter_inappwebview`'s Android chooser honours it — but
+`InAppWebViewChromeClient.startPickerIntent` only takes the direct-camera
+branch `if (!needsCameraPermission())`, which is **true whenever the app
+declares `CAMERA` and has not been granted it**. This app declares it. So an
+ungranted permission drops the customer into the ordinary file chooser on a
+camera-only step, with no error raised anywhere.
+
+Three-state, like every other handler here: `true` proceed, `false` stop and
+name Settings (handing over the gallery would file the wrong kind of photo),
+**`null` proceed anyway** — an app build without the handler must not be
+blocked. ⚠ It ships in an **app release**, so until one lands the old
+behaviour stands.
+
+⚠ This is the **only** screen it matters on. Every other camera in this build
+is bridge-first (`NativeCameraBridge.isSupported` → `openCamera`), so inside
+the host they never reach `image_picker`; step 4 is deliberately picker-only
+because the host's mask is an ID-card frame.
+
 ⚠ **`TopupPhoto.cameraAction` strings are not free-form.** The host branches on
 `action.toLowerCase() == 'selfie'` and falls through to the rear ID-card mask
 for **everything else**, so a near-miss fails silently with a wrong-looking

@@ -58,6 +58,10 @@ const String _kSaveImageToGalleryHandlerName = 'saveImageToGallery';
 /// See `native_bridge.dart`.
 const String _kOpenExternalUrlHandlerName = 'openExternalUrl';
 
+/// Handler the native host registers to check — and if needed request — the
+/// runtime CAMERA permission. See `native_bridge.dart`.
+const String _kEnsureCameraPermissionHandlerName = 'ensureCameraPermission';
+
 /// Web implementation of the native-host camera bridge.
 ///
 /// Uses `flutter_inappwebview`'s `window.flutter_inappwebview.callHandler(...)`,
@@ -350,6 +354,43 @@ class NativeCameraBridge {
         )
         .toDart;
 
+    if (result.isUndefinedOrNull) return null; // old host, no handler
+    final value = result.dartify();
+    if (value is bool) return value;
+    final text = value?.toString().toLowerCase();
+    if (text == 'true') return true;
+    if (text == 'false') return false;
+    return null;
+  }
+
+  /// Asks the native host to ensure the runtime **CAMERA** permission, and
+  /// resolves with whether it is granted.
+  ///
+  /// `true` granted, `false` denied. **`null` means the host has no such
+  /// handler** — an app build predating it — which callers must treat as
+  /// "carry on", not as a denial: blocking on it would break every build
+  /// already in the field.
+  ///
+  /// ⚠ This exists because of a silent fallback, not for a permission prompt
+  /// of its own. `image_picker` sets `capture="environment"` on its file
+  /// input, and `flutter_inappwebview`'s Android chooser honours that by going
+  /// straight to the camera — **but only if the app is not still missing the
+  /// CAMERA permission it declares**. When it is, the plugin quietly drops to
+  /// the ordinary file chooser, so a screen that asked for the camera gets the
+  /// gallery with no error anywhere.
+  ///
+  /// Returns `null` in a plain browser too: there is no runtime permission
+  /// model to consult, and the browser prompts on its own.
+  static Future<bool?> ensureCameraPermission() async {
+    final host = _host;
+    if (host == null) return null;
+
+    final result = await host
+        .callMethod<JSPromise>(
+          'callHandler'.toJS,
+          _kEnsureCameraPermissionHandlerName.toJS,
+        )
+        .toDart;
     if (result.isUndefinedOrNull) return null; // old host, no handler
     final value = result.dartify();
     if (value is bool) return value;
