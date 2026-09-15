@@ -1885,6 +1885,7 @@ Sections present:
 | §3.2 | photos | ทะเบียนจังหวัด / วันหมดอายุทะเบียน / ยี่ห้อสินค้า / รุ่นสินค้า, then the required photos |
 | §4.1/4.2 | customer data | account, name, phone, four addresses, ไม่ถูกต้อง / ยืนยัน, confirm sheet |
 | §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents, PDPA |
+|  |  | ⚠ its confirm dialog is **ยืนยันข้อมูลเอกสาร**, carrying the lender's warranty **verbatim** (`_kBorrowerWarranty`, supplied 2026-09-15). Contract language, not UI copy — do not reword or reflow it, and note it scrolls rather than clipping: a truncated warranty is one the customer did not agree to |
 | §5.4 | success | payout + deadline caveat, ดูสถานะการขอเพิ่มวงเงิน, กลับสู่หน้าแรก |
 
 ~~⚠ **`บันทึกรูปภาพ` (save the QR image) is deliberately left out.**~~
@@ -2693,6 +2694,25 @@ equal the API's exactly). Wire quirks that are real: `topup_argeement_file`
 (the misspelling is the API's) and `save_pdf`, which nests the same
 `ContractPdfRequest` that `/pdf/loan` was called with — so the request that
 made the documents and the request that files them cannot disagree.
+
+**A failed submit shows the request and the response** (`TopupApi.failureReport`,
+added 2026-09-15), in a dialog with a **คัดลอก** button — the same shape and
+reasoning as the `/ploan` one: an `HTTP 400` against 37 fields is unactionable
+without seeing which of them went out, and a `500` is usually an HTML page
+whose last line is the cause. `TopupApi.submit` sends through the transport
+directly rather than `SrisawadApi.send` for this, because `send` decodes and
+discards the raw status and body.
+
+⚠ **Non-prod only**, like the `/ploan` report and `EnvVersionTag`: the request
+body is the customer's personal data and the response may be a gateway stack
+trace. The customer-facing message is unchanged either way.
+
+⚠ **Base64 values are elided by *length*, not by key name** — each replaced by
+its size, every scalar printed verbatim. Nine photos and three PDFs would be
+tens of megabytes: unreadable, unpasteable, and enough to hang the dialog
+rendering it. Keying on known image names instead would dump megabytes the
+first time a field is added. The **response** body is never truncated, for the
+same reason as `/ploan`'s.
 
 `unresolvedFields` reports only what is *unexpectedly* blank: a photo slot this
 loan type never asks for is blank by design, and `latitude`/`longitude`/

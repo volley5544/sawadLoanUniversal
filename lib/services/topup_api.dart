@@ -110,25 +110,128 @@ class TopupApi {
   }) async {
     if (kPLoanUseMockData) return _mock(mockTransNo());
     final base = await SrisawadApi.baseUrl();
-    final json = await SrisawadApi.send(
-      'POST',
-      Uri.parse('$base/topup'),
-      token: token,
-      body: payload,
-    );
-    if (json is! Map<String, dynamic>) {
-      throw SrisawadApiException('Unexpected /topup response: $json');
+    final url = Uri.parse('$base/topup');
+
+    // Sent through the transport directly rather than `SrisawadApi.send`, so
+    // this method owns the raw status and body and can build [failureReport].
+    // `send` decodes and discards them, which is exactly what made a failing
+    // submit unactionable — the same reason `POST /ploan` does its own send.
+    final ApiHttpResult res;
+    try {
+      res = await sendApiRequest(
+        'POST',
+        url,
+        headers: await SrisawadApi.authHeaders(token,
+            contentType: 'application/json'),
+        body: jsonEncode(payload),
+      );
+    } on ApiTransportException catch (e) {
+      Diagnostics.log('topup submit failed: transport: ${e.message}');
+      throw SrisawadApiException(
+        'ส่งคำขอไม่สำเร็จ: ${e.message}',
+        details: failureReport(url, payload, transportError: e.message),
+      );
     }
+
+    final details = failureReport(url, payload, res: res);
+    final json = SrisawadApi.decode(res.body);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      Diagnostics.log('topup submit failed: HTTP ${res.statusCode}');
+      final message = (json is Map && json['message'] != null)
+          ? '${json['message']}'
+          : 'HTTP ${res.statusCode}';
+      throw SrisawadApiException(message,
+          statusCode: res.statusCode, details: details);
+    }
+    if (json is! Map<String, dynamic>) {
+      throw SrisawadApiException('Unexpected /topup response: ${res.body}',
+          details: details);
+    }
+    // ⚠ This endpoint answers `head`/`body` where the rest of the mobile API
+    // answers `results` — a 200 here can still be a refusal.
     final head = json['head'];
     final flag = head is Map ? '${head['error_flag'] ?? ''}' : '';
     if (flag != 'N') {
       final desc = head is Map ? '${head['error_desc'] ?? ''}' : '';
+      Diagnostics.log('topup submit refused in a 200 body: $desc');
       throw SrisawadApiException(
-          desc.isNotEmpty ? desc : 'ส่งคำขอไม่สำเร็จ กรุณาลองใหม่');
+        desc.isNotEmpty ? desc : 'ส่งคำขอไม่สำเร็จ กรุณาลองใหม่',
+        statusCode: res.statusCode,
+        details: details,
+      );
     }
     final body = json['body'];
     return body is Map ? '${body['trans_no'] ?? ''}' : '';
   }
+
+  /// What a failed `POST /topup` shows a tester: the request that went out and
+  /// the response that came back.
+  ///
+  /// Same shape and same reasoning as `PLoanContractApi.failureReport` — an
+  /// `HTTP 400` against 37 fields is unactionable on a device, and a `500` is
+  /// usually an HTML page whose last line is the cause.
+  ///
+  /// ⚠ **Non-prod only at the call site**, like the `/ploan` report: this
+  /// contains the customer's personal data, and a gateway stack trace is what
+  /// a developer needs and what a customer must not read.
+  ///
+  /// ⚠ **The base64 fields are elided, everything else is verbatim.** Nine
+  /// photos and three PDFs would be tens of megabytes of base64 — unreadable,
+  /// unpasteable, and enough to hang the dialog rendering it. Each is replaced
+  /// by its size, which is the only thing about it worth debugging; every
+  /// scalar, which is what a 400 is actually about, is printed unchanged. The
+  /// **response body is never truncated** — on a 500 the cause is often the
+  /// last line.
+  static String failureReport(
+    Uri url,
+    Map<String, dynamic> payload, {
+    ApiHttpResult? res,
+    String? transportError,
+  }) {
+    final out = StringBuffer()..writeln('POST $url');
+    if (transportError != null) {
+      out.writeln('transport error: $transportError');
+    } else if (res != null) {
+      out.writeln('HTTP ${res.statusCode}');
+    }
+    out
+      ..writeln('')
+      ..writeln('--- request body (${payload.length} fields) ---')
+      ..writeln(_redactedPayload(payload));
+    if (res != null) {
+      out
+        ..writeln('')
+        ..writeln('--- response body ---')
+        ..writeln(res.body.isEmpty ? '(empty)' : res.body);
+    }
+    return out.toString();
+  }
+
+  /// Pretty-prints [payload] with every base64 value replaced by its size.
+  static String _redactedPayload(Map<String, dynamic> payload) {
+    Object? shrink(String key, Object? value) {
+      if (value is String && _isBase64Field(key, value)) {
+        return '<base64 ${(value.length * 3 / 4 / 1024).round()} KB elided>';
+      }
+      if (value is Map) {
+        return {
+          for (final e in value.entries) '${e.key}': shrink('${e.key}', e.value)
+        };
+      }
+      return value;
+    }
+
+    final shrunk = {
+      for (final e in payload.entries) e.key: shrink(e.key, e.value)
+    };
+    return const JsonEncoder.withIndent('  ').convert(shrunk);
+  }
+
+  /// A value is treated as base64 by **length**, not by key name: the photo
+  /// and document keys are known, but a new one added later would otherwise
+  /// dump megabytes into the dialog before anyone noticed.
+  static bool _isBase64Field(String key, String value) => value.length > 512;
 
   /// `GET /topup/status-detail/{hash_thai_id}/{db_name}/{trans_no}` — the
   /// state of a request that has already been filed, plus the three contract

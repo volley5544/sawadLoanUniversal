@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sawad_loan_universal/services/api_transport.dart';
+import 'package:sawad_loan_universal/services/topup_api.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_documents.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart';
@@ -240,6 +242,81 @@ void main() {
     test('without a contract it throws rather than filing an empty lead', () {
       final flow = TopupFlow(hashThaiId: 'H', authToken: 'T');
       expect(() => TopupLeadSubmission.fromFlow(flow), throwsStateError);
+    });
+  });
+
+  group('TopupApi.failureReport', () {
+    final url = Uri.parse('https://api/topup');
+
+    test('carries both the request and the response', () {
+      // An HTTP 400 against 37 fields is unactionable without seeing which of
+      // them went out; a 500 is usually an HTML page whose last line is why.
+      final report = TopupApi.failureReport(
+        url,
+        {'contract_no': 'C-1', 'topup_amount': 20000},
+        res: const ApiHttpResult(statusCode: 400, body: '{"message":"bad"}'),
+      );
+      expect(report, contains('POST https://api/topup'));
+      expect(report, contains('HTTP 400'));
+      expect(report, contains('contract_no'));
+      expect(report, contains('C-1'));
+      expect(report, contains('{"message":"bad"}'));
+    });
+
+    test('elides base64 by size, keeping every scalar verbatim', () {
+      // ⚠ Nine photos and three PDFs would be tens of megabytes — unreadable,
+      // unpasteable, and enough to hang the dialog. The scalars are what a 400
+      // is actually about.
+      final report = TopupApi.failureReport(
+        url,
+        {
+          'contract_no': 'C-1',
+          'act_image': 'A' * 40000,
+          'topup_request_file': 'B' * 8000,
+        },
+        res: const ApiHttpResult(statusCode: 400, body: 'x'),
+      );
+      expect(report, contains('C-1'));
+      expect(report, isNot(contains('A' * 600)));
+      expect(report, contains('elided'));
+      // The size survives, because that is the debuggable part of a photo.
+      expect(report, contains('KB'));
+    });
+
+    test('elides by length, not by key name', () {
+      // A photo field added later must not dump megabytes before anyone
+      // notices it is missing from a list of known keys.
+      final report = TopupApi.failureReport(
+        url,
+        {'some_future_image': 'Z' * 40000},
+        res: const ApiHttpResult(statusCode: 500, body: ''),
+      );
+      expect(report, contains('elided'));
+      expect(report, isNot(contains('Z' * 600)));
+    });
+
+    test('the response body is never truncated', () {
+      // On a 500 the cause is often the last line, which is exactly what a cap
+      // would remove.
+      final long = List.generate(400, (i) => 'line $i').join('\n');
+      final report = TopupApi.failureReport(url, const {},
+          res: ApiHttpResult(statusCode: 500, body: long));
+      expect(report, contains('line 0'));
+      expect(report, contains('line 399'));
+    });
+
+    test('a transport failure names itself and still shows the request', () {
+      final report = TopupApi.failureReport(url, {'contract_no': 'C-1'},
+          transportError: 'unreachable: boom');
+      expect(report, contains('transport error: unreachable: boom'));
+      expect(report, contains('C-1'));
+      expect(report, isNot(contains('HTTP ')));
+    });
+
+    test('an empty response body says so rather than showing nothing', () {
+      final report = TopupApi.failureReport(url, const {},
+          res: const ApiHttpResult(statusCode: 502, body: ''));
+      expect(report, contains('(empty)'));
     });
   });
 }

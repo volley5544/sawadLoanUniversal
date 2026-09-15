@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../config/app_environment.dart';
 import '../loan_register/components/loan_register_styles.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_documents.dart';
@@ -255,10 +256,92 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
       final blanks = submission.unresolvedFields;
       Diagnostics.log('topup submit failed: ${e.message}'
           '${blanks.isEmpty ? '' : ' blank=${blanks.join(',')}'}');
-      _snack(blanks.isEmpty
-          ? e.message
-          : '${e.message}\n(ข้อมูลที่ยังว่าง: ${blanks.join(', ')})');
+      _showSubmitError(
+        blanks.isEmpty
+            ? e.message
+            : '${e.message}\n(ข้อมูลที่ยังว่าง: ${blanks.join(', ')})',
+        details: e.details,
+      );
     }
+  }
+
+  /// A failed submit shows the request that went out and the response that
+  /// came back, with a copy button.
+  ///
+  /// A SnackBar cannot carry this: an `HTTP 400` against 37 fields is
+  /// unactionable without seeing which of them went out, and a `500` is
+  /// usually an HTML page whose last line is the cause. Same dialog and same
+  /// reasoning as the `/ploan` failure report.
+  ///
+  /// ⚠ **Non-prod only.** The request body is the customer's personal data and
+  /// the response may be a gateway stack trace — exactly what a developer
+  /// needs and what a customer must not read. The customer-facing [message] is
+  /// unchanged either way.
+  void _showSubmitError(String message, {String? details}) {
+    final showDetails =
+        details != null && details.isNotEmpty && !AppEnvironment.current.isProd;
+    // The message goes on the clipboard too: a body pasted with no status line
+    // above it loses which submit it came from.
+    final copyText = showDetails ? '$message\n\n$details' : message;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'ส่งคำขอไม่สำเร็จ',
+          style: LoanRegisterStyles.appBarTitleStyle().copyWith(fontSize: 16),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SelectableText(
+                message,
+                style: GoogleFonts.notoSansThai(fontSize: 14, height: 1.5),
+              ),
+              if (showDetails) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Text(
+                  'คำขอที่ส่งและคำตอบจากเซิร์ฟเวอร์ (สำหรับผู้พัฒนา)',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: LoanRegisterStyles.primary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Monospace: the request body is JSON and a 500 response is
+                // often HTML or a stack trace, where indentation is structure.
+                SelectableText(
+                  details,
+                  style:
+                      const TextStyle(fontFamily: 'monospace', fontSize: 11.5),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (showDetails)
+            // Selecting monospace text in a scrolling dialog on a phone is
+            // most of the reason a failure body never reaches a bug report.
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: copyText));
+                if (!mounted) return;
+                _snack('คัดลอกข้อผิดพลาดแล้ว');
+              },
+              child: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _snack(String message) => ScaffoldMessenger.of(context)
@@ -730,6 +813,24 @@ class _ConsentSheetState extends State<_ConsentSheet> {
   }
 }
 
+/// The borrower's warranty, supplied by the business and reproduced verbatim.
+///
+/// ⚠ Do not reword or reflow it. It is contract language the customer is
+/// agreeing to, not UI copy — the line breaks here are only source formatting,
+/// and the rendered text is one continuous paragraph.
+const String _kBorrowerWarranty =
+    'ผู้กู้ตกลงให้คำรับรองแก่ผู้ให้กู้ว่าคำรับรองดังต่อไปนี้ถูกต้องและตรงตาม'
+    'ความเป็นจริงระยะเวลาที่ผู้กู้มีหนี้สินเชื่อคงค้าง อยู่กับผู้ให้กู้ตาม'
+    'สัญญาฉบับนี้ ข้อมูล ข้อเท็จจริง คำรับรอง และ/หรือเอกสารใดๆ '
+    'ที่ให้กับผู้ให้กู้ในการสมัครสินเชื่อตามสัญญาฉบับนี้และการทำสัญญาฉบับนี้ '
+    'และ/หรือเอกสารใดๆ อันเกี่ยวกับสินเชื่อตามสัญญาฉบับนี้ '
+    'ถูกต้องและตรงตามความเป็นจริงทุกประการ '
+    'เงินกู้ที่กู้ยืมเงินตามสัญญาฉบับนี้จะนำไปใช้เพื่อวัตถุประสงค์'
+    'ใช้จ่ายในครัวเรือน และหมุนเวียนในการประกอบธุรกิจ '
+    'รวมถึงใช้ในความจำเป็นอื่นๆ '
+    'และผู้กู้เป็นผู้ได้รับประโยชน์ของสินเชื่อตามสัญญาฉบับนี้เองแต่เพียงผู้เดียว '
+    'และผู้กู้มีอำนาจทุกประการแต่เพียงผู้เดียวสำหรับการกู้ยืมเงินตามสัญญาฉบับนี้';
+
 /// The borrower's warranty, accepted immediately before the request is sent.
 class _BorrowerWarrantyDialog extends StatelessWidget {
   const _BorrowerWarrantyDialog();
@@ -739,15 +840,22 @@ class _BorrowerWarrantyDialog extends StatelessWidget {
     return AlertDialog(
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text('ยืนยันการส่งคำขอ',
+      title: Text('ยืนยันข้อมูลเอกสาร',
           style: LoanRegisterStyles.appBarTitleStyle().copyWith(fontSize: 18)),
-      content: Text(
-        'ข้าพเจ้าขอรับรองว่าข้อมูลและเอกสารทั้งหมดที่ให้ไว้เป็นความจริงทุกประการ '
-        'และยินยอมให้บริษัทตรวจสอบข้อมูลเพื่อประกอบการพิจารณาสินเชื่อ',
-        style: GoogleFonts.notoSansThai(
-          fontSize: 14,
-          height: 1.5,
-          color: LoanRegisterStyles.value,
+      // The lender's warranty text, supplied verbatim. It is long enough to
+      // exceed the dialog on a phone, so it scrolls rather than being clipped
+      // — a truncated warranty is one the customer did not agree to.
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Text(
+            _kBorrowerWarranty,
+            style: GoogleFonts.notoSansThai(
+              fontSize: 13,
+              height: 1.6,
+              color: LoanRegisterStyles.value,
+            ),
+          ),
         ),
       ),
       actions: [
