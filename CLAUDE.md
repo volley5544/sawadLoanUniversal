@@ -3087,6 +3087,13 @@ It is passed `showsNotIssuedNotice: false` — the source's `isShowDownload:
 false`. The contract-document link belongs on the detail screen, not in front
 of someone about to pay.
 
+⚠ **The source's second card, ข้อมูลหลักประกัน, is not reproduced** (removed
+2026-09-15 on request). Every row it held — contract number, product type,
+plate — is already on the contract card directly above it, so it restated what
+the customer had just read and pushed the actual choice further down the
+screen. `LoanPaymentCollateralCard` went with it rather than being left as a
+widget nobody calls.
+
 #### The QR page is separate from the top-up flow's
 
 `loan_payment_qr_page.dart`, not a flag on `topup_qr_payment_page.dart`. The

@@ -239,7 +239,6 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
                     ),
                   ),
                 ),
-                LoanPaymentCollateralCard(contract: contract),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 24, 10, 12),
                   child: Text(

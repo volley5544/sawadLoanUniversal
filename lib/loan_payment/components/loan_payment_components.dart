@@ -10,56 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../loan_detail/components/loan_detail_components.dart';
-import '../../p_loan/application/models/loan_contract.dart';
-
-/// **ข้อมูลหลักประกัน** — what the loan is secured on.
-class LoanPaymentCollateralCard extends StatelessWidget {
-  const LoanPaymentCollateralCard({super.key, required this.contract});
-
-  final LoanContract contract;
-
-  @override
-  Widget build(BuildContext context) {
-    final details = contract.contractDetails;
-    final rows = <({String label, String value})>[
-      (label: 'เลขที่สัญญา', value: contract.contractNo.trim()),
-      if (details.loanTypeName.trim().isNotEmpty)
-        (label: 'ประเภทสินค้า', value: details.loanTypeName.trim()),
-      if (details.collateralInformation.trim().isNotEmpty)
-        (label: 'เลขทะเบียน', value: details.collateralInformation.trim()),
-    ];
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: LoanDetailPalette.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'ข้อมูลหลักประกัน',
-            style: GoogleFonts.notoSansThai(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: LoanDetailPalette.navy,
-            ),
-          ),
-          const SizedBox(height: 8),
-          for (final row in rows)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child:
-                  LoanDetailSummaryRow(label: row.label, value: row.value),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 /// One selectable payment option: a mark, its label, its amount and a chevron.
 ///
