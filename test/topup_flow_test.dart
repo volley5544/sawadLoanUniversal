@@ -1167,4 +1167,36 @@ void main() {
       expect(AppEnvironment.uat.isProd, isFalse);
     });
   });
+
+  group('maskUrlSecrets', () {
+    test('masks the token in a fragment, keeping its length', () {
+      // ⚠ The status URL carries a live bearer. The failure dialog shows this
+      // string and the copy button puts it on the clipboard, so a raw token
+      // would land in whatever chat the report is pasted into.
+      final masked = maskUrlSecrets(
+          'https://x/status/HASH#token=eyJhbGciOiJSUzI1NiJ9.abc');
+      expect(masked, isNot(contains('eyJhbGciOiJSUzI1NiJ9')));
+      expect(masked, contains('#token=<redacted:'));
+      expect(masked, contains('chars>'));
+      // The half that makes it debuggable survives.
+      expect(masked, startsWith('https://x/status/'));
+    });
+
+    test('masks a token in a query string too', () {
+      final masked = maskUrlSecrets('https://x/page?token=SECRET&a=1');
+      expect(masked, isNot(contains('SECRET')));
+      expect(masked, contains('&a=1'), reason: 'other params stay readable');
+    });
+
+    test('masks hashThaiId, which identifies the customer', () {
+      final masked = maskUrlSecrets('https://x/p?hashThaiId=7693c1&b=2');
+      expect(masked, isNot(contains('7693c1')));
+      expect(masked, contains('&b=2'));
+    });
+
+    test('leaves a URL with no credentials untouched', () {
+      const plain = 'https://pt.swpfin.com/portal/contract?contno=C-1&comcode=S22';
+      expect(maskUrlSecrets(plain), plain);
+    });
+  });
 }

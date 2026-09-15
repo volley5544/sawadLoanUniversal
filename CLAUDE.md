@@ -2186,6 +2186,18 @@ no registered web app, so there is no anonymous identity to read one with
 buttons dead. A test pins both values non-empty and `https://`, since the JWT
 rides in that URL.
 
+⚠ **A failed open shows the URL it tried** (non-prod, with a คัดลอก button).
+`ไม่สามารถเปิดเอกสารได้` alone cannot separate a URL the host refused as
+un-allowlisted from a popup a browser blocked, and those have opposite fixes;
+the dialog names which of the three states it was.
+
+⚠⚠ **The token is masked in it** (`maskUrlSecrets`). This URL carries a live
+bearer in its fragment, the dialog is readable on screen and the copy button
+puts it on the clipboard — a raw token would land in whatever chat the report
+is pasted into. The length is kept so "no token" and "token present" stay
+distinguishable, the same rule `Diagnostics.report` follows. `hashThaiId` is
+masked too.
+
 ⚠ It needs the host's `openExternalUrl` handler **and** its allowlist, which
 now carries **both** hosts — the list ships in the app while the web build
 picks its host at runtime, so one binary has to cover both flavors or the
