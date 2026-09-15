@@ -1137,4 +1137,34 @@ void main() {
           isNot(AppEnvironment.uat.checkApplicationStatusBase));
     });
   });
+
+  group('the settlement gate itself is untouched', () {
+    // ⚠ The amount screen carries a non-prod ถัดไป button that walks past the
+    // unpaid-interest gate, because the payment system cannot currently clear
+    // interest_paid_flag on uat. That button is UI only — TopupFlow.outcome
+    // stays the authority, and these pin that it still refuses.
+    TopupFlow flowWith(Map<String, dynamic> topupDetail) {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T');
+      flow.contract = LoanContract.fromJson({
+        'contract_no': 'C-1',
+        'db_name': 'MLOAN',
+        'topup_detail': topupDetail,
+      });
+      return flow;
+    }
+
+    test('unpaid interest still resolves to payInterest, not topup', () {
+      final flow = flowWith({'can_topup': 'Y', 'interest_paid_flag': 'Y'});
+      expect(flow.hasUnpaidInterest, isTrue);
+      expect(flow.outcome, TopupOutcome.payInterest);
+    });
+
+    test('the bypass cannot exist on prod', () {
+      // It is keyed on the environment rather than a --dart-define, so a prod
+      // binary has no way to reach it. Pinned because "temporary test button"
+      // is exactly the kind of thing that outlives its reason.
+      expect(AppEnvironment.prod.isProd, isTrue);
+      expect(AppEnvironment.uat.isProd, isFalse);
+    });
+  });
 }

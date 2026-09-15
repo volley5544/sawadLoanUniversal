@@ -2116,6 +2116,28 @@ run (it is priced per `topup_amount`), and the previous rows are cleared
 **before** the call, never after: leaving the old amount's settlement under a
 new figure would explain the wrong number.
 
+⚠ **A non-prod ถัดไป button walks past the unpaid-interest gate**
+(`_bypassSettlementGate`, added 2026-09-15). A contract with
+`interest_paid_flag == 'Y'` must settle before a top-up can be raised, so
+`TopupOutcome.payInterest` is a dead end by design — but the payment system
+cannot currently clear that flag on uat, which leaves every screen after this
+one untestable. The button sits beneath the ชำระเงิน / ปรับปรุงยอดชำระ pair and
+is labelled **ถัดไป (ข้ามการชำระ — สำหรับทดสอบ)**: a silent way past a
+settlement gate on a payment screen is the kind of thing that gets mistaken for
+real behaviour and shipped.
+
+It is keyed on the **environment**, not a `--dart-define`, for two reasons: a
+define defaulting to false would not reach the uat builds that need it without
+the deploy passing it, and a define the deploy script passes is exactly what
+made the hook's and CI's uat builds differ on 2026-09-13. So it cannot reach
+prod at all, and both uat build paths still produce the same bundle.
+
+⚠ **Remove it when the payment system can clear the flag again.** It skips a
+real settlement: anything filed through it is a top-up raised on a contract
+that still owes interest. `TopupFlow.outcome` is untouched — tests pin that it
+still resolves to `payInterest` — so the bypass is UI only and deleting the
+button restores the gate completely.
+
 ⚠ **`TopupFlow.outcome` is still the authority for the buttons**, and the
 breadth of that matters. It is what protects the unpaid-interest and lead
 paths, and it works with **no** recalculation endpoint — which is the current

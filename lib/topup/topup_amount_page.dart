@@ -347,6 +347,39 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
 
   /// The primary button, which does one of three different things — see
   /// [TopupFlow.outcome].
+  /// **Test-only escape hatch past the unpaid-interest gate.**
+  ///
+  /// A contract with `interest_paid_flag == 'Y'` must settle before a top-up
+  /// can be raised, so [TopupOutcome.payInterest] is a dead end by design and
+  /// `TopupFlow.outcome` stays the authority for it. But the payment system
+  /// cannot currently clear that flag on uat, which leaves every step after
+  /// this screen untestable — so a **ถัดไป** button is offered alongside the
+  /// settlement pair to walk past it.
+  ///
+  /// ⚠ **Non-prod only, and by environment rather than a `--dart-define`.**
+  /// A define defaulting to false would not reach the uat builds that need it
+  /// without the deploy passing it, and a define the deploy script passes is
+  /// exactly what made the hook's and CI's uat builds differ on 2026-09-13.
+  /// Keying on the environment means it cannot reach prod at all and both uat
+  /// build paths still produce the same bundle.
+  ///
+  /// ⚠ **Remove this when the payment system can clear the flag again.** It
+  /// skips a real settlement: anything filed through it is a top-up raised on
+  /// a contract that still owes interest.
+  static bool get _bypassSettlementGate => !AppEnvironment.current.isProd;
+
+  /// Advances as though the outcome were [TopupOutcome.topup], whatever the
+  /// real outcome is. Only reachable from the bypass button above.
+  Future<void> _advancePastGate() async {
+    if (!(_flow.plan?.installments.isNotEmpty ?? false)) {
+      final ok = await _recalculate();
+      if (!ok || !mounted) return;
+    }
+    if (!mounted) return;
+    Diagnostics.log('topup settlement gate bypassed (non-prod test button)');
+    context.push(AppRoutes.topupInstallment, extra: _flow);
+  }
+
   Future<void> _primaryAction() async {
     // First tap while the field has focus commits it; the recalculation that
     // follows lights the button for the advancing tap.
@@ -1041,24 +1074,42 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
     // screens cannot disagree about whether the money is still owed.
     if (outcome == TopupOutcome.payInterest) {
       return _withApiNote(
-        Row(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: TopupPrimaryButton(
-                label: 'ชำระเงิน',
-                busy: _submittingLead,
-                onPressed: busy ? null : _payInterest,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TopupPrimaryButton(
+                    label: 'ชำระเงิน',
+                    busy: _submittingLead,
+                    onPressed: busy ? null : _payInterest,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TopupPrimaryButton(
+                    label: 'ปรับปรุงยอดชำระ',
+                    tonal: true,
+                    busy: _recalculating,
+                    onPressed: busy ? null : _refreshFigures,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TopupPrimaryButton(
-                label: 'ปรับปรุงยอดชำระ',
-                tonal: true,
+            // See [_bypassSettlementGate]. Labelled as a test action rather
+            // than a plain ถัดไป: a silent way past a settlement gate on a
+            // payment screen is the kind of thing that gets mistaken for real
+            // behaviour and shipped.
+            if (_bypassSettlementGate) ...[
+              const SizedBox(height: 10),
+              TopupPrimaryButton(
+                label: 'ถัดไป (ข้ามการชำระ — สำหรับทดสอบ)',
                 busy: _recalculating,
-                onPressed: busy ? null : _refreshFigures,
+                onPressed: busy ? null : _advancePastGate,
               ),
-            ),
+            ],
           ],
         ),
       );
