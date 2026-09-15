@@ -205,11 +205,18 @@ void main() {
       expect(TopupSubmission.fromFlow(flow).fields['product_code'], 'INS001');
     });
 
-    test('no purpose falls back to the catch-all product code', () {
-      expect(
-        TopupSubmission.fromFlow(_completeFlow()).fields['product_code'],
-        kTopupOtherProductCode,
-      );
+    test('no purpose sends an EMPTY product_code, never OTR001', () {
+      // ⚠ Changed 2026-09-15 after a live submit returned
+      // `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`. OTR001 is the
+      // source's "อื่นๆ" row in its วัตถุประสงค์ list — a UI value for a screen
+      // this build removed on 2026-09-11 — and the source itself sends `''`
+      // whenever no product was chosen:
+      //   products == ProductsStruct() ? '' : products.productCode
+      final flow = _completeFlow();
+      expect(flow.purpose, isNull, reason: 'เติมวงเงิน picks no product');
+      final code = TopupSubmission.fromFlow(flow).fields['product_code'];
+      expect(code, '');
+      expect(code, isNot(kTopupOtherProductCode));
     });
 
     test('an incomplete flow throws rather than filing a partial request', () {
@@ -319,4 +326,5 @@ void main() {
       expect(report, contains('(empty)'));
     });
   });
+
 }

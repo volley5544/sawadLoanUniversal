@@ -11,7 +11,6 @@ library;
 import '../../p_loan/application/models/loan_documents.dart';
 import 'topup_flow.dart';
 import 'topup_photo.dart';
-import 'topup_purpose.dart';
 
 class TopupSubmission {
   const TopupSubmission._(this.fields, this.unresolvedFields);
@@ -108,7 +107,16 @@ class TopupSubmission {
       'save_pdf': pdfRequest.toJson(),
       'source': flow.source,
       'refer_id': flow.referId,
-      'product_code': flow.purpose?.productCode ?? kTopupOtherProductCode,
+      // ⚠ **Empty for a plain top-up, not `OTR001`.** The source sends
+      // `products == ProductsStruct() ? '' : products.productCode` — i.e. the
+      // empty string whenever no สิทธิพิเศษเฉพาะคุณ product was chosen. Sending
+      // `OTR001` instead earned `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`
+      // on a live submit (2026-09-15).
+      //
+      // `OTR001` is the code the source's own วัตถุประสงค์ list used for its
+      // "อื่นๆ" row — a **UI** value for a screen this build removed
+      // (2026-09-11). It was never what the API wanted on the wire.
+      'product_code': flow.purpose?.productCode ?? '',
     };
 
     // A photo slot this loan type never asks for is blank by design; only the

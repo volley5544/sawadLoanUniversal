@@ -2695,6 +2695,20 @@ equal the API's exactly). Wire quirks that are real: `topup_argeement_file`
 `ContractPdfRequest` that `/pdf/loan` was called with — so the request that
 made the documents and the request that files them cannot disagree.
 
+⚠ **`product_code` is the empty string for a plain top-up**, not `OTR001`.
+A live submit with `OTR001` was refused (2026-09-15) with a **200** carrying
+`error_flag: Y`, `error_code: 501`,
+`ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`. `kTopupOtherProductCode`
+(`OTR001`) is the source's **"อื่นๆ" row in its วัตถุประสงค์ list** — a UI
+value, for a screen this build removed on 2026-09-11 — and the source's own
+submit sends `products == ProductsStruct() ? '' : products.productCode`. The
+constant survives only as the marker `TopupPurpose.isOther` tests, which
+decides whether the amount field is editable. A test pins the empty value.
+
+⚠ **A refusal arrives as HTTP 200.** This endpoint answers `head`/`body`, so
+`error_flag != 'N'` is the failure test — a status check alone reads a refusal
+as success. See the failure report below.
+
 **A failed submit shows the request and the response** (`TopupApi.failureReport`,
 added 2026-09-15), in a dialog with a **คัดลอก** button — the same shape and
 reasoning as the `/ploan` one: an `HTTP 400` against 37 fields is unactionable
