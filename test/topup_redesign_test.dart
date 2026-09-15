@@ -117,34 +117,55 @@ void main() {
       return flow;
     }
 
-    test('carries the API message when there is one', () {
-      const guarantor =
-          'สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ';
+    const guarantor =
+        'สัญญามีผู้ค้ำกรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ';
+
+    test('needs BOTH an ineligible contract and a message', () {
       expect(
-        flowWith({'can_topup': 'Y', 'can_topup_msg': guarantor})
+        flowWith({'can_topup': 'N', 'can_topup_msg': guarantor})
             .canTopupMessage,
         guarantor,
       );
     });
 
-    test('is shown on an ELIGIBLE contract too, not only on a refusal', () {
-      // ⚠ The case it was added for: can_topup is 'Y', the customer can pay,
-      // and the note still has to reach them. Gating on can_topup would hide
-      // exactly the message that matters.
-      final flow = flowWith(
-          {'can_topup': 'Y', 'can_topup_msg': 'สัญญามีผู้ค้ำ กรุณาติดต่อสาขา'});
+    test('an ELIGIBLE contract shows nothing, message or not', () {
+      // ⚠ The note explains a refusal, so above a working ชำระเงิน button it
+      // would read as one where there is none.
+      final flow = flowWith({'can_topup': 'Y', 'can_topup_msg': guarantor});
       expect(flow.contract!.isEligible, isTrue);
-      expect(flow.canTopupMessage, isNotEmpty);
+      expect(flow.canTopupMessage, isEmpty);
     });
 
-    test('is empty when the API says nothing, so nothing renders', () {
-      expect(flowWith({'can_topup': 'Y'}).canTopupMessage, isEmpty);
+    test('an ineligible contract with no message shows nothing', () {
+      expect(flowWith({'can_topup': 'N'}).canTopupMessage, isEmpty);
       expect(
-        flowWith({'can_topup': 'Y', 'can_topup_msg': '   '}).canTopupMessage,
+        flowWith({'can_topup': 'N', 'can_topup_msg': '   '}).canTopupMessage,
         isEmpty,
       );
       expect(flowWith(null).canTopupMessage, isEmpty,
           reason: 'no contract loaded yet');
+    });
+
+    test('a blank can_topup counts as ineligible, like the routing does', () {
+      // `'' != 'Y'`, and TopupFlow.outcome treats it the same way — the two
+      // read one resolved value (canTopupFlag) so they cannot disagree about
+      // whether this contract is eligible.
+      final flow = flowWith({'can_topup_msg': guarantor});
+      expect(flow.canTopupFlag, isNot('Y'));
+      expect(flow.canTopupMessage, guarantor);
+    });
+
+    test('still appears on the ชำระเงิน / ปรับปรุงยอดชำระ pair', () {
+      // ⚠ Ineligible does not mean the buttons are gone: outcome checks unpaid
+      // interest FIRST, so this contract keeps that pair — which is exactly
+      // where the note was asked to appear.
+      final flow = flowWith({
+        'can_topup': 'N',
+        'can_topup_msg': guarantor,
+        'interest_paid_flag': 'Y',
+      });
+      expect(flow.outcome, TopupOutcome.payInterest);
+      expect(flow.canTopupMessage, guarantor);
     });
   });
 

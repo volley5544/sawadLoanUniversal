@@ -2085,14 +2085,23 @@ The `+` is what marks it.
 silently: typing `96,050` and being handed `96,000` back is otherwise
 indistinguishable from the app losing the input.
 
-⚠ **`can_topup_msg` is shown above the amount screen's buttons whenever it is
-non-empty** (`TopupFlow.canTopupMessage`, added 2026-09-14) — **not** only on a
-refusal. That is the point of it: a contract can be perfectly eligible
-(`can_topup == 'Y'`) and still carry one, and
-*"สัญญามีผู้ค้ำ กรุณาติดต่อสาขาเพื่อทำรายการเติมเงินพร้อมกับผู้ค้ำ"* is the case
-it was added for — that customer **can** pay, and gating the note on
-`can_topup` would hide exactly the message that matters. A test pins the
-eligible case.
+⚠ **`can_topup_msg` is shown above the amount screen's buttons when
+`can_topup != 'Y'` **and** the message is non-empty** — both conditions
+(`TopupFlow.canTopupMessage`; added 2026-09-14, tightened 2026-09-15). An
+eligible contract shows nothing even when a message is present: the note
+explains a refusal, so above a working ชำระเงิน button it would read as one
+where there is none.
+
+⚠ **Ineligible does not mean the buttons are gone**, which is the part that
+looks contradictory. `TopupFlow.outcome` checks unpaid interest **first**, so a
+contract can be `can_topup != 'Y'` and still land on the
+ชำระเงิน / ปรับปรุงยอดชำระ pair — which is exactly where this note was asked to
+appear. A test pins that combination.
+
+Both the note and the routing read one resolved value,
+`TopupFlow.canTopupFlag` (detail first, list second), so they cannot disagree
+about whether a contract is eligible — a blank `can_topup` counts as
+ineligible for both.
 
 It sits directly above the buttons because it qualifies them: it is the last
 thing read before pressing, and further down the screen it would be scrolled

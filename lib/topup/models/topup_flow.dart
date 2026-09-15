@@ -279,20 +279,38 @@ class TopupFlow {
   /// otherwise has to stand. Blank is silence, not an answer.
   bool get hasUnpaidInterest => _interestPaidFlag == 'Y';
 
-  /// `topup_detail.can_topup_msg` — the API's own note about this contract,
-  /// shown above the amount screen's buttons when it sends one.
+  /// `can_topup`, resolved **detail first, list second**.
   ///
-  /// It is **not** only a refusal message. A contract can be perfectly
-  /// eligible and still carry one — *"สัญญามีผู้ค้ำ กรุณาติดต่อสาขา…"* is the
-  /// case this was added for — so the screen shows it whenever it is present
-  /// rather than gating on `can_topup`. Empty means the API has nothing to
-  /// say, and nothing is rendered.
+  /// Extracted so [outcome] and [canTopupMessage] read one value: if they
+  /// resolved it separately they could disagree about whether this contract is
+  /// eligible, and the screen would route one way while explaining the other.
+  /// See [outcome] for why the order is what it is.
+  String get canTopupFlag => _firstNonEmpty([
+        amountDetail?.contractDetails.canTopup,
+        contract?.topupDetail.canTopup,
+      ]);
+
+  /// `topup_detail.can_topup_msg` — the API's note about why this contract
+  /// cannot be topped up, shown above the amount screen's buttons.
+  ///
+  /// ⚠ **Two conditions, both required** (tightened 2026-09-15 on request):
+  /// the contract must be ineligible (`can_topup != 'Y'`) **and** the API must
+  /// have sent a message. An eligible contract shows nothing, even when a
+  /// message is present — the note explains a refusal, so putting it above a
+  /// working ชำระเงิน button would read as one where there is none.
   ///
   /// Read off the contract, not [amountDetail]: `can_topup_msg` exists only on
   /// `/loan/list`'s `topup_detail`, and `/topup/recal` sends its nested
   /// `contract_details` blank anyway.
-  String get canTopupMessage =>
-      contract?.topupDetail.canTopupMsg.trim() ?? '';
+  ///
+  /// ⚠ Ineligible does **not** mean the buttons are gone. [outcome] checks
+  /// unpaid interest *first*, so a contract can be `can_topup != 'Y'` and
+  /// still land on the ชำระเงิน / ปรับปรุงยอดชำระ pair — which is exactly
+  /// where this note was asked to appear.
+  String get canTopupMessage {
+    if (canTopupFlag == 'Y') return '';
+    return contract?.topupDetail.canTopupMsg.trim() ?? '';
+  }
 
   String get _interestPaidFlag => _firstNonEmpty([
         amountDetail?.interestPaidFlag,
@@ -476,10 +494,7 @@ class TopupFlow {
     // endpoint that makes the list the effective source, which is what was
     // asked for, without discarding a real `N` from `/topup/detail` (still the
     // path `_old` and P-Loan take).
-    final canTopup = _firstNonEmpty([
-      amountDetail?.contractDetails.canTopup,
-      contract?.topupDetail.canTopup,
-    ]);
+    final canTopup = canTopupFlag;
     if (typeCode == 'L' || typeCode == 'H') return TopupOutcome.lead;
     if (canTopup != 'Y') return TopupOutcome.lead;
     if (netTransferAmount > maxTransferAmount) return TopupOutcome.lead;
