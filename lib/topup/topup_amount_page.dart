@@ -1117,7 +1117,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                   : const EdgeInsets.fromLTRB(22, 0, 22, 10),
               child: Text(
                 note,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.start,
                 style: GoogleFonts.notoSansThai(
                   fontSize: 13,
                   height: 1.4,
