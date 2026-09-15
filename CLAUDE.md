@@ -155,13 +155,14 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 416 tests (models, payloads, headers, NDID terms +
+flutter test               # 458 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
-                           # API-key pairing + verify-with-data, the /ploan
-                           # failure report, mock-mode guard, the top-up flow's
-                           # pricing/outcome rules + its two payloads, the
-                           # loan-detail comcode rules + header card, the
-                           # loan-payment option amounts + refusals) — green
+                           # API-key pairing + verify-with-data, the /ploan and
+                           # /topup failure reports, mock-mode guard, the top-up
+                           # flow's pricing/outcome rules + its two payloads +
+                           # its Storage mirror, the loan-detail comcode rules +
+                           # header card, the loan-payment option amounts +
+                           # refusals + seed) — green
 flutter build web --release --pwa-strategy=none
 ```
 

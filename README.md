@@ -8,14 +8,18 @@ a separate **native Flutter app** via
 native host opens this web build in a WebView). The Android/iOS/desktop
 scaffolding still exists, but the **web build is what ships**.
 
-> **Three features at different stages.** The 5-step wizard is **UI-only** — no
+> **Five features at different stages.** The 5-step wizard is **UI-only** — no
 > backend submit; its screens render from mock data plus a customer profile the
 > native host provides. The **P-Loan application flow**
 > (`lib/p_loan/application/`) is **live end to end** against the srisawad mobile
 > API, with no mock fallback. The **top-up flow** (`lib/topup/`, added
 > 2026-09-11) is live too and is a **different product** from the P-Loan Extra,
 > despite how alike they look — see *Recent changes — 2026-09-11 → 2026-09-12*
-> before editing either. UI text/data is Thai; code comments are English.
+> before editing either. **Loan detail** (`lib/loan_detail/`) and **loan
+> payment** (`lib/loan_payment/`), both added 2026-09-14, are read-only and
+> near-read-only views over one contract — they replace LandAndHouseWeb's
+> `LoanDetailPage` and `SelectPaymentPage`. UI text/data is Thai; code comments
+> are English.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
 > whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
@@ -30,7 +34,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 222 tests
+flutter test                                  # 458 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -348,6 +352,11 @@ lib/
     diagnostics.dart            breadcrumb trail across reloads + a readable
                                 error screen (tap the "(UAT ver…)" tag)
     device_location.dart        GPS for the submit payload (+ _web / _stub)
+    loan_detail_api.dart        POST /payment/history_new
+    external_url.dart           opening a page outside the WebView, and the
+                                application-status URL (token in the fragment)
+    firebase_storage_rest.dart  the top-up photo mirror (REST, no SDK)
+    qr_image_capture.dart       capture + save, shared by both QR screens
   loan_register/
     *_page.dart                 the wizard steps & pickers
     ndid_terms_page.dart        NDID service agreement — the NDID sub-flow's
@@ -365,6 +374,23 @@ lib/
     models/topup_flow.dart      mutable flow state (go_router extra)
     models/topup_settlement.dart   POST /GetRecalTopupData
     components/topup_redesign.dart shared pieces of the redesign
+  loan_detail/                  รายละเอียดสินเชื่อ — read-only, one contract.
+                                UI from the srisawad app, API wiring from
+                                LandAndHouseWeb. No loan/detail call: the
+                                /loan/list row already carries everything.
+    loan_detail_page.dart       three tabs + the comcode_config buttons
+    insurance_list_page.dart    กรมธรรม์
+    models/loan_detail_summary.dart   the header card's conditionals
+    models/payment_history_entry.dart POST /payment/history_new
+    components/loan_detail_header_card.dart  shared with loan_payment
+  loan_payment/                 ชำระเงิน — pick an amount, get a QR. Files
+                                nothing; the QR is paid at the customer's bank.
+    loan_payment_page.dart      three options + the typed-amount field
+    loan_payment_qr_page.dart   separate from the top-up QR screen on purpose
+    models/loan_payment_option.dart   the amounts, rows and refusals
+    models/loan_payment_seed.dart     hands the contract on, avoids a refetch
+  components/
+    qr_payment_button.dart      shared by both QR screens, so they cannot drift
   p_loan/
     submit_form/                standalone P-Loan form (regmast_ploan.php API)
     application/                6-step P-Loan application flow (mobile API)
@@ -372,12 +398,115 @@ lib/
                                 deep-link entry from the LandAndHouseWeb
                                 top-up card; rebuilds the flow, opens step 3
 firestore.rules                 deny-by-default + one client-readable document
+storage.rules                   deny-by-default + one create-only write path
 tools/firestore-import/         seeds appConfig from a console-export dump
 tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
                                 that changes source) and CI (on a push to
                                 `uat`) run a deploy, so whichever finishes
                                 last wins — see CLAUDE.md
 ```
+
+## Recent changes — 2026-09-14 → 2026-09-15
+
+**Two features imported**, plus a run of top-up fixes found while testing them.
+
+### Loan detail (`lib/loan_detail/`) — new
+
+`/loanDetail?contNo=` (optionally `&dbName=`, `&fromHost=true`). Three tabs over
+one contract plus a กรมธรรม์ sub-page — the loan-universal replacement for
+LandAndHouseWeb's `LoanDetailPage`. UI and visibility rules ported from the
+srisawad app; API and config wiring from LandAndHouseWeb.
+
+- **No `loan/detail` call.** The `/loan/list` row already carries
+  `contract_details`, `payment_details`, `car_details` and `insurances` in full,
+  and both reference clients read it that way. Only **ประวัติการชำระ** needs a
+  call of its own (`POST /payment/history_new`), made lazily on first open.
+- ⚠ **`db_name` is truncated to two characters for that endpoint** — `MLOAN`
+  goes out as `ML`. Confirmed on a device. The whole name returns `200` with an
+  empty `data[]`, not an error, so it fails silently and looks exactly like a
+  contract with no payments.
+- The header card's conditionals live on `LoanDetailSummary`, not in the widget:
+  they are nested ternaries over three dates and four amounts, and "the overdue
+  figure turned red a day early" is not something a screenshot review catches.
+- ⚠ `total_installment_number` arrives as a **decimal** and is a count — it is
+  rounded before every comparison, or the last-installment rules never fire.
+- `comcode_config` (Firestore) drives the คู่สัญญา / คำขอออกตั๋ว button and the
+  "ตั๋วสัญญาใช้เงิน … download" notice. Four of its fields are **index-aligned
+  arrays**, and an absent config leaves every rule `false` — safe, but not
+  intended.
+
+### Loan payment (`lib/loan_payment/`) — new
+
+`/loanPayment?contNo=` → three amount options → `/loanPayment/qr`. **Files
+nothing**: the screen's whole output is an amount, carried to a QR the customer
+pays at their bank.
+
+| Option | Amount |
+| --- | --- |
+| ชำระเต็มจำนวน | `current_due_amount + collection_fee` |
+| ยอดค้างชำระ | `overdue_amount + collection_fee` |
+| กำหนดยอดชำระเอง | typed, silently clamped to `os_balance` |
+
+- ⚠ **The two arrears blocks differ by a row, and that is the source's.**
+  ชำระเต็มจำนวน always shows `รวม`; ยอดค้างชำระ only when there is a collection
+  fee. It reads as a bug in a screenshot, so a test pins it.
+- The **QR screen is separate** from the top-up flow's rather than a flag on it
+  — different label, an extra note, no ปรับปรุงยอดชำระ. What they share is the
+  part that was hard: capture-and-save (`services/qr_image_capture.dart`) and
+  the button (`components/qr_payment_button.dart`), which had already drifted
+  once.
+- `LoanPaymentSeed` hands the contract from screen to screen so neither
+  re-fetches `/loan/list` — an optimisation on one path, never a requirement,
+  and the query string stays the authority.
+
+### Top-up fixes
+
+- **Step 4's collateral section was blank.** `/topup/recal` returns
+  `car_details` **present but empty**, so `detail?.carDetails ?? contract?…`
+  never fell through. Sixth read to hit this — fall back **per field**, never
+  per object.
+- **`product_code` must be `''` for a plain top-up**, not `OTR001`. A live
+  submit was refused `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`.
+  `OTR001` was a UI value from the วัตถุประสงค์ screen this build removed.
+- **A failed `POST /topup` now shows the request and response**, with a copy
+  button, non-prod only. Base64 is elided **by length**, so the scalars — which
+  is what a 400 is about — stay readable and pasteable.
+- The **status buttons open the status web page** rather than this build's own
+  screen. ⚠ Its token rides in a **URL fragment**, never a query parameter, so
+  it stays out of server logs and `Referer`.
+- `can_topup_msg` now shows on the card's refusal **and** above the amount
+  screen's buttons, the latter only when `can_topup != 'Y'`.
+- **Every captured photo is mirrored to Cloud Storage** for the back office —
+  best-effort and un-awaited; `POST /topup` still carries the bytes that file
+  the request.
+- ⚠ **A non-prod ถัดไป button walks past the unpaid-interest gate**
+  (`_bypassSettlementGate`), because the payment system cannot currently clear
+  `interest_paid_flag` on uat. **Remove it when that is fixed.**
+
+### Security posture
+
+- `storage.rules` is now **in the repo** and registered in `firebase.json` — it
+  was correct but console-only, so nothing reproduced or reviewed it. One
+  create-only write path for the photo mirror; no `get` and no `list` anywhere,
+  which is what makes the missing owner-scope survivable under anonymous auth.
+- ⚠ `allow create` alone does **not** prevent an overwrite — three POSTs to one
+  object path all returned `200` under a create-only rule. An explicit
+  `resource == null` is what makes it true. Every rule property was then probed
+  against the live bucket.
+- The temporary `http://34.142.213.42:8080/` test host is **out of the srisawad
+  app**, both the allowlist entry and its Android cleartext exception.
+
+### Host app (needs a release)
+
+New JS handlers in `loan_universal_web_widget.dart`: **`openExternalUrl`** (the
+contract document, the policy download, the status page — `window.open` is inert
+in that WebView) and **`ensureCameraPermission`**.
+
+⚠ The second fixes a silent fallback: `image_picker` sets
+`capture="environment"`, but the WebView's chooser only takes the direct-camera
+branch `if (!needsCameraPermission())` — true whenever the app declares `CAMERA`
+and has not been granted it. An ungranted permission drops the customer into the
+**gallery** on a camera-only step, with no error anywhere.
 
 ## Recent changes — 2026-09-11 → 2026-09-12
 
