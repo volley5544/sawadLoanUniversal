@@ -13,10 +13,14 @@ library;
 ///
 /// ⚠ **Never send this to `POST /topup`.** A plain top-up's `product_code` is
 /// the **empty string**; the source sends
-/// `products == ProductsStruct() ? '' : products.productCode`. Sending
-/// `OTR001` earned `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้` on a live
-/// submit (2026-09-15). It survives only as the marker [TopupPurpose.isOther]
-/// tests, which decides whether the amount field is editable.
+/// `products == ProductsStruct() ? '' : products.productCode`, and matching it
+/// is the whole reason this is not on the wire. It survives only as the marker
+/// [TopupPurpose.isOther] tests, which decides whether the amount field is
+/// editable.
+///
+/// ⚠ It was changed while chasing a `501` and was **not** the cause of it
+/// (corrected 2026-09-16) — that refusal is specific to one test contract and
+/// reproduces on the old LandAndHouseWeb app too.
 const String kTopupOtherProductCode = 'OTR001';
 
 /// The product a top-up is raised for.

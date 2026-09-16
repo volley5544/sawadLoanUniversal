@@ -206,12 +206,13 @@ void main() {
     });
 
     test('no purpose sends an EMPTY product_code, never OTR001', () {
-      // ⚠ Changed 2026-09-15 after a live submit returned
-      // `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`. OTR001 is the
-      // source's "อื่นๆ" row in its วัตถุประสงค์ list — a UI value for a screen
-      // this build removed on 2026-09-11 — and the source itself sends `''`
-      // whenever no product was chosen:
+      // OTR001 is the source's "อื่นๆ" row in its วัตถุประสงค์ list — a UI
+      // value for a screen this build removed on 2026-09-11 — and the source
+      // itself sends `''` whenever no product was chosen:
       //   products == ProductsStruct() ? '' : products.productCode
+      // ⚠ Changed while chasing a 501 that turned out to be contract-specific
+      // (it reproduces on the old app too), so this pins the source match, not
+      // a fix for that error.
       final flow = _completeFlow();
       expect(flow.purpose, isNull, reason: 'เติมวงเงิน picks no product');
       final code = TopupSubmission.fromFlow(flow).fields['product_code'];

@@ -465,9 +465,12 @@ pays at their bank.
   `car_details` **present but empty**, so `detail?.carDetails ?? contract?…`
   never fell through. Sixth read to hit this — fall back **per field**, never
   per object.
-- **`product_code` must be `''` for a plain top-up**, not `OTR001`. A live
-  submit was refused `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`.
-  `OTR001` was a UI value from the วัตถุประสงค์ screen this build removed.
+- **`product_code` must be `''` for a plain top-up**, not `OTR001` — that was a
+  UI value from the วัตถุประสงค์ screen this build removed, and the source
+  sends the empty string whenever no product was chosen. ⚠ It was changed while
+  chasing a `501`, and was **not** the cause: that refusal is specific to one
+  test contract and reproduces on the old LandAndHouseWeb app too. **`POST
+  /topup` files fine** on other contracts.
 - **A failed `POST /topup` now shows the request and response**, with a copy
   button, non-prod only. Base64 is elided **by length**, so the scalars — which
   is what a 400 is about — stay readable and pasteable.

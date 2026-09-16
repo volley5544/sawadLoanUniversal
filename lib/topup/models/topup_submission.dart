@@ -109,13 +109,15 @@ class TopupSubmission {
       'refer_id': flow.referId,
       // ⚠ **Empty for a plain top-up, not `OTR001`.** The source sends
       // `products == ProductsStruct() ? '' : products.productCode` — i.e. the
-      // empty string whenever no สิทธิพิเศษเฉพาะคุณ product was chosen. Sending
-      // `OTR001` instead earned `501 / ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`
-      // on a live submit (2026-09-15).
+      // empty string whenever no สิทธิพิเศษเฉพาะคุณ product was chosen.
       //
       // `OTR001` is the code the source's own วัตถุประสงค์ list used for its
       // "อื่นๆ" row — a **UI** value for a screen this build removed
       // (2026-09-11). It was never what the API wanted on the wire.
+      //
+      // ⚠ Changed while chasing a `501`, and **not** the cause of it
+      // (corrected 2026-09-16): that refusal is specific to one test contract
+      // and reproduces on the old LandAndHouseWeb app too.
       'product_code': flow.purpose?.productCode ?? '',
     };
 

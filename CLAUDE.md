@@ -2752,14 +2752,21 @@ equal the API's exactly). Wire quirks that are real: `topup_argeement_file`
 made the documents and the request that files them cannot disagree.
 
 ⚠ **`product_code` is the empty string for a plain top-up**, not `OTR001`.
-A live submit with `OTR001` was refused (2026-09-15) with a **200** carrying
-`error_flag: Y`, `error_code: 501`,
-`ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`. `kTopupOtherProductCode`
-(`OTR001`) is the source's **"อื่นๆ" row in its วัตถุประสงค์ list** — a UI
-value, for a screen this build removed on 2026-09-11 — and the source's own
-submit sends `products == ProductsStruct() ? '' : products.productCode`. The
-constant survives only as the marker `TopupPurpose.isOther` tests, which
-decides whether the amount field is editable. A test pins the empty value.
+`kTopupOtherProductCode` (`OTR001`) is the source's **"อื่นๆ" row in its
+วัตถุประสงค์ list** — a UI value, for a screen this build removed on
+2026-09-11 — and the source's own submit sends
+`products == ProductsStruct() ? '' : products.productCode`. Matching that is
+the whole reason for the change. The constant survives only as the marker
+`TopupPurpose.isOther` tests, which decides whether the amount field is
+editable. A test pins the empty value.
+
+⚠ **It was changed while chasing a `501`, and it was *not* the cause** —
+corrected 2026-09-16. That refusal
+(`error_code: 501`, `ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`) turned out
+to be **specific to one test contract** and reproduces on the **old
+LandAndHouseWeb app too**, so it is backend-side data rather than anything this
+client sends. Filing works on other contracts. The `product_code` change stands
+on its own — it matches the source — but do not read it as the fix for a 501.
 
 ⚠ **A refusal arrives as HTTP 200.** This endpoint answers `head`/`body`, so
 `error_flag != 'N'` is the failure test — a status check alone reads a refusal
@@ -4362,11 +4369,13 @@ reason recorded.
     standard describes integer satang. It was not "fixed" because the source is
     live and the scanner evidently accepts it, but it should be confirmed
     rather than assumed. One line in `topup_qr_payment_page.dart`.
-30. **No live top-up has been filed from this build.** Everything is unit-
-    tested and the flow compiles and runs, but `POST /topup` has never been
-    exercised end to end from here. Worth doing before the flow is offered to
-    customers — the same caveat #12 carried for `/ploan` until 2026-08-17.
-    A top-up also files against a **real contract**, so pick a test customer.
+30. ~~**No live top-up has been filed from this build.**~~ **Resolved
+    2026-09-16** — `POST /topup` files successfully end to end from here.
+    ⚠ One contract refuses with `501 /
+    ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`, and that refusal **reproduces
+    on the old LandAndHouseWeb app too**, so it is backend-side data on that
+    contract rather than anything this client sends. Worth raising with the API
+    team; not a client defect, and not a blocker.
 31. **`max_transfer_amount` gates every contract.** Absent or 0, no payout is
     under it and **every** contract falls to the lead branch (see **Top-up
     flow**). Confirm `/loan/list` actually sends it on uat before reading a
