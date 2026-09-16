@@ -155,14 +155,15 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 458 tests (models, payloads, headers, NDID terms +
+flutter test               # 465 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
                            # flow's pricing/outcome rules + its two payloads +
                            # its Storage mirror, the loan-detail comcode rules +
                            # header card, the loan-payment option amounts +
-                           # refusals + seed) — green
+                           # refusals + seed, the top-up card's ?contNo=
+                           # preselect) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -1763,6 +1764,35 @@ navigating to this build's home — and the success screen does the same.
 
 `/topup` also accepts `?source=&referId=&contNo=` (attribution, and a contract
 to preselect).
+
+**`contNo` now carries two more host entry points** (2026-09-16). The srisawad
+app deep-links the carousel straight to one card from:
+
+| Tapped in the host | Passes |
+| --- | --- |
+| a loan card's **เติมวงเงิน** | that card's own `contract_no` |
+| the home **วงเงินอเนกประสงค์** (M35) tile, or a section card's ดูรายละเอียด | the M35 contract the customer acted on |
+
+⚠ **The loan card's เติมวงเงิน changed destination.** It used to push the
+host's `/consent` → `/webview-page-topup`, i.e. **LandAndHouseWeb**
+(`api_url.topup_web_url`); it now opens this build. So all three top-up entry
+points — that button, the M35 tile and the home เติมวงเงินใหม่ tile — reach one
+implementation. The `/consent` PDPA step is deliberately not reproduced on the
+way: step 7 asks both consents itself, as real opt-ins rather than the
+hardcoded `'Y'` that flow sent, so routing through it would ask twice.
+⚠ Host-side, so it needs an **app release** (same constraint as Outstanding
+#10).
+
+⚠ **`TopupCardPage.preselectedIndex` trims both sides before comparing**, and
+that is not tidiness. `LoanContract.contractNo` comes through `asString`, which
+trims; the host's `LoanDetail` assigns `json['contract_no']` raw. A padded
+number would therefore miss — and the symptom is the quiet kind, since an
+unmatched `contNo` is not an error: it falls back to the first card, so the
+screen loads perfectly and quotes somebody else's contract. It is static and
+public purely so that rule is unit-testable without standing up the page and
+its two API calls (`test/topup_card_preselect_test.dart`).
+`topup_card_page_old.dart` keeps its own private, untrimmed copy — the `_old`
+pair must not change.
 
 ⚠ **A top-up is not a P-Loan Extra, and this is the thing to get straight
 before editing either.** They look alike and price differently:

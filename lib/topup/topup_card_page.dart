@@ -61,6 +61,33 @@ class TopupCardPage extends StatefulWidget {
   /// beneath it and must close the WebView instead.
   final bool fromHost;
 
+  /// Index of [contractNo] in [contracts], or 0 when it isn't there.
+  ///
+  /// An unknown contract number lands on the first card rather than erroring:
+  /// the customer can still pick, which is better than a dead end over a stale
+  /// deep link. That also covers the contract being real but filtered out of
+  /// [contracts] by `isSelectable`.
+  ///
+  /// ⚠ **Both sides are trimmed before comparing.** `LoanContract.contractNo`
+  /// comes through `asString`, which trims; the srisawad host reads its own
+  /// `contract_no` raw and passes it straight into `?contNo=`. So a number
+  /// carrying padding on the wire has to match here — and when it doesn't the
+  /// symptom is the worst kind, a card that loads fine and is simply the
+  /// wrong contract.
+  ///
+  /// Static and public so the rule is unit-testable without standing up the
+  /// page and its two API calls. `topup_card_page_old.dart` keeps its own
+  /// private copy on purpose — the `_old` pair must not change.
+  static int preselectedIndex(
+    List<LoanContract> contracts,
+    String contractNo,
+  ) {
+    final wanted = contractNo.trim();
+    if (wanted.isEmpty) return 0;
+    final i = contracts.indexWhere((c) => c.contractNo.trim() == wanted);
+    return i < 0 ? 0 : i;
+  }
+
   @override
   State<TopupCardPage> createState() => _TopupCardPageState();
 }
@@ -119,16 +146,9 @@ class _TopupCardPageState extends State<TopupCardPage> {
     }
   }
 
-  /// Index of `?contNo=` in [contracts], or 0 when it isn't there.
-  ///
-  /// An unknown contract number lands on the first card rather than erroring:
-  /// the customer can still pick, which is better than a dead end over a stale
-  /// deep link.
-  int _preselectedIndex(List<LoanContract> contracts) {
-    if (widget.contractNo.isEmpty) return 0;
-    final i = contracts.indexWhere((c) => c.contractNo == widget.contractNo);
-    return i < 0 ? 0 : i;
-  }
+  /// Index of `?contNo=` in [contracts]. See [TopupCardPage.preselectedIndex].
+  int _preselectedIndex(List<LoanContract> contracts) =>
+      TopupCardPage.preselectedIndex(contracts, widget.contractNo);
 
   /// Back on the flow's first screen. Nothing is beneath it when the host
   /// opened this route directly.
