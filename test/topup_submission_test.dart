@@ -57,8 +57,8 @@ const Set<String> _topupFields = {
 };
 
 TopupFlow _completeFlow({
-  bool marketing = false,
-  bool sensitive = true,
+  bool? marketing,
+  bool? sensitive,
   String contractNo = 'MOCK-C-6701002',
 }) {
   final base =
@@ -85,8 +85,10 @@ TopupFlow _completeFlow({
     ..plan = plan
     ..documents = mockDocuments()
     ..verifiedThaiId = mockCustomer().thaiId
-    ..marketingConsent = marketing
-    ..sensitiveConsent = sensitive
+    // `null` leaves TopupFlow's own defaults in place, so a test can prove
+    // what an untouched flow actually files.
+    ..marketingConsent = marketing ?? true
+    ..sensitiveConsent = sensitive ?? true
     ..latitude = '13.7563000'
     ..longitude = '100.5017600';
   flow.installment = plan.installments.first;
@@ -149,6 +151,19 @@ void main() {
           _completeFlow(marketing: false),
         );
         expect(submission.unresolvedFields, isNot(contains('marketing_consent')));
+      });
+
+      // ⚠ End to end, because the tests above set both booleans explicitly and
+      // would keep passing if the flow's defaults were flipped. Step 7's
+      // ความยินยอม checkboxes are commented out — the host's /consent page
+      // asks instead — so what an *untouched* flow files is the only thing a
+      // customer can now produce, and it must be Y for both (confirmed
+      // 2026-09-17).
+      test('an untouched flow files Y for both, as the consent page recorded',
+          () {
+        final fields = TopupSubmission.fromFlow(_completeFlow()).fields;
+        expect(fields['marketing_consent'], 'Y');
+        expect(fields['sensitive_consent'], 'Y');
       });
     });
 
