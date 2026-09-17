@@ -484,20 +484,43 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
             onRemove: () =>
                 setState(() => flow.photos.remove(TopupPhoto.selfieWithIdCard)),
           ),
-          const PLoanSectionHeader('ความยินยอม'),
-          TopupConsentCheckbox(
-            value: flow.sensitiveConsent,
-            required: true,
-            onChanged: (v) => setState(() => flow.sensitiveConsent = v),
-            label: 'ข้าพเจ้ายินยอมให้บริษัทเก็บรวบรวม ใช้ และเปิดเผย'
-                'ข้อมูลส่วนบุคคลที่มีความอ่อนไหวเพื่อประกอบการพิจารณาสินเชื่อ',
-          ),
-          TopupConsentCheckbox(
-            value: flow.marketingConsent,
-            onChanged: (v) => setState(() => flow.marketingConsent = v),
-            label: 'ข้าพเจ้ายินยอมให้บริษัทใช้ข้อมูลส่วนบุคคล'
-                'เพื่อการติดต่อนำเสนอผลิตภัณฑ์และบริการ',
-          ),
+          // ── ความยินยอม (PDPA) — asked before this build opens ──────────
+          //
+          // ⚠ **Commented out, not deleted** (2026-09-17, on request). The
+          // srisawad host now funnels *every* top-up entry point through its
+          // own `/consent` page, which shows `assets/consent.md` behind a
+          // single ยอมรับ / ปฏิเสธ pair and opens this build only on ยอมรับ.
+          // That document's clause 13 covers collection, use and disclosure
+          // and clause 14 covers marketing, so a customer who reaches this
+          // screen has already answered both — and asking again here would
+          // put the same question in front of them twice.
+          //
+          // `TopupFlow.marketingConsent` / `sensitiveConsent` therefore
+          // default to **true**, which is what the payload sends. See the
+          // note on those fields: that is *not* the source's hardcoded `'Y'`,
+          // which recorded a consent nobody was ever asked for. Here the
+          // consent is real, it is simply collected one screen earlier and in
+          // another app.
+          //
+          // ⚠ Restoring this block means flipping those two defaults back to
+          // `false` in the same commit — on their own, the checkboxes would
+          // render already-ticked and the required one could never be
+          // meaningfully refused.
+          //
+          // const PLoanSectionHeader('ความยินยอม'),
+          // TopupConsentCheckbox(
+          //   value: flow.sensitiveConsent,
+          //   required: true,
+          //   onChanged: (v) => setState(() => flow.sensitiveConsent = v),
+          //   label: 'ข้าพเจ้ายินยอมให้บริษัทเก็บรวบรวม ใช้ และเปิดเผย'
+          //       'ข้อมูลส่วนบุคคลที่มีความอ่อนไหวเพื่อประกอบการพิจารณาสินเชื่อ',
+          // ),
+          // TopupConsentCheckbox(
+          //   value: flow.marketingConsent,
+          //   onChanged: (v) => setState(() => flow.marketingConsent = v),
+          //   label: 'ข้าพเจ้ายินยอมให้บริษัทใช้ข้อมูลส่วนบุคคล'
+          //       'เพื่อการติดต่อนำเสนอผลิตภัณฑ์และบริการ',
+          // ),
         ],
       ),
     );

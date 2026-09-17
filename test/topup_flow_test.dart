@@ -544,6 +544,32 @@ void main() {
       final optedOut = _submittableFlow()..marketingConsent = false;
       expect(optedOut.canSubmit, isTrue);
     });
+
+    // ⚠ Both default to true because the srisawad host collects PDPA consent
+    // on its own `/consent` page — a single ยอมรับ over `assets/consent.md`,
+    // whose clause 13 covers collection/use/disclosure and clause 14 covers
+    // marketing — and opens this build only on ยอมรับ. Step 7's ความยินยอม
+    // checkboxes are commented out rather than asking the same question
+    // twice.
+    //
+    // This is NOT the source's hardcoded 'Y', which recorded a consent nobody
+    // was asked for; the consent here is real and collected one screen
+    // earlier. Pinned because it is a legally meaningful value that a later
+    // refactor could flip in silence.
+    test('PDPA consents default to the answer given on the host consent page',
+        () {
+      final fresh = TopupFlow(hashThaiId: 'h', authToken: 't');
+      expect(fresh.sensitiveConsent, isTrue);
+      expect(fresh.marketingConsent, isTrue);
+    });
+
+    // The gate stays wired even though nothing on screen can clear it now, so
+    // restoring the checkboxes needs no change to canSubmit.
+    test('the canSubmit gate survives the checkboxes being commented out', () {
+      final refused = _submittableFlow()..sensitiveConsent = false;
+      expect(refused.canSubmit, isFalse);
+      expect(refused.submitBlockedReason, isNotEmpty);
+    });
   });
 
   group('status model', () {

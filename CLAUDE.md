@@ -155,7 +155,7 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 476 tests (models, payloads, headers, NDID terms +
+flutter test               # 478 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1775,11 +1775,19 @@ app deep-links the carousel straight to one card from:
 
 ⚠ **The loan card's เติมวงเงิน changed destination.** It used to push the
 host's `/consent` → `/webview-page-topup`, i.e. **LandAndHouseWeb**
-(`api_url.topup_web_url`); it now opens this build. So all three top-up entry
-points — that button, the M35 tile and the home เติมวงเงินใหม่ tile — reach one
-implementation. The `/consent` PDPA step is deliberately not reproduced on the
-way: step 7 asks both consents itself, as real opt-ins rather than the
-hardcoded `'Y'` that flow sent, so routing through it would ask twice.
+(`api_url.topup_web_url`); it now reaches this build. So all top-up entry
+points — that button, its วงเงินพิเศษ / สิทธิพิเศษเฉพาะคุณ variants, the M35
+tile and the home เติมวงเงินใหม่ tile — reach one implementation.
+
+⚠ **They all still go through `/consent` first** (host change, 2026-09-17).
+That page is now the single accept handler: it shows `assets/consent.md` and
+opens `/loan-universal-webview` on ยอมรับ, so **consent cannot be skipped** by
+any entry point. This build's own ความยินยอม checkboxes on step 7 are
+commented out as a result — see **Deliberate deviations from the source**.
+⚠ An earlier revision of this note said the opposite (that the loan card
+bypassed `/consent` and step 7 asked instead); that was true for a few hours
+on 2026-09-16 and is not now.
+
 ⚠ Host-side, so it needs an **app release** (same constraint as Outstanding
 #10).
 
@@ -1915,7 +1923,7 @@ Sections present:
 | §3.1 | installments | ยอดจัดสินเชื่อใหม่ + tenor list |
 | §3.2 | photos | ทะเบียนจังหวัด / วันหมดอายุทะเบียน / ยี่ห้อสินค้า / รุ่นสินค้า, then the required photos |
 | §4.1/4.2 | customer data | account, name, phone, four addresses, ไม่ถูกต้อง / ยืนยัน, confirm sheet |
-| §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents, PDPA |
+| §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents. ⚠ **PDPA is no longer here** — the host's `/consent` page asks it before this build opens (2026-09-17); the block is commented out, defaults are `true` |
 |  |  | ⚠ its confirm dialog is **ยืนยันข้อมูลเอกสาร**, carrying the lender's warranty **verbatim** (`_kBorrowerWarranty`, supplied 2026-09-15). Contract language, not UI copy — do not reword or reflow it, and note it scrolls rather than clipping: a truncated warranty is one the customer did not agree to |
 | §5.4 | success | payout + deadline caveat, ดูสถานะการขอเพิ่มวงเงิน, กลับสู่หน้าแรก |
 
@@ -2413,11 +2421,39 @@ Each of these is a behaviour change, not a port artefact:
   `3401700351967` alongside the customer's own, which let anyone holding one of
   those cards verify for **any** account. Same decision the P-Loan port made;
   `test/topup_flow_test.dart` pins it shut.
-- **The PDPA consents are real.** The source hardcoded `marketing_consent` and
+- **The PDPA consents are real** — but they are **no longer asked here**
+  (changed 2026-09-17). The source hardcoded `marketing_consent` and
   `sensitive_consent` to `'Y'` in the submit body, recording a marketing
-  consent the customer was never asked for. Step 7 asks: ยินยอมข้อมูลอ่อนไหว is
-  required and gates `canSubmit`, ยินยอมการตลาด is a genuine opt-in that gates
-  nothing. `N` is a real answer, so neither is ever reported as unresolved.
+  consent the customer was never asked for, and step 7 used to ask both with
+  its own ความยินยอม checkboxes.
+
+  The srisawad host now funnels **every** top-up entry point through its own
+  `/consent` page — `assets/consent.md` behind a single ยอมรับ / ปฏิเสธ pair,
+  opening this build only on ยอมรับ — so both answers are settled before step
+  1. Clause 13 of that document covers collection, use and disclosure; clause
+  14 covers marketing. Step 7's checkboxes are therefore **commented out**
+  (not deleted) and `TopupFlow.marketingConsent` / `sensitiveConsent` default
+  to **`true`**.
+
+  ⚠ **That is not a revert to the source's behaviour.** The source's `'Y'`
+  stood for nothing — it had no consent screen anywhere. Here the consent is
+  real and auditable; it is collected one screen earlier, in another app.
+
+  ⚠ **Restoring the checkboxes means flipping both defaults back to `false` in
+  the same commit.** On their own they would render already-ticked, and the
+  required one could never be meaningfully refused. The commented block in
+  `topup_conclusion_page.dart` says so at the call site.
+
+  ⚠ **A plain browser bypasses the host's consent page.** `/topup` is
+  URL-addressable, so opening the deployed URL directly skips it and still
+  files `Y`/`Y`. Inside the app — the only route a customer has — it cannot be
+  skipped. Same class as the `จำลองยืนยันตัวตนสำเร็จ` NDID bypass, and it wants
+  the same fix: a define defaulting off.
+
+  `canSubmit` still gates on `sensitiveConsent` and `N` is still a real
+  answer, so neither is ever reported as unresolved and restoring the block
+  needs no change to the gate. Two tests pin the defaults and the surviving
+  gate.
 - **No baked-in lead credential.** See **The lead fallback** below.
 - ~~**No Firebase Storage mirror.**~~ **Reversed 2026-09-14 on request** — see
   **The Cloud Storage mirror** below. What is *not* reproduced is the source's

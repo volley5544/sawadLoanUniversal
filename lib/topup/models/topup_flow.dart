@@ -119,14 +119,32 @@ class TopupFlow {
   /// The ID number `/vision/thai-id-validate` read off the card photo.
   String verifiedThaiId = '';
 
-  /// PDPA answers. Both start **unanswered** rather than defaulting to yes.
+  /// PDPA answers, **already given before this build opens** (2026-09-17).
   ///
-  /// The source hardcoded `'Y'` for both into the submit body, so the customer
-  /// was recorded as having consented to marketing they were never asked
-  /// about. `N` is a real answer here, which is why neither is ever reported
-  /// as a missing field.
-  bool marketingConsent = false;
-  bool sensitiveConsent = false;
+  /// The srisawad host funnels every top-up entry point through its own
+  /// `/consent` page, which shows `assets/consent.md` behind a single
+  /// ยอมรับ / ปฏิเสธ pair and launches this build **only** on ยอมรับ. That
+  /// document's clause 13 covers collection, use and disclosure, and clause 14
+  /// covers marketing — so both answers are settled before step 1, and step 7's
+  /// ความยินยอม checkboxes are commented out rather than asking again.
+  ///
+  /// ⚠ **This is not the source's hardcoded `'Y'`.** That recorded a consent
+  /// the customer was never asked for, because the source had no consent
+  /// screen anywhere. Here the consent is real and auditable; it is collected
+  /// one screen earlier, in another app. The distinction is the whole reason
+  /// the deviation note in CLAUDE.md exists — don't read this as reverting it.
+  ///
+  /// ⚠ **A plain browser bypasses that page.** `/topup` is URL-addressable, so
+  /// opening the deployed URL directly skips the host's consent screen and
+  /// still files `Y`/`Y`. Inside the app — the only way a customer reaches
+  /// this — the page cannot be skipped. Same class as the
+  /// `จำลองยืนยันตัวตนสำเร็จ` NDID bypass, and it wants the same fix: a define
+  /// that defaults off.
+  ///
+  /// Restoring the checkboxes means setting both back to `false` in the same
+  /// commit — see the commented block in `topup_conclusion_page.dart`.
+  bool marketingConsent = true;
+  bool sensitiveConsent = true;
 
   /// Device GPS, captured on the conclusion screen and never awaited.
   String latitude = '';
