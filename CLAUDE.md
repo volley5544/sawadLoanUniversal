@@ -155,7 +155,7 @@ passes that again, archive the next round the same way.
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 465 tests (models, payloads, headers, NDID terms +
+flutter test               # 476 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -163,7 +163,7 @@ flutter test               # 465 tests (models, payloads, headers, NDID terms +
                            # its Storage mirror, the loan-detail comcode rules +
                            # header card, the loan-payment option amounts +
                            # refusals + seed, the top-up card's ?contNo=
-                           # preselect) — green
+                           # preselect + its two-condition eligibility) — green
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -2240,22 +2240,109 @@ as Outstanding #34; until one ships, both buttons report
 it is URL-addressable, reload-safe, and the revert is one line in
 `_openStatus`. Don't delete it as dead code.
 
-#### The contract card has three headers
+#### Which card a contract gets
 
-`TopupCardVariant.of(contract)`, in this order — a contract that is *both*
-ineligible and carries products shows the ineligible header, not the offer:
+⚠ **`TopupCardVariant` describes the `_old` card only.** The redesigned card
+never calls it — it branches on its own two flags below. The enum is left in
+place because `topup_card_page_old.dart` still renders from it; delete it with
+the `_old` pair. Its three headers were: `ineligible` (`can_topup == 'N'`),
+`specialOffer` (the contract carries add-on products), `plain` — in that
+order, so a contract that was both ineligible and carried products showed the
+ineligible header.
 
-| Variant | When | Shows |
+**The live card has two layouts**, decided by one ternary in
+`_TopupContractCard.build`:
+
+```dart
+!eligible && !pending ? _ineligible() : _offer(pending)
+```
+
+| `pending` | `eligible` | Card |
 | --- | --- | --- |
-| `ineligible` | `topup_detail.can_topup == 'N'` | ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้, then **`can_topup_msg`** — see below. No amount, no action |
-| `specialOffer` | the contract carries add-on products | ข้อเสนอพิเศษสำหรับคุณ (+ the special limit when there is one), then the ordinary card |
-| `plain` | otherwise | the ordinary card |
+| **true** | *(not consulted)* | `_offer` in **status** mode |
+| false | true | `_offer` in **full offer** mode |
+| false | false | `_ineligible` — the refusal |
+
+- **`pending`** = `!hasNoRequestYet` — `request_status` non-empty **and** not
+  `ยังไม่ได้ทำรายการเติมเงิน`.
+- **`eligible`** = **`canTopupInApp(contract)`**, not `LoanContract.isEligible`
+  — see below.
+
+⚠ **A request in flight outranks a refusal.** A contract that is both
+ineligible *and* mid-request shows the status card, never the refusal: the
+customer's own pending request is the more useful answer.
+
+⚠ **Before any of that, `_load()` filters to `isSelectable`** —
+`account_status == 'A'` and `account_type != 'L'`. A contract failing either
+gets no card at all, and an empty result is the notice
+ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้.
+
+**Eligibility is two conditions, not one** (`canTopupInApp`, instructed
+2026-09-17): `contract_details.loan_type_code` is **`M` or `C`** *and*
+`topup_detail.can_topup == 'Y'`. Everything else — land/house `L`/`H`, any
+future code, a blank — gets the refusal card even when `can_topup` says `Y`.
+
+⚠ **It is deliberately not `LoanContract.isEligible`**, which tests
+`can_topup == 'Y'` alone. That getter is shared with the **P-Loan Extra** flow
+(`p_loan_contract_select_page`, `/pLoan/resume`), and a P-Loan Extra is a
+different product that only *references* the contract — a loan type this flow
+cannot service says nothing about whether that one can. Widening `isEligible`
+would silently refuse P-Loan Extra applications too. A test pins the
+divergence.
+
+⚠ **A blank `loan_type_code` refuses**, the same direction a blank `can_topup`
+takes: blank is silence, not permission. It cannot happen on this screen today
+— the card is built from `/loan/list`, whose `contract_details` is populated —
+but `POST /topup/recal` sends that whole block **blank**, so wiring this to
+`amountDetail` instead would refuse every contract.
+
+⚠ **Matching is case-sensitive**, matching `TopupFlow.requiredPhotos`, which
+switches on the same two codes. If the API ever sends lowercase, both have to
+change together: a card that opened on `'m'` while `requiredPhotos` fell
+through to its tax-disc-only default would be worse than a visible refusal.
+
+⚠ **This makes `TopupOutcome.lead`'s `L`/`H` arm unreachable from the card** —
+those contracts no longer reach the amount screen. The arm stays as defence in
+depth (and because it is the source's); the lead branch itself is still live
+through its other two conditions, a `can_topup` that flips to non-`Y` after
+the detail/recal call and a payout over `max_transfer_amount`.
+
+⚠ **The refusal's second line is only `can_topup_msg` when `can_topup` is what
+refused** (`topupRefusalReason`). On a loan-type refusal the contract is
+`can_topup == 'Y'`, so any message it carries describes something else — the
+same reason the amount screen withholds that message above a working button.
+That case falls back to กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652.
+
+⚠ **`_start` re-applies the identical rule** before building a flow, so a
+button that should never have rendered still cannot open one.
+
+**The band header is unconditional in the redesign.** Every `_offer` card —
+status mode included — leads with ✨ ข้อเสนอพิเศษสำหรับคุณ, not just contracts
+carrying products. `_band`'s `hasSpecial` is computed and passed but never
+read: the design draws the same band for M35 and non-M35 (PDF pp.10/11 differ
+only in the figures), so the uplift shows as a larger figure rather than as
+different furniture.
+
+**What each layout carries:**
+
+| | Full offer | Status (`pending`) | Refusal |
+| --- | --- | --- | --- |
+| Status pill | ยังไม่ได้ทำรายการเติมวงเงิน | `request_status`, or มีคำขออยู่ระหว่างดำเนินการ when blank, + ⏱ | ไม่เข้าเงื่อนไข + ⏱ |
+| Figures | วงเงินสินเชื่อใหม่สูงสุด, −เงินต้น, −อากรแสตมป์ | **ยอดที่ขอไว้** only | **วงเงินสินเชื่อเดิม** (`credit_limit`) only |
+| Payout strip + `*เมื่อชำระ…` | ✅ | — | — |
+| `Code : xxx` | — | — | only when `can_topup_code` is non-empty |
+| Button | **เติมวงเงิน** | **ดูสถานะคำขอ** | **none** — the action is a phone call |
 
 Separately, the **สิทธิพิเศษเฉพาะคุณ** grid in the card body
 (`showsSpecialOffers`) needs *three* conditions: products, `can_topup != 'N'`,
 **and** no request already in flight — tapping a product starts a request, which
 a contract mid-request cannot take. So the offer header can appear while the
 grid is withheld; they are deliberately not the same predicate.
+
+⚠ In the redesign that `can_topup != 'N'` clause is **dead** — the grid renders
+only inside the non-pending `_offer` branch, which already required
+`can_topup == 'Y'`. It still matters to `_old`. And the grid is switched off
+entirely today by `showSpecialOffersSection = false`.
 
 ⚠ **An empty product entry does not count.** The API pads
 `topup_detail.products`, and an entry with no code and no name must not flip the

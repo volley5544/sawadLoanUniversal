@@ -247,8 +247,11 @@ class _TopupCardPageState extends State<TopupCardPage> {
       _openStatus(contract);
       return;
     }
-    if (!contract.isEligible) {
-      final reason = contract.topupDetail.canTopupMsg;
+    // Same rule the card's layout branch uses, so a button that should never
+    // have rendered still cannot start a flow this contract is refused.
+    if (!canTopupInApp(contract)) {
+      final reason =
+          contract.isEligible ? '' : contract.topupDetail.canTopupMsg;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(reason.isNotEmpty
             ? reason
@@ -489,7 +492,10 @@ class _TopupContractCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = !contract.hasNoRequestYet;
-    final eligible = contract.isEligible;
+    // ⚠ **Not `contract.isEligible`** — see [canTopupInApp]. A top-up needs
+    // the loan type to be M or C *as well as* `can_topup == 'Y'`; that getter
+    // tests only the flag and is shared with the P-Loan Extra flow.
+    final eligible = canTopupInApp(contract);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       clipBehavior: Clip.antiAlias,
@@ -751,7 +757,7 @@ class _TopupContractCard extends StatelessWidget {
     // Second line is the API's own reason — see TopupDetail.ineligibleReason,
     // which also holds the fallback for a refusal that names none.
     final message = 'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
-        '${contract.topupDetail.ineligibleReason}';
+        '${topupRefusalReason(contract)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
