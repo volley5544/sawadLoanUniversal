@@ -26,6 +26,14 @@ cross-referenced throughout it. Do not renumber either list.
 - [Outstanding #11 / #12 — hardcoded PDPA consents, the first live submit](#outstanding-11-12)
 - [Outstanding #14 — `latitude` / `longitude`](#outstanding-14)
 - [Outstanding #18 — Android WebView could not render the inline PDF](#outstanding-18)
+- [Outstanding #26 — `transaction_ref` seen on a live request](#outstanding-26)
+- [Outstanding #27 — `/rp/verify-with-data` verified end to end](#outstanding-27)
+- [Outstanding #30 — the first live top-up filed from this build](#outstanding-30)
+- [Outstanding #33 — the temporary top-up recalculation host](#outstanding-33)
+- [The 2026-09 top-up redesign: provenance, colour rules, reverted experiments](#topup-redesign)
+- [`POST /ploan`: the two retargets, and what they deleted](#ploan-save-retarget)
+- [`pdfx` 2.9.2 leaks every document the step-6 sheet opens](#pdfx-leak)
+- [Step 6's `สรุปยอดสินเชื่อใหม่`, and which `fee_amount` wins](#step6-summary-rows)
 - [Pentest 2026-08-11 — the full finding list](#pentest-2026-08-11)
 
 ---
@@ -353,3 +361,284 @@ live in the working copy, never in the remote.
     #4 client-side auth, #5/#8 OTP, #6 brute force, #24 public Firebase Storage
     listing, and the TLS items (#21/#22 in the sheet's numbering — not this
     list's).
+
+## <a id="outstanding-26"></a>Outstanding #26 — `transaction_ref` seen on a live request
+
+**Closed 2026-09-10.** NDID's review finding 2 required a Transaction Ref of
+digits only, at most 9 — and required the *same* number to appear on our
+waiting screen and inside the `request_message` the IdP shows. The srisawad
+gateway generates it; this app only displays what comes back. Until this run
+nobody had seen one arrive.
+
+**✅ Closed 2026-09-10.** Shipped 2026-08-31 (uat `WEB_VERSION` 74);
+verified end to end on uat `WEB_VERSION` 82, our screen and the bank's
+quoting the same reference.
+
+- ✅ **The field arrives.** A real run showed a genuine `transaction_ref` on
+  the countdown screen, not `-`. So the gateway does generate and return it,
+  and the half of NDID's issue 2 that is ours to display is **done**. (Had
+  it been absent the breadcrumb trail — tap the `(UAT ver…)` tag — would read
+  `ndid transaction_ref absent from gateway response`; a value breaking
+  p.38's format logs `… is not 5-9 digits` and is still displayed, being
+  what the IdP quotes.)
+- ✅ **The IdP app shows the clause, with the same number.** Confirmed
+  2026-09-10 from a KBank consent screen photographed beside our own
+  waiting screen: both quoted **`312461174`**. So the backend really does
+  append the clause to the message it forwards, and NDID's issue 2 is
+  **closed on both sides** — which was the one thing that could have failed
+  the review again while our screen looked perfectly correct.
+
+  What the bank rendered, in full:
+
+  > ท่านกำลังยืนยันตัวตนเพื่อใช้ตามวัตถุประสงค์ของบริษัท ศรีสวัสดิ์ พาวเวอร์
+  > 2014 จำกัด และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย
+  > (Transaction Ref:312461174)
+
+  Four things fall out of that one screenshot: the RP name is ours, the AS
+  clause is present and names the chosen bank (so #27's open bullet closes
+  too), the reference is 9 digits of digits only — legal under p.38, at the
+  maximum length — and the timings line up (KBank stamped 13:30 and asked
+  for confirmation by 14:30, i.e. the `request_timeout` of 3600 s).
+
+⚠ **The gateway writes `(Transaction Ref:N)` with no space after the
+colon**, which is how p.38's own template writes it. `requestMessage` had a
+space; corrected 2026-09-10. That branch only runs for a gateway composing
+no clause of its own (SIT/DAP), but the two paths should be
+indistinguishable to a customer.
+
+If the clause ever turns out to be ours to add after all, the revert is
+small and named: pass `transactionRef` to `NdidApi.createVerifyRequest`
+again (`NdidTransactionRef.generate()` is still there for exactly this) and
+prefer the local value over the response's on screen.
+
+## <a id="outstanding-27"></a>Outstanding #27 — `/rp/verify-with-data` verified end to end
+
+Shipped and exercised 2026-09-10 on the uat gateway. Only the AS **error
+codes** (`40000`–`40500`) remain unseen — they became reachable with this
+endpoint but no live request has produced one, which is why #24c asks NDID to
+inject them.
+
+2026-09-10 on the uat gateway. Only the AS **error codes** remain unseen.
+
+- ✅ **The data reaches the backend.** A live run delivered the AS payload to
+  `callback_url`, confirmed by the user. So the AS responds, the gateway
+  forwards, and the callback fires — the whole point of the endpoint. Note
+  **nothing client-side can observe this**: `NdidVerifyStatus` is unchanged
+  and reads no data, by design, so this can only ever be confirmed from the
+  backend side.
+- ✅ **A real IdP → AS pair resolves.** Matching on
+  `(industry_code, company_code)` held on a real run, as the live reads
+  predicted: **13 of 13** on prod, **16 of 16** on uat. If a customer ever
+  picks a bank whose AS is absent, the flow silently degrades to
+  `/rp/verify` and the breadcrumb `ndid no AS matches IdP …` under the
+  `(UAT ver…)` tag is what says so.
+- ✅ **The body shape** — the generated body reached `20005 - No IdP found`
+  on prod, past structural validation; both endpoints also verified present
+  on uat (`/services/{id}/as` 200, `/rp/verify-with-data` 400-on-empty).
+- ✅ **The IdP app shows the AS clause.** The KBank consent screen in #26
+  read *"และประสงค์ให้ส่งข้อมูลจาก ธนาคารกสิกรไทย"* — the AS named is the
+  bank the customer picked as their IdP, which is exactly what
+  `findAsForIdp` resolves. So the clause, the resolution and the consent the
+  customer actually sees all agree.
+- ⏳ ⚠ **The AS error codes** `40000`–`40500`, newly reachable and still
+  never seen (#24c).
+
+⚠ Confirmed against the **uat** gateway. Prod is still blocked behind the
+same app release as #22 — the shipped app does not allowlist
+`ndid.srisawadpower.com`, so in-app NDID cannot reach it. The uat gateway is
+allowlisted, which is why testing could proceed at all.
+
+## <a id="outstanding-30"></a>Outstanding #30 — the first live top-up filed from this build
+
+~~**No live top-up has been filed from this build.**~~ **Resolved
+2026-09-16** — `POST /topup` files successfully end to end from here.
+⚠ One contract refuses with `501 /
+ข้อมูลบางส่วนผิดพลาดไม่สามารถสร้างใบคำขอได้`, and that refusal **reproduces
+on the old LandAndHouseWeb app too**, so it is backend-side data on that
+contract rather than anything this client sends. Worth raising with the API
+team; not a client defect, and not a blocker.
+
+⚠ The `501` above is the one corrected on 2026-09-16: it was first read as a
+`product_code` problem and the payload was changed accordingly. That change
+stands on its own (it matches the source), but it is **not** the fix — the
+refusal is contract-specific backend data and reproduces on LandAndHouseWeb.
+
+## <a id="outstanding-33"></a>Outstanding #33 — the temporary top-up recalculation host
+
+~~**`POST /GetRecalTopupData` is on a temporary test host.**~~
+**✅ Resolved 2026-09-14** — the QA endpoint landed as **`POST /topup/recal`
+on the mobile API base**, which is exactly what this item asked for: HTTPS,
+CORS, and the customer's own bearer token. The top-up flow now calls it
+**instead of `GET /topup/detail`**, one response carrying both the limits
+and the settlement. See **`POST /topup/recal`**.
+
+Three things remain, none of them blocking:
+
+- ⚠ **Rotate the `…prod` `Basic` account** from the old sample. It shipped
+  readable in uat builds 124–126 on 2026-09-13 and is now used by nothing.
+- ✅ **The test host is out of the srisawad app** (done 2026-09-14,
+  `123cf65` on `pentest_resolved`). Both halves went together:
+  `http://34.142.213.42:8080/` from `_kHttpRequestAllowedPrefixes` — the
+  only plain-http entry in an otherwise all-https list — and the
+  `<domain-config>` block for that IP in `network_security_config.xml`, a
+  scoped hole in the pentest's finding-13 cleartext control, which is whole
+  again. Removing only the allowlist entry would have left an Android
+  cleartext exception for an IP nothing can reach, which is the worse half
+  to leave behind.
+- ⚠ **The M35 ceiling disagreement is still open** — `/loan/list` grants
+  `topup_extra` 5,000 that `/topup/recal` does not recognise, so the
+  customer is offered a limit the settlement is not priced at. See
+  `TopupFlow.settlementPricingAmount`.
+
+⚠ **The third bullet above is stale.** It was written before the API team
+confirmed (also 2026-09-14) that `default_topup_amount` **already includes**
+`topup_extra` — so there was never an M35 ceiling disagreement between
+`/loan/list` and `/topup/recal`; the client was double-counting the uplift.
+`TopupFlow.applySpecialLimit` is now a no-op. See **`POST /topup/recal`** in
+CLAUDE.md.
+
+## <a id="topup-redesign"></a>The 2026-09 top-up redesign: provenance, colour rules, reverted experiments
+
+The card and amount screens were rebuilt to a BA design on 2026-09-12, from
+`etc/M35 + หน้าจอเติมเงิน_ปิดปรับผ่านแอพมือถือ_หลั.pdf`. ⚠ That PDF is
+git-ignored **since 2026-09-13** — the old `/etc/*.txt` rule did not cover it,
+so it and three tester screenshots are in the remote's history; see the
+`.gitignore` comment.
+
+### The colour rules, all set from device checks on 2026-09-12
+
+Each looked fine in a render and wrong on a phone:
+
+| Element | Treatment | Why |
+| --- | --- | --- |
+| the two deduction rows (`TopupFigureRow(deduction: true)`) | label, figure **and its `บาท`** in label grey | in value navy a deduction carried the same weight as the payout under it, so the eye found three equal numbers instead of two small ones explaining a large one. The unit joined them on 2026-09-13 — it had stayed navy, leaving the amount screen's two หัก rows half-lit |
+| `วงเงินสินเชื่อใหม่สูงสุด` | label grey via `mutedLabel`, figure stays dark | it heads the group whose other rows are muted; opt-in, because the amount screen's `เงินคงเหลือโอนเข้าบัญชี` is also an emphasis row and *is* a conclusion |
+| `บาท`, everywhere | the **figure's** colour, not label grey | the unit belongs to the number beside it; a grey unit broke the phrase in half |
+| `*เมื่อชำระยอดเพื่อเติมวงเงิน` | orange, not alert red | it qualifies *when* the money arrives rather than warning about anything, and in red beside a payout it read as a problem with the payout |
+| the band's ✨ | `#F7BF97` | the one mark on the blue with no warmth |
+
+`TopupPrimaryButton`'s corner radius also went 4 → 12. ⚠ That button is
+shared, so it is **the one change that reaches the `_old` pair** — nothing they
+*say* changed, but "they render exactly as they did" is approximate rather
+than literal.
+
+**ปรับปรุงยอดชำระ is `tonal`, a third variant** (2026-09-13, on request): pale
+blue `#E6F4FF` with a `LoanRegisterStyles.value` label, beside the orange
+ชำระเงิน. It is a **new flag** rather than a restyled `outlined` precisely
+because of the line above — `outlined` is what `topup_amount_page_old.dart`
+renders, and editing it in place would move the thing the `_old` pair exists to
+be compared against. The same two colours are on the QR screen's copy of this
+button, since the two screens hand back and forth.
+
+**A fifth colour was folded out.** A one-off teal caption on the product grid
+and the softer `LoanRegisterStyles.required` red both went, because a fifth
+colour on one caption read as a different kind of message than it was.
+`TopupNotice` gained an optional `accent` for this, so a redesigned screen can
+use the design's pure red **without** repainting the un-redesigned steps or the
+`_old` pair.
+
+### Experiments that were reverted
+
+- **`+5,000.00` was briefly orange.** The BA's screenshot draws the M35 pair as
+  two readings of the same kind, and colouring one of them made the uplift look
+  like a separate offer rather than a term of the sum above the bar. The `+` is
+  what marks it.
+- **The conditions panel briefly sat below the cards**, so the screen would
+  open on the offer the way the render does. Reverted on request the same day
+  (2026-09-12): it is how a customer finds out *why* a card says what it says,
+  which is worth more than leading with the number.
+- **The M35 pair was briefly `TopupFigureRow`s.** As table rows the long Thai
+  labels squeezed the figures they introduced, and the pair read as entries in
+  a list rather than as the arithmetic behind the blue bar. Hence
+  `TopupStackedFigure` — set from the BA's screenshot on 2026-09-12.
+
+## <a id="ploan-save-retarget"></a>`POST /ploan`: the two retargets, and what they deleted
+
+The P-Loan save endpoint reached its current shape through two changes, both of
+which removed constraints rather than adding them.
+
+**Where it started.** An Extra filed with `POST /topup`, because the FlutterFlow
+source it was forked from was a top-up request wearing P-Loan naming. A new
+P-Loan filed with `<:8082>/SavePloanContract`, `multipart/form-data`, behind a
+baked-in **Basic** service credential (`kPLoanSaveApiAuth`) on a host with its
+own port define (`kPLoanSaveApiBase`).
+
+**2026-07-31 — both kinds unified** onto the save endpoint, on instruction. A
+P-Loan Extra is a *P-Loan contract that references an existing one*, not a
+top-up of it: it draws a separate `topup_extra` line rather than closing the old
+loan out, which is also why `payoutAmount` stopped deducting the old principal
+on 2026-07-30. `refContractNo` became the only field separating the two kinds.
+
+**2026-08-04 — retargeted to `POST /ploan`** on the mobile API base, with the
+customer's own Firebase bearer token. This deleted `kPLoanSaveApiBase` and
+`kPLoanSaveApiAuth` from `app_environment.dart` and closed the pentest's
+high-severity baked-in-credential finding — a bearer token replaces a shared
+secret, so there is nothing left in the bundle to leak. It also removed two
+host-side prerequisites that had each needed an app release: the never-built
+`httpMultipart` bridge handler, and an `:8082` allowlist entry (Outstanding #2
+and #3).
+
+**2026-08-07 — body moved back to `multipart/form-data`** from the JSON the
+retarget briefly used. ⚠ Worth understanding why that cost nothing this time:
+what made `<:8082>/SavePloanContract` need the native host (verified
+2026-07-27) was **never multipart as such** — it was **no CORS headers and a
+401'd preflight**, which blocked a browser upload outright and left the bridge
+as the only route. `/ploan` sends `access-control-allow-origin: *`, so
+`bypassHostBridge: true` uploads with `package:http` directly, in the host and
+in a plain browser alike.
+
+**The step-6 payload preview is gone.** A non-prod **ดู/คัดลอก Payload (POST
+/ploan)** button used to dump the resolved URL, the form fields, the file parts
+and `unresolvedFields` into a copyable dialog; removed 2026-09-07 on request.
+`submit_form/`'s own **ดู Payload** button is a different feature and is
+untouched. What remains for inspecting a real submit is the failure report,
+which only appears when the submit *fails* — so a successful body can no longer
+be read off a device. To bring it back, build
+`PLoanContractSubmission.fromFlow(flow)` and print `fields` / `files` /
+`unresolvedFields`; the mapper is unchanged.
+
+⚠ **A stale caveat was carried until 2026-09-17.** CLAUDE.md kept a note asking
+someone to confirm "that `<:7076>/ploan` is reachable and sends
+`access-control-allow-origin: *`". Both halves were already answered: the live
+submit of 2026-08-17 proved reachability and CORS, and `<:7076>` is the retired
+uat gateway — the config has pointed at `srisawad-qa.ecorpgroup.com` since
+2026-09-11. Removed.
+
+## <a id="pdfx-leak"></a>`pdfx` 2.9.2 leaks every document the step-6 sheet opens
+
+Found 2026-08-17 while hunting the iOS white screen. It was **not** that bug's
+cause, and is a real leak either way.
+
+`PdfController.dispose()` disposes only its `PageController` — it **never calls
+`PdfDocument.close()`** — so the pdf.js `PDFDocumentProxy` and its
+`ArrayBuffer` stayed alive in the JS heap and the worker for the rest of the
+session. Step 6 requires all three contracts to be opened before the NDID row
+unlocks, so that left **three** orphaned documents resident from step 6 onward,
+through the whole NDID countdown.
+
+`_PdfInlineViewState._release()` now disposes the controller, closes the
+document, and clears the global `ImageCache` — `PdfView` rasterises every page
+at 2x as a JPEG through `PdfPageImageProvider`, so those bitmaps outlive the
+sheet inside a 100 MB budget. Clearing the whole cache is deliberately broad
+and cheap: the only other images this app caches are the ID-card/selfie
+thumbnails, which re-decode from bytes still held on the flow.
+
+## <a id="step6-summary-rows"></a>Step 6's `สรุปยอดสินเชื่อใหม่`, and which `fee_amount` wins
+
+**Why the section is new-P-Loan only** (hidden for an Extra on request,
+2026-07-30). Every row in it was a top-up framing: the reference contract's
+headroom (`ยอดจัดสินเชื่อเดิม` / `สินเชื่อวงเงินอเนกประสงค์`, the `topup_extra`
+row / `รวมยอดวงเงินที่อนุมัติ`) plus `หักยอดเงินต้นสัญญาเก่า`, the principal a
+top-up would clear. A P-Loan Extra draws against none of it — it only
+*references* the contract. It took `จำนวนเงินที่จะได้รับ` with it, replaced by
+`ยอดโอนเงินเข้าบัญชี` in the next section.
+
+**The duty came from the wrong endpoint for a few hours.** Two endpoints return
+a `fee_amount`: `GET /topup/detail` gives the duty on the top-up *total* (**6**
+on `MLOAN`/`ฮฮM680702003NF61X` — ฿1 per ฿2,000 of 12,000), while
+`POST /topup/calculator` recomputes it for the amount actually requested (**1**
+for 2,000). Sourcing it from `/topup/detail` was tried on 2026-07-30 and
+reverted the same day: it charged the duty for a larger amount than the
+customer is borrowing. Step 2 folds the calculator's in with
+`detail.copyWith(feeAmount: plan.feeAmount)`, so `LoanAmountDetail.feeAmount` is
+the calculator's from then on.
