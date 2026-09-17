@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 495 tests (models, payloads, headers, NDID terms +
+flutter test               # 499 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2989,6 +2989,14 @@ it entirely), so a default of `false` would silently restyle the very thing the
 ⚠ The **rules are unchanged** — `showsOverdueRow` and
 `showsCurrentInstallmentAmountRow` still compute as before; only whether the
 card consults them changed. Restoring the rows is one argument.
+
+⚠ **`กรมธรรม์` is unaffected** and still renders whenever `/loan/list` returns
+a non-empty `insurances`. It sits immediately *above* the two gated rows in the
+same card, which is close enough to be worth pinning: four **widget** tests
+pump the card and assert กรมธรรม์ and its ดูรายละเอียด link survive, that the
+two rows do not, and that เลขที่สัญญา / ชำระภายในวันที่ / งวดปัจจุบัน /
+รวมต้องชำระ all stay. A model test could not catch that slip — the getter
+would still be right while the card stopped consulting it.
 
 
 `models/loan_detail_summary.dart` holds every derived rule the card renders,

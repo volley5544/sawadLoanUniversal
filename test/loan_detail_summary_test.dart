@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/loan_detail/components/loan_detail_components.dart';
 import 'package:sawad_loan_universal/loan_detail/components/loan_detail_header_card.dart';
@@ -51,6 +52,7 @@ LoanContract _contract({
     });
 
 void main() {
+  _headerCardRenderTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -564,3 +566,65 @@ void _headerCardRowSwitchTests() {
 }
 
 void _noop() {}
+
+/// ⚠ **Hiding ค้างชำระ / ค่างวดปัจจุบัน must not take กรมธรรม์ with it.**
+///
+/// That row sits in the same card, immediately above the two that were gated
+/// on 2026-09-17, and is guarded only by `insurances.isNotEmpty`. A model test
+/// cannot catch a widget-level slip here — the getters would still be right
+/// while the card stopped consulting one of them — so this pumps the card.
+void _headerCardRenderTests() {
+  Future<void> pump(WidgetTester tester, LoanContract contract) =>
+      tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: LoanDetailHeaderCard(
+              contract: contract,
+              showsNotIssuedNotice: false,
+              onDownloadContract: null,
+              onViewInsurances: _noop,
+              showsArrearsAndInstalmentRows: false,
+            ),
+          ),
+        ),
+      ));
+
+  final withPolicy = _contract(
+    overdueAmount: 9170,
+    overdueFrom: '5',
+    overdueTo: '6',
+    insurances: const [
+      {'ins_name': 'ประกันภัยรถจักรยานยนต์', 'ins_url': 'https://x/y.pdf'},
+    ],
+  );
+
+  group('the loan detail header card, with the two rows withheld', () {
+    testWidgets('still shows กรมธรรม์ when the contract carries a policy',
+        (tester) async {
+      await pump(tester, withPolicy);
+      expect(find.text('กรมธรรม์'), findsOneWidget);
+      expect(find.text('ดูรายละเอียด'), findsOneWidget);
+    });
+
+    testWidgets('withholds ค่างวดปัจจุบัน and the arrears row', (tester) async {
+      await pump(tester, withPolicy);
+      expect(find.text('ค่างวดปัจจุบัน'), findsNothing);
+      expect(find.text('ค้างชำระ (งวดที่5-6)'), findsNothing);
+    });
+
+    testWidgets('keeps the rows the design does — including งวดปัจจุบัน',
+        (tester) async {
+      await pump(tester, withPolicy);
+      expect(find.text('เลขที่สัญญา'), findsOneWidget);
+      expect(find.text('ชำระภายในวันที่'), findsOneWidget);
+      // The instalment *number* row, which is not the amount row above.
+      expect(find.text('งวดปัจจุบัน'), findsOneWidget);
+      expect(find.text('รวมต้องชำระ'), findsOneWidget);
+    });
+
+    testWidgets('no policy, no กรมธรรม์ row', (tester) async {
+      await pump(tester, _contract());
+      expect(find.text('กรมธรรม์'), findsNothing);
+    });
+  });
+}
