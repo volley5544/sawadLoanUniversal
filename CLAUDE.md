@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 489 tests (models, payloads, headers, NDID terms +
+flutter test               # 492 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3180,6 +3180,7 @@ the loan detail screen) **no call of its own**: everything comes off the
 | Route | Takes |
 | --- | --- |
 | `/loanPayment` | `?contNo=` (+ optional `&dbName=`, `&fromHost=true`) |
+| `/loanPayment/old` | the same — the pre-redesign screen, comparison only |
 | `/loanPayment/qr` | `?contNo=&amount=` (+ optional `&dbName=`) |
 
 The amount rides in the **query string**, not `extra`: a reload reproduces the
@@ -3209,8 +3210,8 @@ that make it safe:
 
 | Option | Amount |
 | --- | --- |
-| **ชำระเต็มจำนวน** | `current_due_amount + collection_fee` |
-| **ยอดค้างชำระ** | `overdue_amount + collection_fee` |
+| **ชำระเต็มจำนวน** | `current_due_amount` |
+| **ยอดค้างชำระ** | `overdue_amount + collection_fee + penalty_fee` |
 | **กำหนดยอดชำระเอง** | what the customer types |
 
 The source holds these as a `[true, false, false]` bool list and recomputes
@@ -3218,8 +3219,28 @@ each amount inline at **four** call sites — the radio's label, the option's ow
 detail block, the button's disabled test and the push to the QR page. They are
 gathered onto `LoanPaymentSummary` so those four cannot disagree.
 
-⚠ **The collection fee rides on both fixed options**, not just the arrears one.
-Easy to get wrong, and a test pins it.
+⚠⚠ **Both fixed amounts changed on 2026-09-17 with the redesign, and that is a
+billing change.** ชำระเต็มจำนวน used to add the collection fee on top of
+`current_due_amount`, and ยอดค้างชำระ omitted the penalty.
+
+`current_due_amount` **"includes all the customer need to pay"** (confirmed
+with the API owner while building the redesign), so adding the fee
+double-counted it — and the design's own figures only reconcile without it:
+`1,060.25` arrears + `1,440.00` instalment = `2,500.25`, which is exactly
+`current_due_amount`. It is also **the same field** the loan detail screen
+shows as `รวมต้องชำระ` and breaks down as `ยอดรวมต้องชำระ`; those two screens
+are one tap apart over one contract, so a customer must not be shown two
+totals.
+
+⚠ **The fees now ride on the arrears option only.** A test pins that, and
+another pins that the design's three figures reconcile.
+
+⚠ `penalty_fee`'s wire name on `payment_details` is **unconfirmed** — see the
+loan detail section. It defaults to 0, so a response without it bills exactly
+as before and the row is withheld; a test pins that too.
+
+⚠ **`loan_payment_page_old.dart` keeps the old formulas** through its own copy
+of this class. That is the point of the `_old` pair — see below.
 
 ⚠ **`ค่างวดปัจจุบัน` reads `installment_amount`, `รวมต้องชำระ`-style figures
 read `current_due_amount`** — the same two-fields-one-name trap the loan detail
@@ -3292,7 +3313,48 @@ deliberate; if it is ever reported as a bug, a toast in
 clamp survives the row's removal, so nobody deletes `osBalance` on the grounds
 that nothing renders it.
 
-#### The header card is shared with the loan detail screen
+#### The 2026-09-17 redesign, and the `_old` pair
+
+The screen was rebuilt to a new design
+(`etc/ui_changed/select_payment_page/after/`). Three structural changes:
+
+- **Each option is an accordion.** Its detail now sits *inside* the bordered
+  card rather than as sibling cards beneath it, so the orange border wraps the
+  choice and its explanation together. The detail cards went from grey with an
+  orange heading to white with a navy one — orange is the selection and the
+  action on this screen, so a second orange heading inside an already-orange
+  card read as another control.
+- **A compact header replaces `LoanDetailHeaderCard`** — icon, product, plate,
+  contract number, and nothing else. That card restates due date, current
+  instalment, arrears and `รวมต้องชำระ` directly above three options whose own
+  figures explain the same money.
+- **The arrears block leads with the date** and carries four rows —
+  ค่างวดค้างชำระ, ค่าติดตามค้างชำระ, ค่าเบี้ยปรับค้างชำระ, then a bold `รวม`.
+  Its heading is `ยอดค้างชำระ`, not `ค่างวดเลยกำหนดชำระ`.
+  `LoanPaymentSummary.overdueRangeLabel` (`ค้างชำระ (งวดที่ n-m)`) is no longer
+  rendered by the live screen and is kept for the `_old` one.
+
+⚠ **`รวม` is gated by `showsArrearsTotal`**, widened on 2026-09-17 from "a
+collection fee" to "**either** fee" — a contract with a penalty and no
+collection fee now also has more than one row to total. ชำระเต็มจำนวน still
+shows it unconditionally, which is the source's asymmetry and still reads as a
+bug in a screenshot.
+
+**The pre-redesign screen is preserved** at **`/loanPayment/old`**
+(`loan_payment_page_old.dart`), carrying a superseded banner.
+
+⚠ **It has private copies of everything it renders** —
+`loan_payment_components_old.dart` and `loan_payment_option_old.dart` — so
+editing the live screen, its components *or its arithmetic* cannot change what
+it shows. That is stricter than the top-up `_old` pair, which shares its
+models, and it has to be: the redesign changed the **amounts**, so a shared
+model would have carried that change straight into the page kept for
+comparison. It therefore still bills the old way.
+
+⚠ **Delete the three `_old` files together** once the redesign is signed off.
+Nothing routes there except a hand-typed URL.
+
+#### The header card (the `_old` screen only)
 
 `LoanDetailHeaderCard` was extracted from `loan_detail_page.dart` for this.
 That is not a convenience: the source embeds its own `LoanDetailCardComponent`
@@ -3304,6 +3366,10 @@ apart, would invite the reader to wonder which is right.
 It is passed `showsNotIssuedNotice: false` — the source's `isShowDownload:
 false`. The contract-document link belongs on the detail screen, not in front
 of someone about to pay.
+
+⚠ **The live screen no longer renders it** (redesign, above) — only
+`loan_payment_page_old.dart` does. The loan detail screen is now its one live
+caller.
 
 ⚠ **The source's second card, ข้อมูลหลักประกัน, is not reproduced** (removed
 2026-09-15 on request). Every row it held — contract number, product type,

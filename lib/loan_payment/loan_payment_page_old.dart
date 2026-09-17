@@ -22,18 +22,37 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
 import '../loan_detail/components/loan_detail_components.dart';
+import '../loan_detail/components/loan_detail_header_card.dart';
+import '../loan_detail/insurance_list_page.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../router/app_router.dart';
 import '../services/native_bridge.dart';
 import '../services/p_loan_api.dart';
 import '../services/srisawad_api.dart';
-import 'components/loan_payment_components.dart';
-import 'models/loan_payment_option.dart';
+import 'components/loan_payment_components_old.dart';
+import 'models/loan_payment_option_old.dart';
 import 'models/loan_payment_seed.dart';
 
-class LoanPaymentPage extends StatefulWidget {
-  const LoanPaymentPage({
+/// ⚠ **Superseded — kept for comparison only** (2026-09-17).
+///
+/// This is the pre-redesign ชำระเงิน screen, frozen at the version that
+/// shipped before the new design landed, and routed at **`/loanPayment/old`**.
+/// It carries **private copies** of everything it renders —
+/// `loan_payment_components_old.dart` and `loan_payment_option_old.dart` — so
+/// that editing the live screen, its components or its arithmetic cannot
+/// change what this one shows. That is the whole point of the pair: the `_old`
+/// page is what the redesign is compared *against*.
+///
+/// ⚠ **Delete the three `_old` files together** once the redesign is signed
+/// off. They are a comparison aid, not a fallback — nothing routes here except
+/// a hand-typed URL.
+///
+/// ⚠ It keeps the **old amounts** on purpose: `ชำระเต็มจำนวน` still adds the
+/// collection fee to `current_due_amount` and `ยอดค้างชำระ` still omits the
+/// penalty. The live screen corrected both on 2026-09-17 — see CLAUDE.md.
+class LoanPaymentPageOld extends StatefulWidget {
+  const LoanPaymentPageOld({
     super.key,
     required this.contractNo,
     this.dbName = '',
@@ -55,14 +74,14 @@ class LoanPaymentPage extends StatefulWidget {
   final bool fromHost;
 
   @override
-  State<LoanPaymentPage> createState() => _LoanPaymentPageState();
+  State<LoanPaymentPageOld> createState() => _LoanPaymentPageStateOld();
 }
 
-class _LoanPaymentPageState extends State<LoanPaymentPage> {
+class _LoanPaymentPageStateOld extends State<LoanPaymentPageOld> {
   LoanContract? _contract;
   String? _error;
 
-  LoanPaymentOption _option = LoanPaymentOption.full;
+  LoanPaymentOptionOld _option = LoanPaymentOptionOld.full;
 
   final TextEditingController _amountController = TextEditingController();
   final FocusNode _amountFocus = FocusNode();
@@ -84,20 +103,20 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
 
   /// Focus strips the separators so the field is editable as a plain number;
   /// blur re-formats it and applies the balance ceiling. Both halves are the
-  /// source's — see [LoanPaymentSummary.blurredFieldText] for the ⚠ on the
+  /// source's — see [LoanPaymentSummaryOld.blurredFieldText] for the ⚠ on the
   /// silent clamp.
   void _onAmountFocusChanged() {
     final contract = _contract;
     if (contract == null) return;
     if (_amountFocus.hasFocus) {
-      final raw = parsePaymentAmount(_amountController.text);
+      final raw = parsePaymentAmountOld(_amountController.text);
       _amountController.text = raw == 0 ? '' : _amountController.text
           .replaceAll(',', '');
       return;
     }
     setState(() {
       _amountController.text =
-          LoanPaymentSummary(contract).blurredFieldText(_amountController.text);
+          LoanPaymentSummaryOld(contract).blurredFieldText(_amountController.text);
     });
   }
 
@@ -164,7 +183,7 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
     }
   }
 
-  void _select(LoanPaymentOption option) {
+  void _select(LoanPaymentOptionOld option) {
     if (_option == option) return;
     // Leaving the typed option commits whatever is in the field, so coming
     // back to it shows the same figure rather than a half-typed one.
@@ -172,10 +191,10 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
     setState(() => _option = option);
   }
 
-  void _onPay(LoanPaymentSummary summary) {
+  void _onPay(LoanPaymentSummaryOld summary) {
     final rejection = summary.rejectionFor(_option, _amountController.text);
     if (rejection != null) {
-      showLoanPaymentMessage(context, rejection);
+      showLoanPaymentMessageOld(context, rejection);
       return;
     }
     final amount = summary.amountFor(_option, _amountController.text);
@@ -212,7 +231,7 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
     if (contract == null) {
       return const PLoanLoadingView(message: 'กำลังโหลดข้อมูลสัญญา...');
     }
-    final summary = LoanPaymentSummary(contract);
+    final summary = LoanPaymentSummaryOld(contract);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,19 +242,19 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ⚠ **The compact header, not `LoanDetailHeaderCard`**
-                // (redesign, 2026-09-17). That card restates the whole
-                // contract — due date, current instalment, arrears,
-                // `รวมต้องชำระ` — directly above three options whose own
-                // figures explain the same money. The customer is here to
-                // choose an amount, so the header is now only what identifies
-                // the contract. `loan_payment_page_old.dart` still renders the
-                // full card.
-                LoanPaymentContractHeader(
-                  loanTypeIconDataUrl: contract.contractDetails.loanTypeIcon,
-                  loanTypeName: contract.contractDetails.loanTypeName.trim(),
-                  plate: contract.contractDetails.collateralInformation.trim(),
-                  contractNo: contract.contractNo.trim(),
+                // `isShowDownload: false` in the source — the contract-document
+                // link belongs on the detail screen, not in front of someone
+                // about to pay.
+                LoanDetailHeaderCard(
+                  contract: contract,
+                  showsNotIssuedNotice: false,
+                  onDownloadContract: null,
+                  onViewInsurances: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          InsuranceListPage(insurances: contract.insurances),
+                    ),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 24, 10, 12),
@@ -253,19 +272,16 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                   child: Text(
-                    // Grey and regular, not navy and bold (redesign): it is
-                    // an instruction above the controls, not a heading over a
-                    // section — and in navy bold it competed with the option
-                    // labels underneath it.
                     'กรุณาเลือกจำนวนเงินที่ต้องการชำระ',
                     style: GoogleFonts.notoSansThai(
-                      fontSize: 14,
-                      color: LoanDetailPalette.label,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: LoanDetailPalette.navy,
                     ),
                   ),
                 ),
-                for (final option in LoanPaymentOption.values)
-                  _optionBlock(option, summary),
+                for (final option in LoanPaymentOptionOld.values)
+                  ..._optionBlock(option, summary),
                 const SizedBox(height: 24),
               ],
             ),
@@ -276,74 +292,78 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
     );
   }
 
-  /// The option's card, **with its detail nested inside it** when it is the
-  /// selected one — see [LoanPaymentOptionCard] for why that changed.
-  Widget _optionBlock(
-    LoanPaymentOption option,
-    LoanPaymentSummary summary,
+  /// The option's header card, plus its detail cards when it is the selected
+  /// one. They are **siblings**, not nested — see [LoanPaymentOptionCardOld].
+  List<Widget> _optionBlock(
+    LoanPaymentOptionOld option,
+    LoanPaymentSummaryOld summary,
   ) =>
-      LoanPaymentOptionCard(
-        label: option.label,
-        amount: switch (option) {
-          LoanPaymentOption.full => '${formatMoney(summary.fullAmount)} บาท',
-          LoanPaymentOption.overdue =>
-            '${formatMoney(summary.overdueTotal)} บาท',
-          LoanPaymentOption.custom => null,
-        },
-        selected: _option == option,
-        onTap: () => _select(option),
-        children: _option == option ? _detailCards(option, summary) : const [],
-      );
+      [
+        LoanPaymentOptionCardOld(
+          label: option.label,
+          amount: switch (option) {
+            LoanPaymentOptionOld.full => '${formatMoney(summary.fullAmount)} บาท',
+            LoanPaymentOptionOld.overdue =>
+              '${formatMoney(summary.overdueTotal)} บาท',
+            LoanPaymentOptionOld.custom => null,
+          },
+          selected: _option == option,
+          onTap: () => _select(option),
+        ),
+        if (_option == option) ..._detailCards(option, summary),
+      ];
 
   List<Widget> _detailCards(
-    LoanPaymentOption option,
-    LoanPaymentSummary summary,
+    LoanPaymentOptionOld option,
+    LoanPaymentSummaryOld summary,
   ) =>
       switch (option) {
         // Two cards, deliberately: what is late, then what is due next.
-        LoanPaymentOption.full => [
+        LoanPaymentOptionOld.full => [
             if (summary.showsOverdueBlock)
-              LoanPaymentDetailCard(
-                heading: 'ยอดค้างชำระ',
+              LoanPaymentDetailCardOld(
+                heading: 'ค่างวดเลยกำหนดชำระ',
                 children: _arrearsRows(summary, showsTotal: true),
               ),
-            LoanPaymentDetailCard(
+            LoanPaymentDetailCardOld(
               heading: 'ค่างวดปัจจุบัน',
               children: [
-                LoanPaymentDetailRow(
+                LoanPaymentDetailRowOld(
                   label: summary.currentInstallmentLabel,
                   value: '${formatMoney(summary.installmentAmount)} บาท',
                 ),
-                LoanPaymentDetailRow(
+                LoanPaymentDetailRowOld(
                   label: 'วันครบกำหนดชำระ',
                   value: summary.currentDueDate,
                 ),
               ],
             ),
           ],
-        LoanPaymentOption.overdue => [
+        LoanPaymentOptionOld.overdue => [
             if (summary.showsOverdueBlock)
-              LoanPaymentDetailCard(
-                heading: 'ยอดค้างชำระ',
-                // ⚠ **No รวม row unless a fee is present**, where
-                // ชำระเต็มจำนวน always shows one — see
-                // [LoanPaymentSummary.showsArrearsTotal].
+              LoanPaymentDetailCardOld(
+                heading: 'ค่างวดเลยกำหนดชำระ',
+                // ⚠ **No รวม row unless there is a collection fee**, where
+                // ชำระเต็มจำนวน always shows one. Not a tidy-up candidate: the
+                // source guards this option's รวม behind `collection_fee != 0`
+                // and the other option's not at all. With no fee the total
+                // would only repeat the single row above it.
                 children: _arrearsRows(
                   summary,
-                  showsTotal: summary.showsArrearsTotal,
+                  showsTotal: summary.showsCollectionFee,
                 ),
               ),
             if (summary.showsNoOverdueNotice)
-              const LoanPaymentDetailCard(
-                heading: 'ยอดค้างชำระ',
-                children: [LoanPaymentNotice(text: 'คุณไม่มียอดค้างชำระ')],
+              const LoanPaymentDetailCardOld(
+                heading: 'ค่างวดเลยกำหนดชำระ',
+                children: [LoanPaymentNoticeOld(text: 'คุณไม่มียอดค้างชำระ')],
               ),
           ],
-        LoanPaymentOption.custom => [
-            LoanPaymentDetailCard(
+        LoanPaymentOptionOld.custom => [
+            LoanPaymentDetailCardOld(
               heading: 'กำหนดยอดชำระ',
               children: [
-                LoanPaymentNotice(
+                LoanPaymentNoticeOld(
                   text: '*การกำหนดยอดชำระเอง: การชำระค่างวดไม่เต็มจำนวน '
                       'จะมีดอกเบี้ยเพิ่มขึ้นและค่าติดตามทวงถามหนี้ (ถ้ามี) '
                       'ส่งผลให้ชำระหนี้ไม่ครบตามระยะเวลาที่กำหนด '
@@ -353,12 +373,12 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
                 // The standing statement of the ceiling — and, since the
                 // ยอดหนี้คงเหลือ row was removed, the only place the rule
                 // appears at all.
-                const LoanPaymentNotice(
+                const LoanPaymentNoticeOld(
                   text: '**ไม่สามารถระบุจำนวนเงินเกินยอดหนี้คงเหลือได้',
                   alert: true,
                 ),
                 const SizedBox(height: 12),
-                LoanPaymentAmountField(
+                LoanPaymentAmountFieldOld(
                   controller: _amountController,
                   focusNode: _amountFocus,
                   hintText: 'กรอกจำนวนเงินที่ต้องการจ่ายค่างวด',
@@ -371,47 +391,37 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
   /// ค่างวดเลยกำหนดชำระ's rows. [showsTotal] differs by option — see the note
   /// on the ยอดค้างชำระ arm above.
   List<Widget> _arrearsRows(
-    LoanPaymentSummary summary, {
+    LoanPaymentSummaryOld summary, {
     required bool showsTotal,
   }) =>
       [
-        // ⚠ **The date leads the block now** (redesign) and the arrears figure
-        // is labelled `ค่างวดค้างชำระ` rather than `ค้างชำระ (งวดที่ n-m)`.
-        // The instalment range is not in the new design at all —
-        // `overdueRangeLabel` is kept on the model for the `_old` screen.
-        LoanPaymentDetailRow(
-          label: 'วันครบกำหนดชำระ',
-          value: summary.overdueDueDate,
-        ),
-        LoanPaymentDetailRow(
-          label: 'ค่างวดค้างชำระ',
+        LoanPaymentDetailRowOld(
+          label: summary.overdueRangeLabel,
           value: '${formatMoney(summary.overdueAmount)} บาท',
         ),
         if (summary.showsCollectionFee)
-          LoanPaymentDetailRow(
-            label: 'ค่าติดตามค้างชำระ',
+          LoanPaymentDetailRowOld(
+            label: 'ค่าติดตามทวงถาม',
             value: '${formatMoney(summary.collectionFee)} บาท',
           ),
-        if (summary.showsPenaltyFee)
-          LoanPaymentDetailRow(
-            label: 'ค่าเบี้ยปรับค้างชำระ',
-            value: '${formatMoney(summary.penaltyFee)} บาท',
-          ),
         if (showsTotal)
-          LoanPaymentDetailRow(
+          LoanPaymentDetailRowOld(
             label: 'รวม',
             value: '${formatMoney(summary.overdueTotal)} บาท',
-            strong: true,
           ),
+        LoanPaymentDetailRowOld(
+          label: 'วันครบกำหนดชำระ',
+          value: summary.overdueDueDate,
+        ),
       ];
 
-  Widget _payBar(LoanPaymentSummary summary) {
+  Widget _payBar(LoanPaymentSummaryOld summary) {
     final disabled = summary.isDisabled(_option, _amountController.text);
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-        child: LoanPaymentPrimaryButton(
+        child: LoanPaymentPrimaryButtonOld(
           label: 'ชำระเงิน',
           onPressed: disabled ? null : () => _onPay(summary),
         ),

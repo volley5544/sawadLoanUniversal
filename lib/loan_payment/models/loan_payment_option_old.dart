@@ -1,3 +1,6 @@
+/// ⚠ **Superseded — the `_old` payment screen's copy of the rules** (frozen
+/// 2026-09-17). See `loan_payment_page_old.dart`; delete with it.
+///
 /// The three ways a customer may pay an instalment, and the rules behind them.
 ///
 /// Transcribed from LandAndHouseWeb's `select_payment_page_widget.dart`, which
@@ -11,7 +14,7 @@ library;
 import '../../p_loan/application/components/p_loan_components.dart';
 import '../../p_loan/application/models/loan_contract.dart';
 
-enum LoanPaymentOption {
+enum LoanPaymentOptionOld {
   /// **ชำระเต็มจำนวน** — this instalment plus anything overdue.
   full('ชำระเต็มจำนวน'),
 
@@ -21,13 +24,13 @@ enum LoanPaymentOption {
   /// **กำหนดยอดชำระเอง** — whatever the customer types.
   custom('กำหนดยอดชำระเอง');
 
-  const LoanPaymentOption(this.label);
+  const LoanPaymentOptionOld(this.label);
   final String label;
 }
 
 /// Everything the payment screen derives from one contract.
-class LoanPaymentSummary {
-  LoanPaymentSummary(this.contract);
+class LoanPaymentSummaryOld {
+  LoanPaymentSummaryOld(this.contract);
 
   final LoanContract contract;
 
@@ -39,13 +42,8 @@ class LoanPaymentSummary {
   /// `payment_details.overdue_amount` — arrears.
   double get overdueAmount => contract.paymentDetails.overdueAmount;
 
-  /// `payment_details.collection_fee` — ค่าติดตามค้างชำระ.
+  /// `payment_details.collection_fee` — ค่าติดตามทวงถาม.
   double get collectionFee => contract.paymentDetails.collectionFee;
-
-  /// `payment_details.penalty_fee` — ค่าเบี้ยปรับค้างชำระ, added to this
-  /// screen by the 2026-09-17 redesign. See [PaymentDetails.penaltyFee]: the
-  /// wire name is unconfirmed, and 0 withholds the row.
-  double get penaltyFee => contract.paymentDetails.penaltyFee;
 
   /// `payment_details.installment_amount` — the scheduled instalment, shown
   /// under ค่างวดปัจจุบัน.
@@ -66,41 +64,21 @@ class LoanPaymentSummary {
 
   // ── per-option amounts ──────────────────────────────────────────────
 
-  /// ชำระเต็มจำนวน: **`current_due_amount` alone.**
-  ///
-  /// ⚠ **Changed 2026-09-17, and it is a billing change.** It used to add the
-  /// collection fee on top. That field "includes all the customer need to
-  /// pay" (confirmed with the API owner while building the redesign), so
-  /// adding the fee double-counted it — the redesign's own figures only
-  /// reconcile without it: `1,060.25` arrears + `1,440.00` instalment =
-  /// `2,500.25`, which is exactly `current_due_amount`.
-  ///
-  /// It is also the **same field** the loan detail screen shows as
-  /// `รวมต้องชำระ` and breaks down as `ยอดรวมต้องชำระ`. Those two screens are
-  /// one tap apart over one contract, so a customer must not see two totals.
-  ///
-  /// ⚠ `loan_payment_page_old.dart` keeps the old formula, via its own copy of
-  /// this class — that is what the `_old` pair is for.
-  double get fullAmount => currentDueAmount;
+  /// ชำระเต็มจำนวน: what is due now **plus** the collection fee.
+  double get fullAmount => currentDueAmount + collectionFee;
 
-  /// ยอดค้างชำระ: the arrears **plus both fees**.
-  ///
-  /// ⚠ The penalty joined the collection fee here on 2026-09-17; before that
-  /// only the collection fee rode along, and a contract carrying a penalty was
-  /// under-billed on this option. The redesign draws all three rows and a
-  /// `รวม` that sums them, so the option's headline figure has to match what
-  /// its own block adds up to.
-  double get overdueTotal => overdueAmount + collectionFee + penaltyFee;
+  /// ยอดค้างชำระ: the arrears **plus** the collection fee.
+  double get overdueTotal => overdueAmount + collectionFee;
 
   /// The amount [option] would send to the QR screen.
   ///
   /// [customText] is the raw field text, only read for
-  /// [LoanPaymentOption.custom].
-  double amountFor(LoanPaymentOption option, String customText) =>
+  /// [LoanPaymentOptionOld.custom].
+  double amountFor(LoanPaymentOptionOld option, String customText) =>
       switch (option) {
-        LoanPaymentOption.full => fullAmount,
-        LoanPaymentOption.overdue => overdueTotal,
-        LoanPaymentOption.custom => parsePaymentAmount(customText),
+        LoanPaymentOptionOld.full => fullAmount,
+        LoanPaymentOptionOld.overdue => overdueTotal,
+        LoanPaymentOptionOld.custom => parsePaymentAmountOld(customText),
       };
 
   // ── which rows each option shows ────────────────────────────────────
@@ -109,24 +87,8 @@ class LoanPaymentSummary {
   /// when there are arrears. Zero is withheld rather than shown as `0.00`.
   bool get showsOverdueBlock => overdueAmount != 0;
 
-  /// ค่าติดตามค้างชำระ appears only when a fee was charged — likewise.
+  /// ค่าติดตามทวงถาม appears only when a fee was charged — likewise.
   bool get showsCollectionFee => collectionFee != 0;
-
-  /// ค่าเบี้ยปรับค้างชำระ, likewise — and it is how a response carrying no
-  /// `penalty_fee` renders the design's own no-fee case rather than `0.00`.
-  bool get showsPenaltyFee => penaltyFee != 0;
-
-  /// Whether the **ยอดค้างชำระ** option's block ends in a `รวม` row.
-  ///
-  /// ⚠ Asymmetric with ชำระเต็มจำนวน, which always shows one — the source
-  /// guards this option's total behind a fee being present and the other
-  /// option's not at all. With no fee the total would only repeat the single
-  /// row above it.
-  ///
-  /// ⚠ Widened on 2026-09-17 from "a collection fee" to "either fee", because
-  /// the redesign added the penalty row: a contract with a penalty and no
-  /// collection fee now also has more than one row to total.
-  bool get showsArrearsTotal => showsCollectionFee || showsPenaltyFee;
 
   /// **คุณไม่มียอดค้างชำระ**, in place of the ยอดค้างชำระ option's detail
   /// block. The exact complement of [showsOverdueBlock].
@@ -175,25 +137,25 @@ class LoanPaymentSummary {
   ///     reads as zero. An **empty** field leaves the button *enabled*, and
   ///     pressing it raises `กรอกจำนวนเงินที่ต้องการจ่ายค่างวด` — the prompt is
   ///     more useful than a dead button, and it is the source's behaviour.
-  bool isDisabled(LoanPaymentOption option, String customText) =>
+  bool isDisabled(LoanPaymentOptionOld option, String customText) =>
       switch (option) {
-        LoanPaymentOption.full => fullAmount == 0,
-        LoanPaymentOption.overdue => overdueTotal == 0,
-        LoanPaymentOption.custom =>
-          customText.isNotEmpty && parsePaymentAmount(customText) == 0,
+        LoanPaymentOptionOld.full => fullAmount == 0,
+        LoanPaymentOptionOld.overdue => overdueTotal == 0,
+        LoanPaymentOptionOld.custom =>
+          customText.isNotEmpty && parsePaymentAmountOld(customText) == 0,
       };
 
-  /// Why a press cannot proceed, or null when it can. [LoanPaymentOption.full]
-  /// and [LoanPaymentOption.overdue] always can — [isDisabled] has already
+  /// Why a press cannot proceed, or null when it can. [LoanPaymentOptionOld.full]
+  /// and [LoanPaymentOptionOld.overdue] always can — [isDisabled] has already
   /// stopped the zero cases.
-  String? rejectionFor(LoanPaymentOption option, String customText) {
-    if (option != LoanPaymentOption.custom) return null;
+  String? rejectionFor(LoanPaymentOptionOld option, String customText) {
+    if (option != LoanPaymentOptionOld.custom) return null;
     if (customText.trim().isEmpty) {
       return 'กรอกจำนวนเงินที่ต้องการจ่ายค่างวด';
     }
     // `>= 1`, so exactly one baht is allowed even though the message reads
     // "more than 1". The wording is the source's; the rule is the source's too.
-    if (parsePaymentAmount(customText) < 1) {
+    if (parsePaymentAmountOld(customText) < 1) {
       return 'จำนวนที่จ่ายต้องมากกว่า 1 บาท';
     }
     return null;
@@ -220,7 +182,7 @@ class LoanPaymentSummary {
   /// literal here and the comma formatter never runs on it.
   String blurredFieldText(String raw) {
     if (raw.isEmpty) return '0.0';
-    final typed = parsePaymentAmount(raw);
+    final typed = parsePaymentAmountOld(raw);
     return formatMoney(typed <= osBalance ? typed : osBalance);
   }
 }
@@ -231,5 +193,5 @@ class LoanPaymentSummary {
 /// Mirrors the source's `removeCommaFromNumText`, which strips every character
 /// outside `[A-Za-z0-9.]` and falls back to `0.00` — so a field holding only
 /// punctuation is zero rather than an error.
-double parsePaymentAmount(String text) =>
+double parsePaymentAmountOld(String text) =>
     double.tryParse(text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;

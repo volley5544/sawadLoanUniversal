@@ -9,6 +9,7 @@ LoanContract _contract({
   num currentDueAmount = 4585,
   num overdueAmount = 0,
   num collectionFee = 0,
+  num penaltyFee = 0,
   num installmentAmount = 4585,
   num osBalance = 86217.08,
   int currentInstallment = 7,
@@ -29,6 +30,7 @@ LoanContract _contract({
         'current_due_amount': currentDueAmount,
         'overdue_amount': overdueAmount,
         'collection_fee': collectionFee,
+        'penalty_fee': penaltyFee,
         'installment_amount': installmentAmount,
         'current_installment_number': currentInstallment,
         'overdue_from': overdueFrom,
@@ -46,14 +48,40 @@ void main() {
       collectionFee: 50,
     ));
 
-    test('ชำระเต็มจำนวน is what is due now plus the collection fee', () {
-      expect(summary.fullAmount, 4635);
-      expect(summary.amountFor(LoanPaymentOption.full, ''), 4635);
+    // ⚠ **Changed 2026-09-17 with the redesign, and it is a billing change.**
+    // `current_due_amount` "includes all the customer need to pay", so adding
+    // the collection fee on top double-counted it. It is also the field the
+    // loan detail screen shows as `รวมต้องชำระ` one tap away, and the two must
+    // not disagree. `loan_payment_page_old.dart` keeps the old formula through
+    // its own copy of this class.
+    test('ชำระเต็มจำนวน is current_due_amount alone', () {
+      expect(summary.fullAmount, 4585);
+      expect(summary.amountFor(LoanPaymentOption.full, ''), 4585);
     });
 
-    test('ยอดค้างชำระ is the arrears plus the collection fee', () {
+    test('ยอดค้างชำระ is the arrears plus both fees', () {
       expect(summary.overdueTotal, 9220);
       expect(summary.amountFor(LoanPaymentOption.overdue, ''), 9220);
+
+      final withPenalty = LoanPaymentSummary(_contract(
+          overdueAmount: 9170, collectionFee: 50, penaltyFee: 10.25));
+      expect(withPenalty.overdueTotal, 9230.25);
+    });
+
+    // The redesign's own figures only reconcile this way: the arrears block
+    // sums to the ยอดค้างชำระ headline, and that plus the instalment is the
+    // ชำระเต็มจำนวน headline.
+    test("the design's figures reconcile", () {
+      final s = LoanPaymentSummary(_contract(
+        currentDueAmount: 2500.25,
+        overdueAmount: 1000,
+        collectionFee: 50,
+        penaltyFee: 10.25,
+        installmentAmount: 1440,
+      ));
+      expect(s.overdueTotal, 1060.25);
+      expect(s.fullAmount, 2500.25);
+      expect(s.overdueTotal + s.installmentAmount, s.fullAmount);
     });
 
     test('กำหนดยอดชำระเอง is whatever was typed, separators stripped', () {
@@ -65,14 +93,40 @@ void main() {
       expect(summary.amountFor(LoanPaymentOption.custom, ''), 0);
     });
 
-    test('the collection fee rides on both fixed options, not just arrears',
-        () {
-      // Easy to get wrong: ชำระเต็มจำนวน adds it too, even on a contract whose
-      // arrears are zero.
-      final noArrears = LoanPaymentSummary(
-          _contract(currentDueAmount: 4585, collectionFee: 50));
-      expect(noArrears.fullAmount, 4635);
-      expect(noArrears.overdueTotal, 50);
+    // ⚠ The fees ride on the **arrears** option only now. They used to ride on
+    // both — see the note on fullAmount; current_due_amount already contains
+    // them, so ชำระเต็มจำนวน must not add them a second time.
+    test('the fees ride on the arrears option, not on ชำระเต็มจำนวน', () {
+      final noArrears = LoanPaymentSummary(_contract(
+          currentDueAmount: 4585, collectionFee: 50, penaltyFee: 10));
+      expect(noArrears.fullAmount, 4585);
+      expect(noArrears.overdueTotal, 60);
+    });
+
+    // penalty_fee is unconfirmed on payment_details, so a response without it
+    // must leave every figure and row exactly as it was.
+    test('a contract with no penalty_fee bills as before', () {
+      final s = LoanPaymentSummary(
+          _contract(overdueAmount: 9170, collectionFee: 50));
+      expect(s.penaltyFee, 0);
+      expect(s.showsPenaltyFee, isFalse);
+      expect(s.overdueTotal, 9220);
+    });
+
+    // The รวม row's rule widened with the new penalty row: a contract with a
+    // penalty and no collection fee still has more than one row to total.
+    test('รวม shows for either fee, and for neither it does not', () {
+      expect(
+          LoanPaymentSummary(_contract(overdueAmount: 9170)).showsArrearsTotal,
+          isFalse);
+      expect(
+          LoanPaymentSummary(_contract(overdueAmount: 9170, collectionFee: 50))
+              .showsArrearsTotal,
+          isTrue);
+      expect(
+          LoanPaymentSummary(_contract(overdueAmount: 9170, penaltyFee: 10))
+              .showsArrearsTotal,
+          isTrue);
     });
   });
 
@@ -129,9 +183,10 @@ void main() {
     });
 
     test('รวม is shown for ชำระเต็มจำนวน but gated for ยอดค้างชำระ', () {
-      // ⚠ The source guards this option's total behind `collection_fee != 0`
+      // ⚠ The source guards this option's total behind a fee being present
       // and the other option's not at all, so with no fee the two arrears
       // blocks legitimately differ by a row. Pinned because it reads as a bug.
+      // The gate itself is `showsArrearsTotal`, tested above.
       final noFee = LoanPaymentSummary(
           _contract(overdueAmount: 9170, collectionFee: 0));
       expect(noFee.showsCollectionFee, isFalse);

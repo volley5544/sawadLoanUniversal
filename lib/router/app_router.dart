@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../loan_detail/loan_detail_page.dart';
 import '../loan_payment/loan_payment_page.dart';
+import '../loan_payment/loan_payment_page_old.dart';
 import '../loan_payment/models/loan_payment_seed.dart';
 import '../loan_payment/loan_payment_qr_page.dart';
 import '../loan_register/appointment_datetime_page.dart';
@@ -156,6 +157,11 @@ abstract final class AppRoutes {
   /// reproduces the same bill — and so the figure on screen is provably the
   /// one the payment screen settled on, not something re-derived here from
   /// data that may have moved since.
+  /// ⚠ **The pre-redesign ชำระเงิน screen**, kept for comparison only
+  /// (2026-09-17). Nothing navigates here — it is reachable by typing the URL.
+  /// Delete it with the three `_old` files once the redesign is signed off.
+  static const String loanPaymentOld = '/loanPayment/old';
+
   static const String loanPaymentQr = '/loanPayment/qr';
 }
 
@@ -286,6 +292,21 @@ final GoRouter appRouter = GoRouter(
           fromHost: q['fromHost'] == 'true',
           // Present only when another screen in this build pushed here; a
           // reload drops `extra`, and the screen fetches instead.
+          seed: state.extra is LoanPaymentSeed
+              ? state.extra as LoanPaymentSeed
+              : null,
+        );
+      },
+    ),
+    // ── pre-redesign screen, reference only ────────────────────────────
+    GoRoute(
+      path: AppRoutes.loanPaymentOld,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return LoanPaymentPageOld(
+          contractNo: q['contNo'] ?? '',
+          dbName: q['dbName'] ?? '',
+          fromHost: q['fromHost'] == 'true',
           seed: state.extra is LoanPaymentSeed
               ? state.extra as LoanPaymentSeed
               : null,
