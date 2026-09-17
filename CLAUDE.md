@@ -27,9 +27,22 @@ projects, `prod` and `uat` (see Deploy below).
 replaced designs, closed Outstanding items, the full pentest list, and the
 evidence behind decisions that are now just one line below. It is **not**
 `@`-imported, so it costs nothing per session: read it when a change touches one
-of those areas, and put new history there rather than growing this file. This
-file stays under the 150k-character limit Claude Code loads per session; if it
-passes that again, archive the next round the same way.
+of those areas, and put new history there rather than growing this file.
+
+⚠ **This file is ~266k characters, well over the 150k target above, and another
+archiving round will not fix that** (measured 2026-09-17, after one). The
+resolved history has now largely been moved; what remains is current
+architecture for six features — the loan-register wizard, both P-Loan features,
+top-up, loan detail and loan payment — and cutting it would lose working
+knowledge rather than history.
+
+**The next move is structural, not editorial:** split the per-feature sections
+into their own `docs/` files (`docs/TOPUP.md`, `docs/PLOAN.md`, `docs/NDID.md`,
+`docs/LOAN_DETAIL.md`) and leave this file as the map — current state, run and
+deploy commands, conventions, Outstanding, and a paragraph per feature pointing
+at its own doc. That is a decision about how the project's docs are organised,
+so it has not been done unilaterally. Until then, keep putting *new* history in
+`HISTORY.md` rather than here.
 
 ## Current state (read this first)
 
