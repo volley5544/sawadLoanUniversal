@@ -441,7 +441,14 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   }
 
   Widget _tabBody(LoanContract contract) => switch (_tab) {
-        LoanDetailTab.info => _LoanInfoTab(contract: contract),
+        LoanDetailTab.info => _LoanInfoTab(
+            contract: contract,
+            showsContractDocument: _showsContractDocument(contract),
+            contractDocumentLabel: _comcodeConfig
+                    .contractButtonLabel(contract.barcodeDetails.comcode) ??
+                'สัญญาเงินกู้',
+            onContractDocument: _onContractDocumentPressed,
+          ),
         LoanDetailTab.payment => _PaymentInfoTab(contract: contract),
         LoanDetailTab.history => _PaymentHistoryTab(
             history: _history,
@@ -457,12 +464,29 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   /// Both are independently gated — ชำระเงิน on `is_show_payButton`, the
   /// document on [ComcodeConfig.showsContractButton] — so the bar can hold one
   /// button, two, or vanish entirely. The source has the same shape.
+  /// **The คู่สัญญา / คำขอออกตั๋ว bottom-bar button is disabled** (2026-09-17,
+  /// on request — "for now"), which leaves ชำระเงิน alone and full-width.
+  ///
+  /// The document itself is **not** unreachable: the same condition and the
+  /// same action now sit on the **สัญญาเงินกู้** row at the foot of the
+  /// ข้อมูลสินเชื่อ tab. Flip this back to `true` to restore the button; both
+  /// would then render, which is why it is a switch rather than a deletion.
+  static const bool showContractDocumentButton = false;
+
+  /// Whether this contract's คู่สัญญา / คำขอออกตั๋ว document can be opened at
+  /// all — the PDF resolved **and** the comcode rules allowing it.
+  ///
+  /// One predicate, read by the bottom-bar button and by the สัญญาเงินกู้ row,
+  /// so the two cannot diverge on which contracts offer the document.
+  bool _showsContractDocument(LoanContract contract) =>
+      _contractDocumentUrl != null &&
+      _comcodeConfig.showsContractButton(
+        comcode: contract.barcodeDetails.comcode,
+        loanTypeCode: contract.contractDetails.loanTypeCode,
+      );
+
   Widget _buildBottomBar(LoanContract contract) {
-    final showsDocument = _contractDocumentUrl != null &&
-        _comcodeConfig.showsContractButton(
-          comcode: contract.barcodeDetails.comcode,
-          loanTypeCode: contract.contractDetails.loanTypeCode,
-        );
+    final showsDocument = showContractDocumentButton && _showsContractDocument(contract);
     if (!_showPayButton && !showsDocument) return const SizedBox.shrink();
 
     final label =
@@ -566,9 +590,26 @@ class _BottomBarButton extends StatelessWidget {
 
 /// **ข้อมูลสินเชื่อ** — the contract's own terms and its collateral.
 class _LoanInfoTab extends StatelessWidget {
-  const _LoanInfoTab({required this.contract});
+  const _LoanInfoTab({
+    required this.contract,
+    required this.showsContractDocument,
+    required this.contractDocumentLabel,
+    required this.onContractDocument,
+  });
 
   final LoanContract contract;
+
+  /// Same condition the bottom-bar button used, from
+  /// `_LoanDetailPageState._showsContractDocument`.
+  final bool showsContractDocument;
+
+  /// ⚠ **The label is the Firestore one** — `button_name` at this comcode's
+  /// index in `comcode_config`, the same value the disabled bottom-bar button
+  /// read. It is expected to be changed there to `สัญญาเงินกู้`; the fallback
+  /// here is only for a config that names none.
+  final String contractDocumentLabel;
+
+  final VoidCallback onContractDocument;
 
   @override
   Widget build(BuildContext context) {
@@ -622,6 +663,30 @@ class _LoanInfoTab extends StatelessWidget {
               ? details.lastDueDate
               : contract.contractCloseDate),
         ),
+        // **สัญญาเงินกู้** (added 2026-09-17) — the คู่สัญญา / คำขอออกตั๋ว
+        // document, moved off the bottom bar and onto the end of this list.
+        // Same visibility condition and same action as that button, which is
+        // now disabled; see `showContractDocumentButton`.
+        if (showsContractDocument)
+          LoanDetailFieldRow(
+            label: contractDocumentLabel,
+            value: '',
+            trailing: GestureDetector(
+              onTap: onContractDocument,
+              child: Text(
+                'ดูรายละเอียด',
+                textAlign: TextAlign.end,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 14,
+                  height: 1.2,
+                  fontWeight: FontWeight.w600,
+                  color: LoanDetailPalette.navy,
+                  decoration: TextDecoration.underline,
+                  decorationColor: LoanDetailPalette.navy,
+                ),
+              ),
+            ),
+          ),
         _dataDateFooter(contract),
       ],
     );
@@ -658,6 +723,10 @@ class _PaymentInfoTab extends StatelessWidget {
           label: 'วันชำระครั้งล่าสุด',
           value: formatThaiDate(payment.latestPaidDate),
         ),
+        // **ยอดรวมต้องชำระ** (added 2026-09-17) — the breakdown behind the
+        // header card's `รวมต้องชำระ`. Every visibility rule is on
+        // LoanDetailSummary; this only places it.
+        LoanDetailTotalPayableSection(summary: LoanDetailSummary(contract)),
         _dataDateFooter(contract),
       ],
     );

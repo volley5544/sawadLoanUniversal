@@ -178,4 +178,76 @@ class LoanDetailSummary {
   // ── กรมธรรม์ ────────────────────────────────────────────────────────
 
   bool get showsInsuranceRow => contract.insurances.isNotEmpty;
+
+  // ── ยอดรวมต้องชำระ (ข้อมูลการชำระ tab, added 2026-09-17) ─────────────
+  //
+  // The breakdown behind the header card's `รวมต้องชำระ`: what is already in
+  // arrears, and what falls due on the next date. Five shapes, all four of the
+  // design's cases plus the empty one, and which rows appear is decided here
+  // rather than in the widget — the same reason the header card's rules live
+  // in this class.
+
+  /// `ค่างวดค้างชำระ` — the arrears instalments.
+  double get overdueInstallmentAmount => contract.paymentDetails.overdueAmount;
+
+  /// `ค่าติดตามค้างชำระ`.
+  double get overdueCollectionFee => contract.paymentDetails.collectionFee;
+
+  /// `ค่าเบี้ยปรับค้างชำระ`. See [PaymentDetails.penaltyFee] — the wire name is
+  /// unconfirmed, and 0 withholds the row.
+  double get overduePenaltyFee => contract.paymentDetails.penaltyFee;
+
+  /// `รวมค้างชำระ` — the arrears subtotal.
+  double get overdueSubtotal =>
+      overdueInstallmentAmount + overdueCollectionFee + overduePenaltyFee;
+
+  /// Each fee row is withheld at zero; the design's
+  /// *กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row.
+  bool get showsOverdueCollectionFeeRow => overdueCollectionFee != 0;
+  bool get showsOverduePenaltyFeeRow => overduePenaltyFee != 0;
+
+  /// The whole `ส่วนค้างชำระตั้งแต่วันที่ …` block.
+  bool get showsOverdueSection => overdueSubtotal != 0;
+
+  /// ⚠ **The remainder, not `installment_amount`** (settled 2026-09-17:
+  /// *"ยอดรวมต้องชำระ is current_due_amount — this field is sum of all to
+  /// current"*). So the arrears subtotal and this row always add up to the
+  /// total beneath them; reading the scheduled instalment instead would put
+  /// three rows above a total that disagrees with them, which is worse than
+  /// either figure alone.
+  ///
+  /// Clamped at zero: `current_due_amount` below the arrears it contains would
+  /// otherwise render a negative instalment.
+  double get upcomingDueAmount {
+    final remainder = totalPayableAmount - overdueSubtotal;
+    return remainder > 0 ? remainder : 0;
+  }
+
+  /// The `ส่วนที่จะครบกำหนดชำระในวันที่ …` block.
+  bool get showsUpcomingSection => upcomingDueAmount != 0;
+
+  /// `ยอดรวมต้องชำระ` — **the same figure the header card shows as
+  /// `รวมต้องชำระ`**, deliberately: one screen must not carry two numbers for
+  /// one thing. Both read `payment_details.current_due_amount`.
+  double get totalPayableAmount => totalDueAmount;
+
+  /// ⚠ **Withheld when arrears are the only thing on the list.** In that shape
+  /// the block already ends in its own `รวมค้างชำระ` subtotal for the same
+  /// figure, so the design does not repeat it — while the upcoming-only and
+  /// the nothing-owed shapes both *do* show it (the upcoming block carries no
+  /// subtotal of its own). Straight from the design's four cases; it reads as
+  /// an inconsistency until you notice the subtotal is doing the job.
+  bool get showsTotalPayableRow => showsUpcomingSection || !showsOverdueSection;
+
+  /// `ส่วนค้างชำระตั้งแต่วันที่ …` — dated by `overdue_date`, falling back to
+  /// the contract's due date, the same way the payment screen's arrears block
+  /// does. A blank date under a bill is the one outcome that is certainly
+  /// wrong.
+  String get overdueSectionDate =>
+      contract.paymentDetails.overdueDate.trim().isNotEmpty
+          ? contract.paymentDetails.overdueDate
+          : contract.paymentDetails.currentDueDate;
+
+  /// `ส่วนที่จะครบกำหนดชำระในวันที่ …`.
+  String get upcomingSectionDate => contract.paymentDetails.currentDueDate;
 }

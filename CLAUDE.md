@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 479 tests (models, payloads, headers, NDID terms +
+flutter test               # 489 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2884,17 +2884,90 @@ httpRequest bridge handler)"*. Same trap the P-Loan Extra deep link carries.
 
 | # | Tab | Source | Rows |
 | --- | --- | --- | --- |
-| 1 | ข้อมูลสินเชื่อ | `/loan/list` | ค่างวด, จำนวนงวด, สาขาที่ทำสัญญา, วันที่ทำสัญญา, กลุ่มสินค้า, ยี่ห้อ/รุ่น/รายละเอียดสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันงวดสุดท้าย |
+| 1 | ข้อมูลสินเชื่อ | `/loan/list` | ค่างวด, จำนวนงวด, สาขาที่ทำสัญญา, วันที่ทำสัญญา, กลุ่มสินค้า, ยี่ห้อ/รุ่น/รายละเอียดสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันงวดสุดท้าย, **สัญญาเงินกู้** |
 |  |  |  | ⚠ รุ่นสินค้า and รายละเอียดสินค้า fall back to `-`; the latter takes a **`cc`** suffix (engine displacement) **only when it has a value**, since `- cc` would claim a measurement that isn't there |
-| 2 | ข้อมูลการชำระ | `/loan/list` | ชำระค่างวดแล้ว, จำนวนวันที่ค้าง, จำนวนงวดที่ค้าง, วันชำระครั้งล่าสุด |
+| 2 | ข้อมูลการชำระ | `/loan/list` | ชำระค่างวดแล้ว, จำนวนวันที่ค้าง, จำนวนงวดที่ค้าง, วันชำระครั้งล่าสุด, **ยอดรวมต้องชำระ** |
 | 3 | ประวัติการชำระ | `POST /payment/history_new` | one card per payment |
 
-⚠ **No ชำระเงิน button** (asked for, 2026-09-14: *"not to do payment page for
-now"*). The source puts it in the bottom bar beside the contract-document
-button, behind its own `is_show_payButton` config flag. It is **absent**, not
-disabled — a button that cannot ever do anything is worse than no button. When
-the payment flow lands, add it as the first child of `_buildBottomBar`'s row
-behind that flag.
+**The bottom bar is ชำระเงิน alone** (changed 2026-09-17).
+
+⚠ **The คู่สัญญา / คำขอออกตั๋ว button is disabled, not removed** —
+`_LoanDetailPageState.showContractDocumentButton`, `false` "for now" on
+request. Flip it back to `true` to restore; the ชำระเงิน button then shares
+the row as before.
+
+⚠ **The document is still reachable**: the **สัญญาเงินกู้** row at the foot of
+the ข้อมูลสินเชื่อ tab carries the *same* visibility condition and the *same*
+action. Both read one predicate, `_showsContractDocument` (the PDF resolved
+**and** `ComcodeConfig.showsContractButton`), so the button and the row cannot
+disagree about which contracts offer it — which matters while one of them is
+switched off and nobody is looking at it.
+
+⚠ **The row's label is the Firestore one**, `button_name` at this comcode's
+index in `comcode_config` — the same value the button read, expected to be
+changed there to `สัญญาเงินกู้`. The code's fallback is only for a config that
+names none, which is why it does not have to match what the design draws. Its
+right-hand side is a fixed **ดูรายละเอียด** link, matching the header's
+กรมธรรม์ row.
+
+ชำระเงิน itself is behind `is_show_payButton` as before. (A note here said
+until 2026-09-17 that there was *no* ชำระเงิน button; that was true for part of
+2026-09-14 only, before the loan payment screen landed the same day.)
+
+#### ยอดรวมต้องชำระ — the breakdown behind the header's `รวมต้องชำระ`
+
+Added 2026-09-17 at the foot of the **ข้อมูลการชำระ** tab: what is already in
+arrears, what falls due next, and the total. Every visibility rule is on
+`LoanDetailSummary` rather than in the widget, for the same reason the header
+card's are — *"the overdue figure turned red a day early"* is not something a
+screenshot review catches.
+
+| Block | Rows |
+| --- | --- |
+| `ส่วนค้างชำระตั้งแต่วันที่ …` | ค่างวดค้างชำระ (`overdue_amount`), ค่าติดตามค้างชำระ (`collection_fee`), ค่าเบี้ยปรับค้างชำระ (`penalty_fee`), then **`รวมค้างชำระ`** |
+| `ส่วนที่จะครบกำหนดชำระในวันที่ …` | one row — the remainder, see below |
+| — | **`ยอดรวมต้องชำระ`** |
+
+⚠ **`ยอดรวมต้องชำระ` is `payment_details.current_due_amount`** — settled
+2026-09-17: *"this field is sum of all to current"*. It is therefore **the same
+field the header card shows as `รวมต้องชำระ`**, deliberately: one screen must
+not carry two numbers for one thing.
+
+⚠ **The upcoming row is the remainder, not `installment_amount`.** Total minus
+the arrears subtotal, so the rows always add up to the figure beneath them.
+Reading the scheduled instalment instead would put rows above a total that
+disagrees with them — worse than either figure alone, and the same rule the
+top-up card's payout follows. It is **clamped at zero**, since a
+`current_due_amount` below the arrears it contains would otherwise render a
+negative instalment.
+
+⚠ **Each fee row is withheld at zero**, which is how the design's
+*กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row — and how a
+response with no `penalty_fee` renders correctly rather than showing `0.00`.
+
+⚠ **`penalty_fee` is new on `PaymentDetails` and its wire name is
+unconfirmed.** It is a real field on `topup_detail`, but no `/loan/list` sample
+here carries one under `payment_details`. It defaults to 0 and is deliberately
+**not** read off `topup_detail`, which prices a top-up rather than this
+contract's arrears. Point it at the real key in `PaymentDetails` when the API
+team names it; nothing else reads it.
+
+⚠ **The grand total is withheld when arrears are the only thing shown**, and
+this reads as a bug until you see why: that block already ends in its own
+`รวมค้างชำระ` for the same figure. The upcoming-only and the nothing-owed
+shapes both *do* show it, because the upcoming block carries no subtotal. All
+five shapes come straight from the design and a test pins each.
+
+⚠ **The upcoming block's row is labelled `ค่างวดค้างชำระ` in the design**, under
+a heading that says the opposite (it is *not* in arrears). Reproduced as drawn
+rather than corrected to `ค่างวด` — but it looks like a copy-paste in the mock,
+so confirm it with the BA. It is one string literal in
+`LoanDetailTotalPayableSection`.
+
+⚠ **The arrears block is dated by `overdue_date`, falling back to
+`current_due_date`** — the same rule the loan payment screen's arrears block
+follows, and for the same reason: a blank date under a bill is the one outcome
+that is certainly wrong.
 
 #### The header card is a wall of conditionals — they live in a model
 

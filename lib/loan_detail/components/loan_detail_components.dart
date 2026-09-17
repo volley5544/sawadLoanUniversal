@@ -18,6 +18,8 @@ import 'package:hexcolor/hexcolor.dart';
 
 import '../../loan_register/components/env_version_tag.dart';
 import '../../loan_register/components/loan_register_styles.dart';
+import '../../p_loan/application/components/p_loan_components.dart';
+import '../models/loan_detail_summary.dart';
 
 /// The srisawad mobile app's own colours for this screen. See the library note.
 class LoanDetailPalette {
@@ -217,11 +219,17 @@ class LoanDetailFieldRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.suffix = '',
+    this.trailing,
   });
 
   final String label;
   final String value;
   final String suffix;
+
+  /// Replaces [value] on the right-hand side — the `ดูรายละเอียด` link on the
+  /// สัญญาเงินกู้ row. Same slot `LoanDetailSummaryRow` already has, so the two
+  /// row widgets stay interchangeable to read.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -253,11 +261,12 @@ class LoanDetailFieldRow extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 6,
-                child: Text(
-                  suffix.isEmpty ? value : '$value $suffix',
-                  textAlign: TextAlign.end,
-                  style: valueStyle,
-                ),
+                child: trailing ??
+                    Text(
+                      suffix.isEmpty ? value : '$value $suffix',
+                      textAlign: TextAlign.end,
+                      style: valueStyle,
+                    ),
               ),
             ],
           ),
@@ -434,4 +443,111 @@ class PaymentHistoryCard extends StatelessWidget {
           ),
         ],
       );
+}
+
+/// **ยอดรวมต้องชำระ** — the breakdown behind the header card's `รวมต้องชำระ`,
+/// at the foot of the **ข้อมูลการชำระ** tab (added 2026-09-17).
+///
+/// Two blocks — what is already in arrears, and what falls due next — and a
+/// grand total. Which of them appear is decided by [LoanDetailSummary], not
+/// here: this widget only draws what it is handed, so the five shapes the
+/// design specifies are unit-testable without pumping a widget.
+///
+/// ⚠ **The rows are indented under their block heading, and the two subtotals
+/// are underlined.** That is the design's way of showing which figures are
+/// sums of the lines above them rather than lines in their own right, and it
+/// is the only thing distinguishing `รวมค้างชำระ` from the rows it totals.
+class LoanDetailTotalPayableSection extends StatelessWidget {
+  const LoanDetailTotalPayableSection({super.key, required this.summary});
+
+  final LoanDetailSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 18, 27, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ยอดรวมต้องชำระ',
+            style: GoogleFonts.notoSansThai(
+              fontSize: 15,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+              color: LoanDetailPalette.navy,
+            ),
+          ),
+          if (summary.showsOverdueSection) ...[
+            const SizedBox(height: 10),
+            _blockHeading(
+                'ส่วนค้างชำระตั้งแต่วันที่ ${formatThaiDate(summary.overdueSectionDate)}'),
+            _row('ค่างวดค้างชำระ', summary.overdueInstallmentAmount),
+            if (summary.showsOverdueCollectionFeeRow)
+              _row('ค่าติดตามค้างชำระ', summary.overdueCollectionFee),
+            if (summary.showsOverduePenaltyFeeRow)
+              _row('ค่าเบี้ยปรับค้างชำระ', summary.overduePenaltyFee),
+            _row('รวมค้างชำระ', summary.overdueSubtotal, total: true),
+          ],
+          if (summary.showsUpcomingSection) ...[
+            const SizedBox(height: 10),
+            _blockHeading(
+                'ส่วนที่จะครบกำหนดชำระในวันที่ ${formatThaiDate(summary.upcomingSectionDate)}'),
+            // ⚠ The design labels this row `ค่างวดค้างชำระ` too, under a
+            // heading that says the opposite. Reproduced as drawn rather than
+            // corrected to `ค่างวด` — see the note in CLAUDE.md; this constant
+            // is the one place to change it.
+            _row('ค่างวดค้างชำระ', summary.upcomingDueAmount),
+          ],
+          if (summary.showsTotalPayableRow) ...[
+            const SizedBox(height: 10),
+            _row('ยอดรวมต้องชำระ', summary.totalPayableAmount, total: true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _blockHeading(String text) => Padding(
+        padding: const EdgeInsets.only(left: 8, bottom: 6),
+        child: Text(
+          text,
+          style: GoogleFonts.notoSansThai(
+            fontSize: 13.5,
+            height: 1.4,
+            fontWeight: FontWeight.w600,
+            color: LoanDetailPalette.navy,
+          ),
+        ),
+      );
+
+  /// One line of the breakdown. [total] underlines and bolds both halves — the
+  /// two subtotal rows.
+  Widget _row(String label, double amount, {bool total = false}) {
+    final style = GoogleFonts.notoSansThai(
+      fontSize: 13.5,
+      height: 1.6,
+      fontWeight: total ? FontWeight.w700 : FontWeight.w400,
+      color: total ? LoanDetailPalette.navy : LoanDetailPalette.label,
+      decoration: total ? TextDecoration.underline : null,
+      decorationColor: total ? LoanDetailPalette.navy : null,
+    );
+    return Padding(
+      padding: EdgeInsets.only(left: total ? 8 : 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 5, child: Text(label, style: style)),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 4,
+            child: Text('${formatMoney(amount)} บาท',
+                textAlign: TextAlign.end, style: style),
+          ),
+        ],
+      ),
+    );
+  }
 }

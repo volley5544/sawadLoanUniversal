@@ -285,6 +285,7 @@ class PaymentDetails {
     this.overdueDate = '',
     this.currentDateTime = '',
     this.collectionFee = 0,
+    this.penaltyFee = 0,
   });
 
   final int installmentAmount;
@@ -313,6 +314,20 @@ class PaymentDetails {
   final String currentDateTime;
   final double collectionFee;
 
+  /// `penalty_fee` — the arrears penalty, shown as `ค่าเบี้ยปรับค้างชำระ` in
+  /// the loan detail screen's **ยอดรวมต้องชำระ** breakdown.
+  ///
+  /// ⚠ **The wire name is unconfirmed on this block.** `penalty_fee` is a real
+  /// field on `topup_detail`, but no `/loan/list` sample here carries one under
+  /// `payment_details`. It defaults to 0, and the row is withheld at 0, so an
+  /// API that sends nothing renders the design's own
+  /// *กรณี…แต่ไม่มีค่าธรรมเนียม* case rather than a zero row. Point it at the
+  /// real key here when the API team names it — nothing else reads it.
+  ///
+  /// ⚠ Deliberately **not** `topup_detail.penalty_fee`: that block prices a
+  /// top-up, not this contract's arrears.
+  final double penaltyFee;
+
   factory PaymentDetails.fromJson(Map<String, dynamic> json) => PaymentDetails(
         installmentAmount: asInt(json['installment_amount']),
         overdueAmount: asDouble(json['overdue_amount']),
@@ -330,6 +345,7 @@ class PaymentDetails {
         overdueDate: asString(json['overdue_date']),
         currentDateTime: asString(json['current_date_time']),
         collectionFee: asDouble(json['collection_fee']),
+        penaltyFee: asDouble(json['penalty_fee']),
       );
 }
 

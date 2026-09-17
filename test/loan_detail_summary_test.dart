@@ -50,6 +50,7 @@ LoanContract _contract({
     });
 
 void main() {
+  _totalPayableTests();
   group('the last installment changes the whole card', () {
     test('it is detected by count, with the total rounded to an int', () {
       // `total_installment_number` is parsed as a double (the top-up endpoints
@@ -372,6 +373,145 @@ void main() {
       expect(LoanDetailApi.wireDbName('M'), 'M');
       expect(LoanDetailApi.wireDbName(''), '');
       expect(LoanDetailApi.wireDbName('  MLOAN  '), 'ML');
+    });
+  });
+}
+
+/// A row shaped for the **ยอดรวมต้องชำระ** breakdown on the ข้อมูลการชำระ tab.
+///
+/// `current_due_amount` is the grand total — "this field is sum of all to
+/// current" (settled 2026-09-17) — so these fixtures set it to the intended
+/// total and let the upcoming row fall out as the remainder.
+LoanContract _payable({
+  num currentDueAmount = 2500.25,
+  num overdueAmount = 1000,
+  num collectionFee = 50,
+  num penaltyFee = 10.25,
+  String overdueDate = '2026-08-20',
+  String currentDueDate = '2026-09-20',
+}) =>
+    LoanContract.fromJson({
+      'contract_no': 'MLOAN-TEST-02',
+      'db_name': 'MLOAN',
+      'contract_details': {'loan_type_code': 'M', 'installment_amount': 1440},
+      'payment_details': {
+        'current_due_amount': currentDueAmount,
+        'overdue_amount': overdueAmount,
+        'collection_fee': collectionFee,
+        'penalty_fee': penaltyFee,
+        'overdue_date': overdueDate,
+        'current_due_date': currentDueDate,
+        'current_installment_number': 7,
+        'total_installment_number': 48,
+      },
+    });
+
+void _totalPayableTests() {
+  group('ยอดรวมต้องชำระ — the five shapes from the design', () {
+    test('arrears with both fees, plus an upcoming instalment', () {
+      final s = LoanDetailSummary(_payable());
+      expect(s.showsOverdueSection, isTrue);
+      expect(s.overdueInstallmentAmount, 1000);
+      expect(s.overdueCollectionFee, 50);
+      expect(s.overduePenaltyFee, 10.25);
+      expect(s.overdueSubtotal, 1060.25);
+      expect(s.showsUpcomingSection, isTrue);
+      expect(s.upcomingDueAmount, 1440);
+      expect(s.totalPayableAmount, 2500.25);
+      expect(s.showsTotalPayableRow, isTrue);
+    });
+
+    // The design's "กรณีมีค่างวดค้าง และค่างวดงวดถัดไป แต่ไม่มีค่าธรรมเนียม".
+    test('no fees leaves the arrears block a single row', () {
+      final s = LoanDetailSummary(
+          _payable(collectionFee: 0, penaltyFee: 0, currentDueAmount: 2440));
+      expect(s.showsOverdueCollectionFeeRow, isFalse);
+      expect(s.showsOverduePenaltyFeeRow, isFalse);
+      expect(s.overdueSubtotal, 1000);
+      expect(s.upcomingDueAmount, 1440);
+    });
+
+    // "กรณีมีค่างวดค้างอย่างเดียว" — and the asymmetry worth pinning: the
+    // grand total is withheld, because รวมค้างชำระ already states the same
+    // figure one line above it.
+    test('arrears only withholds the grand-total row', () {
+      final s = LoanDetailSummary(_payable(
+          collectionFee: 0, penaltyFee: 0, currentDueAmount: 1000));
+      expect(s.showsOverdueSection, isTrue);
+      expect(s.showsUpcomingSection, isFalse);
+      expect(s.showsTotalPayableRow, isFalse);
+    });
+
+    // "กรณีมีค่างวดงวดถัดไปอย่างเดียว" — which *does* show it, since the
+    // upcoming block carries no subtotal of its own.
+    test('upcoming only still shows the grand total', () {
+      final s = LoanDetailSummary(_payable(
+          overdueAmount: 0,
+          collectionFee: 0,
+          penaltyFee: 0,
+          currentDueAmount: 1440));
+      expect(s.showsOverdueSection, isFalse);
+      expect(s.showsUpcomingSection, isTrue);
+      expect(s.upcomingDueAmount, 1440);
+      expect(s.showsTotalPayableRow, isTrue);
+      expect(s.totalPayableAmount, 1440);
+    });
+
+    test('"ไม่มียอด" shows the grand total alone, at zero', () {
+      final s = LoanDetailSummary(_payable(
+          overdueAmount: 0,
+          collectionFee: 0,
+          penaltyFee: 0,
+          currentDueAmount: 0));
+      expect(s.showsOverdueSection, isFalse);
+      expect(s.showsUpcomingSection, isFalse);
+      expect(s.showsTotalPayableRow, isTrue);
+      expect(s.totalPayableAmount, 0);
+    });
+
+    // ⚠ The whole reason the upcoming row is a remainder rather than
+    // `installment_amount`: the rows must add up to the total under them.
+    test('the rows always sum to the grand total', () {
+      for (final due in [2500.25, 1500, 1060.25, 0]) {
+        final s = LoanDetailSummary(_payable(currentDueAmount: due));
+        if (s.showsUpcomingSection) {
+          expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount,
+              reason: 'current_due_amount $due');
+        }
+      }
+    });
+
+    // current_due_amount below the arrears it contains would otherwise render
+    // a negative instalment under "ส่วนที่จะครบกำหนดชำระ".
+    test('an upcoming amount never goes negative', () {
+      final s = LoanDetailSummary(_payable(currentDueAmount: 500));
+      expect(s.upcomingDueAmount, 0);
+      expect(s.showsUpcomingSection, isFalse);
+    });
+
+    // One screen must not carry two numbers for one thing: the section's grand
+    // total and the header card's รวมต้องชำระ are the same field.
+    test('the grand total is the header card figure', () {
+      final s = LoanDetailSummary(_payable());
+      expect(s.totalPayableAmount, s.totalDueAmount);
+    });
+
+    // penalty_fee is unconfirmed on payment_details, so it must degrade to a
+    // withheld row rather than a zero one.
+    test('a response with no penalty_fee withholds that row', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'payment_details': {'overdue_amount': 100, 'current_due_amount': 100},
+      });
+      expect(c.paymentDetails.penaltyFee, 0);
+      expect(LoanDetailSummary(c).showsOverduePenaltyFeeRow, isFalse);
+    });
+
+    test('the arrears block dates off overdue_date, falling back to the due date',
+        () {
+      expect(LoanDetailSummary(_payable()).overdueSectionDate, '2026-08-20');
+      expect(LoanDetailSummary(_payable(overdueDate: '')).overdueSectionDate,
+          '2026-09-20');
     });
   });
 }
