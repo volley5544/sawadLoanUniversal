@@ -351,6 +351,11 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         LoanDetailHeaderCard(
           contract: contract,
           showsNotIssuedNotice: _showsNotIssuedNotice(contract),
+          // ค้างชำระ and ค่างวดปัจจุบัน are withheld here (2026-09-17, on
+          // request): the ยอดรวมต้องชำระ section on the ข้อมูลการชำระ tab now
+          // breaks both of them down in full, so the card restated them.
+          // งวดปัจจุบัน — the instalment number — is a different row and stays.
+          showsArrearsAndInstalmentRows: false,
           onDownloadContract:
               _contractDocumentUrl == null ? null : _openContractDocument,
           onViewInsurances: () => Navigator.of(context).push(

@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 492 tests (models, payloads, headers, NDID terms +
+flutter test               # 495 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2970,6 +2970,26 @@ follows, and for the same reason: a blank date under a bill is the one outcome
 that is certainly wrong.
 
 #### The header card is a wall of conditionals — they live in a model
+
+⚠ **On the loan detail screen the `ค้างชำระ (งวดที่ n-m)` and `ค่างวดปัจจุบัน`
+rows are withheld** (2026-09-17, on request) —
+`LoanDetailHeaderCard.showsArrearsAndInstalmentRows: false`. The card there
+keeps เลขที่สัญญา, ชำระภายในวันที่, **งวดปัจจุบัน** and รวมต้องชำระ; the two
+figures dropped are exactly what the **ยอดรวมต้องชำระ** section on the
+ข้อมูลการชำระ tab now breaks down in full, so the card was restating them.
+⚠ Note `งวดปัจจุบัน` — the instalment *number*, `10/54` — is a different row
+and stays.
+
+⚠ **The flag defaults to `true`**, so `loan_payment_page_old.dart` is
+untouched. That page is frozen for comparison against the redesigned payment
+screen and is now the card's only other caller (the live payment screen dropped
+it entirely), so a default of `false` would silently restyle the very thing the
+`_old` pair exists to be compared against. A test pins the default.
+
+⚠ The **rules are unchanged** — `showsOverdueRow` and
+`showsCurrentInstallmentAmountRow` still compute as before; only whether the
+card consults them changed. Restoring the rows is one argument.
+
 
 `models/loan_detail_summary.dart` holds every derived rule the card renders,
 transcribed from the source's `loan_installment_payment_detail.dart`, which

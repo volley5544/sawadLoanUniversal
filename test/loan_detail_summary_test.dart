@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/loan_detail/components/loan_detail_components.dart';
+import 'package:sawad_loan_universal/loan_detail/components/loan_detail_header_card.dart';
 import 'package:sawad_loan_universal/p_loan/application/components/p_loan_components.dart';
 import 'package:sawad_loan_universal/loan_detail/models/loan_detail_summary.dart';
 import 'package:sawad_loan_universal/loan_detail/models/payment_history_entry.dart';
@@ -50,6 +51,7 @@ LoanContract _contract({
     });
 
 void main() {
+  _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
     test('it is detected by count, with the total rounded to an int', () {
@@ -515,3 +517,50 @@ void _totalPayableTests() {
     });
   });
 }
+
+void _headerCardRowSwitchTests() {
+  group('the header card\'s ค้างชำระ / ค่างวดปัจจุบัน switch', () {
+    LoanDetailHeaderCard card({bool? shows}) => LoanDetailHeaderCard(
+          contract: _contract(),
+          showsNotIssuedNotice: false,
+          onDownloadContract: null,
+          onViewInsurances: () {},
+          showsArrearsAndInstalmentRows: shows ?? true,
+        );
+
+    // ⚠ The default must stay `true`. `loan_payment_page_old.dart` is the only
+    // other caller and is frozen for comparison against the redesigned payment
+    // screen — a default of `false` would silently restyle the very thing the
+    // `_old` pair exists to be compared against.
+    test('defaults to showing them, so the _old payment page is untouched', () {
+      expect(
+        LoanDetailHeaderCard(
+          contract: _contract(),
+          showsNotIssuedNotice: false,
+          onDownloadContract: null,
+          onViewInsurances: _noop,
+        ).showsArrearsAndInstalmentRows,
+        isTrue,
+      );
+    });
+
+    test('the loan detail screen opts out', () {
+      expect(card(shows: false).showsArrearsAndInstalmentRows, isFalse);
+      expect(card().showsArrearsAndInstalmentRows, isTrue);
+    });
+
+    // The rules themselves are untouched — only whether the card consults
+    // them. งวดปัจจุบัน (the instalment *number*) is a separate row and stays.
+    test('the underlying summary rules are unchanged', () {
+      // `showsOverdueRow` keys on the instalment *range*, not the amount —
+      // `0-0` is the API's way of saying nothing is overdue.
+      final s = LoanDetailSummary(
+          _contract(overdueAmount: 9170, overdueFrom: '5', overdueTo: '6'));
+      expect(s.showsOverdueRow, isTrue);
+      expect(s.showsCurrentInstallmentAmountRow, isTrue);
+      expect(s.showsInstallmentRow, isTrue);
+    });
+  });
+}
+
+void _noop() {}

@@ -31,10 +31,27 @@ class LoanDetailHeaderCard extends StatelessWidget {
     required this.showsNotIssuedNotice,
     required this.onDownloadContract,
     required this.onViewInsurances,
+    this.showsArrearsAndInstalmentRows = true,
   });
 
   final LoanContract contract;
   final bool showsNotIssuedNotice;
+
+  /// Whether the **ค้างชำระ (งวดที่ n-m)** and **ค่างวดปัจจุบัน** rows render.
+  ///
+  /// `false` on the **loan detail** screen since 2026-09-17, on request: the
+  /// card there keeps เลขที่สัญญา, ชำระภายในวันที่, งวดปัจจุบัน and
+  /// รวมต้องชำระ, and the two figures dropped are the ones the
+  /// **ยอดรวมต้องชำระ** section on the ข้อมูลการชำระ tab now breaks down in
+  /// full. Note งวดปัจจุบัน — the instalment *number*, `10/54` — is a
+  /// different row and stays.
+  ///
+  /// ⚠ **Defaults to `true` so `loan_payment_page_old.dart` is untouched.**
+  /// That page is frozen for comparison against the redesigned payment screen,
+  /// and it is now the only other caller — the live payment screen dropped
+  /// this card entirely. A default of `false` would silently restyle the thing
+  /// the `_old` pair exists to be compared against.
+  final bool showsArrearsAndInstalmentRows;
 
   /// Null when the config names no contract portal, in which case the notice's
   /// `download` link is rendered as plain text rather than a dead tap.
@@ -133,7 +150,7 @@ class LoanDetailHeaderCard extends StatelessWidget {
           ),
         const SizedBox(height: 3),
         if (showsNotIssuedNotice) _notIssuedNotice(),
-        if (summary.showsOverdueRow)
+        if (showsArrearsAndInstalmentRows && summary.showsOverdueRow)
           LoanDetailSummaryRow(
             label: summary.overdueRangeLabel,
             value: summary.overdueValueLabel,
@@ -148,7 +165,8 @@ class LoanDetailHeaderCard extends StatelessWidget {
             value: summary.installmentValue,
             emphasised: true,
           ),
-        if (summary.showsCurrentInstallmentAmountRow)
+        if (showsArrearsAndInstalmentRows &&
+            summary.showsCurrentInstallmentAmountRow)
           LoanDetailSummaryRow(
             label: 'ค่างวดปัจจุบัน',
             value: summary.currentInstallmentAmountLabel,
