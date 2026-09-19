@@ -13,6 +13,7 @@
 library;
 
 import '../../p_loan/application/components/p_loan_components.dart';
+import '../components/loan_detail_components.dart';
 import '../../p_loan/application/models/loan_contract.dart';
 
 class LoanDetailSummary {
@@ -71,9 +72,9 @@ class LoanDetailSummary {
   /// is owed today, not what was owed on a date already gone.
   String get payByDateLabel {
     if (isFinalInstallment && !dueDateInFuture) {
-      return formatThaiDate(contract.paymentDetails.currentDateTime);
+      return thaiDateOrDash(contract.paymentDetails.currentDateTime);
     }
-    return formatThaiDate(contract.paymentDetails.currentDueDate);
+    return thaiDateOrDash(contract.paymentDetails.currentDueDate);
   }
 
   /// The due date is shown red once it has passed.
@@ -160,9 +161,9 @@ class LoanDetailSummary {
 
   /// `-` rather than a blank cell, so an unrecorded value reads as "not
   /// recorded" instead of as a rendering fault. The source guards both of
-  /// these the same way.
-  static String _orDash(String value) =>
-      value.trim().isEmpty ? '-' : value.trim();
+  /// these the same way, and since 2026-09-19 it is the rule for every text
+  /// field on this screen — see [dashIfEmpty].
+  static String _orDash(String value) => dashIfEmpty(value);
 
   String get productModel => _orDash(contract.carDetails.series);
 
@@ -239,14 +240,17 @@ class LoanDetailSummary {
   /// an inconsistency until you notice the subtotal is doing the job.
   bool get showsTotalPayableRow => showsUpcomingSection || !showsOverdueSection;
 
-  /// `ส่วนค้างชำระตั้งแต่วันที่ …` — dated by `overdue_date`, falling back to
-  /// the contract's due date, the same way the payment screen's arrears block
-  /// does. A blank date under a bill is the one outcome that is certainly
-  /// wrong.
-  String get overdueSectionDate =>
-      contract.paymentDetails.overdueDate.trim().isNotEmpty
-          ? contract.paymentDetails.overdueDate
-          : contract.paymentDetails.currentDueDate;
+  /// `ส่วนค้างชำระตั้งแต่วันที่ …` — dated by `overdue_date` **and nothing
+  /// else**.
+  ///
+  /// ⚠ **It used to fall back to `current_due_date`** (until 2026-09-19), on
+  /// the grounds that a blank date under a bill is certainly wrong. The policy
+  /// is now the opposite and for a better reason: a substituted date is wrong
+  /// *silently*, and the customer cannot tell. An absent value renders `-`
+  /// through [thaiDateOrDash] and gets reported to the data team. The payment
+  /// screen's arrears block changed with it.
+
+  String get overdueSectionDate => contract.paymentDetails.overdueDate;
 
   /// `ส่วนที่จะครบกำหนดชำระในวันที่ …`.
   String get upcomingSectionDate => contract.paymentDetails.currentDueDate;

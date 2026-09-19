@@ -169,15 +169,25 @@ void main() {
       expect(summary.currentDueDate, '05/10/2569');
     });
 
-    test('an absent overdue_date falls back to the contract due date', () {
-      // A blank date under a bill is the one outcome that is certainly wrong.
-      final summary = LoanPaymentSummary(
-          _contract(overdueDate: '', currentDueDate: '2026-09-11'));
-      expect(summary.overdueDueDate, '11/09/2569');
+    // ⚠ **No fallback since 2026-09-19.** It used to borrow
+    // `current_due_date`; a date taken from the instalment block is wrong
+    // silently, where `-` is visible and gets reported to the data team.
+    test('an absent or unparseable overdue_date renders as -', () {
       expect(
-        LoanPaymentSummary(
-                _contract(overdueDate: 'nonsense', currentDueDate: '2026-09-11'))
+        LoanPaymentSummary(_contract(overdueDate: '', currentDueDate: '2026-09-11'))
             .overdueDueDate,
+        '-',
+      );
+      expect(
+        LoanPaymentSummary(_contract(
+                overdueDate: 'nonsense', currentDueDate: '2026-09-11'))
+            .overdueDueDate,
+        '-',
+      );
+      // The instalment block's own date is unaffected.
+      expect(
+        LoanPaymentSummary(_contract(overdueDate: '', currentDueDate: '2026-09-11'))
+            .currentDueDate,
         '11/09/2569',
       );
     });

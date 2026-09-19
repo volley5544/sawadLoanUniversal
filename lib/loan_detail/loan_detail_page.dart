@@ -635,16 +635,20 @@ class _LoanInfoTab extends StatelessWidget {
         ),
         LoanDetailFieldRow(
           label: 'สาขาที่ทำสัญญา',
-          value: '${contract.branchName} (${contract.branchCode})',
+          // Both halves absent renders `-`, not an empty pair of brackets.
+          value: contract.branchName.trim().isEmpty &&
+                  contract.branchCode.trim().isEmpty
+              ? '-'
+              : '${contract.branchName} (${contract.branchCode})',
         ),
         LoanDetailFieldRow(
           label: 'วันที่ทำสัญญา',
-          value: formatThaiDate(contract.contractDate),
+          value: thaiDateOrDash(contract.contractDate),
         ),
         LoanDetailFieldRow(
-            label: 'กลุ่มสินค้า', value: details.loanTypeName.trim()),
+            label: 'กลุ่มสินค้า', value: dashIfEmpty(details.loanTypeName)),
         LoanDetailFieldRow(
-            label: 'ยี่ห้อสินค้า', value: details.vehicleBrand.trim()),
+            label: 'ยี่ห้อสินค้า', value: dashIfEmpty(details.vehicleBrand)),
         LoanDetailFieldRow(label: 'รุ่นสินค้า', value: summary.productModel),
         LoanDetailFieldRow(
           label: 'รายละเอียดสินค้า',
@@ -652,21 +656,21 @@ class _LoanInfoTab extends StatelessWidget {
           suffix: summary.productDetailSuffix,
         ),
         LoanDetailFieldRow(
-            label: 'เลขทะเบียน', value: details.collateralInformation.trim()),
-        // `first_due_date` / `last_due_date` from the contract row. The second
-        // falls back to the top-level `contract_close_date`, which is what the
-        // source does for a loan that omits it.
+            label: 'เลขทะเบียน',
+            value: dashIfEmpty(details.collateralInformation)),
+        // `first_due_date` / `last_due_date`, from the contract row.
+        //
+        // ⚠ `วันงวดสุดท้าย` **no longer falls back to the top-level
+        // `contract_close_date`** (changed 2026-09-19). The source does
+        // substitute it, but a date borrowed from another field is wrong
+        // silently — see [dashIfEmpty].
         LoanDetailFieldRow(
           label: 'วันเริ่มงวดแรก',
-          value: details.firstDueDate.trim().isNotEmpty
-              ? formatThaiDate(details.firstDueDate)
-              : '-',
+          value: thaiDateOrDash(details.firstDueDate),
         ),
         LoanDetailFieldRow(
           label: 'วันงวดสุดท้าย',
-          value: formatThaiDate(details.lastDueDate.trim().isNotEmpty
-              ? details.lastDueDate
-              : contract.contractCloseDate),
+          value: thaiDateOrDash(details.lastDueDate),
         ),
         // **สัญญาเงินกู้** (added 2026-09-17) — the คู่สัญญา / คำขอออกตั๋ว
         // document, moved off the bottom bar and onto the end of this list.
@@ -726,7 +730,7 @@ class _PaymentInfoTab extends StatelessWidget {
         ),
         LoanDetailFieldRow(
           label: 'วันชำระครั้งล่าสุด',
-          value: formatThaiDate(payment.latestPaidDate),
+          value: thaiDateOrDash(payment.latestPaidDate),
         ),
         // **ยอดรวมต้องชำระ** (added 2026-09-17) — the breakdown behind the
         // header card's `รวมต้องชำระ`. Every visibility rule is on

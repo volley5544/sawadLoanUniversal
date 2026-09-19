@@ -52,6 +52,7 @@ LoanContract _contract({
     });
 
 void main() {
+  _dashPolicyTests();
   _headerCardRenderTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
@@ -511,11 +512,15 @@ void _totalPayableTests() {
       expect(LoanDetailSummary(c).showsOverduePenaltyFeeRow, isFalse);
     });
 
-    test('the arrears block dates off overdue_date, falling back to the due date',
-        () {
+    // ⚠ **No fallback since 2026-09-19** — see the payment screen's twin test.
+    // The getter now returns the raw field and the widget renders `-` for an
+    // absent one through `thaiDateOrDash`.
+    test('the arrears block dates off overdue_date and nothing else', () {
       expect(LoanDetailSummary(_payable()).overdueSectionDate, '2026-08-20');
       expect(LoanDetailSummary(_payable(overdueDate: '')).overdueSectionDate,
-          '2026-09-20');
+          isEmpty);
+      expect(thaiDateOrDash(LoanDetailSummary(_payable(overdueDate: ''))
+          .overdueSectionDate), '-');
     });
   });
 }
@@ -625,6 +630,66 @@ void _headerCardRenderTests() {
     testWidgets('no policy, no กรมธรรม์ row', (tester) async {
       await pump(tester, _contract());
       expect(find.text('กรมธรรม์'), findsNothing);
+    });
+  });
+}
+
+/// **Missing text renders `-`, never a blank cell and never another field's
+/// value** (policy set 2026-09-19).
+void _dashPolicyTests() {
+  group('dashIfEmpty / thaiDateOrDash', () {
+    test('null, empty and whitespace all render -', () {
+      expect(dashIfEmpty(null), '-');
+      expect(dashIfEmpty(''), '-');
+      expect(dashIfEmpty('   '), '-');
+    });
+
+    // `asString` turns a null into the literal 'null' on some paths, and a
+    // row reading "null" is worse than one reading "-".
+    test('the literal string "null" renders - too', () {
+      expect(dashIfEmpty('null'), '-');
+    });
+
+    test('a real value passes through, trimmed', () {
+      expect(dashIfEmpty('  MLOAN-1  '), 'MLOAN-1');
+      expect(dashIfEmpty('0'), '0');
+    });
+
+    test('an absent or unparseable date renders -', () {
+      expect(thaiDateOrDash(null), '-');
+      expect(thaiDateOrDash(''), '-');
+      expect(thaiDateOrDash('nonsense'), '-');
+      expect(thaiDateOrDash('2026-09-20'), '20/09/2569');
+    });
+  });
+
+  group('the loan detail rows that stopped falling back', () {
+    // ⚠ `วันงวดสุดท้าย` used to borrow the top-level `contract_close_date`.
+    test('วันงวดสุดท้าย no longer borrows contract_close_date', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'contract_close_date': '2030-01-01',
+        'contract_details': {'last_due_date': ''},
+      });
+      expect(thaiDateOrDash(c.contractDetails.lastDueDate), '-');
+      // The field it used to borrow is still there — only the borrowing went.
+      expect(c.contractCloseDate, '2030-01-01');
+    });
+
+    test('a date the API does send is unaffected', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'contract_details': {'last_due_date': '2029-06-20'},
+      });
+      expect(thaiDateOrDash(c.contractDetails.lastDueDate), '20/06/2572');
+    });
+
+    test('ชำระภายในวันที่ renders - rather than blank', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'payment_details': {'current_due_date': '', 'current_date_time': ''},
+      });
+      expect(LoanDetailSummary(c).payByDateLabel, '-');
     });
   });
 }

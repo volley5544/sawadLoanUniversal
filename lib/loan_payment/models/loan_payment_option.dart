@@ -9,6 +9,7 @@
 library;
 
 import '../../p_loan/application/components/p_loan_components.dart';
+import '../../loan_detail/components/loan_detail_components.dart';
 import '../../p_loan/application/models/loan_contract.dart';
 
 enum LoanPaymentOption {
@@ -140,28 +141,25 @@ class LoanPaymentSummary {
   String get currentInstallmentLabel =>
       'งวดที่ ${contract.paymentDetails.currentInstallmentNumber}';
 
-  /// Due date shown against the **arrears** block.
+  /// Due date shown against the **arrears** block — `overdue_date` **and
+  /// nothing else**.
   ///
-  /// `overdue_date` when the contract carries one, else [currentDueDate].
+  /// ⚠ **It used to fall back to [currentDueDate]** (until 2026-09-19). On a
+  /// real contract (2026-09-14, `000จYC69020100002NFX`) `overdue_date` came
+  /// back empty while the old build plainly rendered a date in this row, and
+  /// the fallback was added on the grounds that a blank date under a bill is
+  /// certainly wrong.
   ///
-  /// ⚠ The fallback is not tidiness. The source reads `overdue_date` here and
-  /// nothing else, and on a real contract (2026-09-14, `000จYC69020100002NFX`)
-  /// that field came back empty while the old build plainly rendered a date in
-  /// this row — the same one as the instalment block below it. Whatever the
-  /// old build resolves it from, a **blank date under a bill** is the one
-  /// outcome that is certainly wrong, so an absent value degrades to the
-  /// contract's own due date rather than to nothing.
-  ///
-  /// If the API starts sending `overdue_date`, this prefers it and the
-  /// fallback stops mattering.
-  String get overdueDueDate {
-    final overdue = formatThaiDate(contract.paymentDetails.overdueDate);
-    return overdue.isNotEmpty ? overdue : currentDueDate;
-  }
+  /// The policy is now the opposite, for a better reason: a date borrowed from
+  /// the instalment block is wrong **silently**, and the customer cannot tell
+  /// it apart from the real thing. `-` is visible, gets reported, and gets
+  /// fixed at source. The loan detail screen's arrears block changed with it.
+  String get overdueDueDate =>
+      thaiDateOrDash(contract.paymentDetails.overdueDate);
 
   /// Due date of the instalment coming up (`current_due_date`).
   String get currentDueDate =>
-      formatThaiDate(contract.paymentDetails.currentDueDate);
+      thaiDateOrDash(contract.paymentDetails.currentDueDate);
 
   // ── what the ชำระเงิน button does ───────────────────────────────────
 

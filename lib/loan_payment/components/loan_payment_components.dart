@@ -294,11 +294,12 @@ class LoanPaymentContractHeader extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(loanTypeName, style: navy)),
-                    if (plate.isNotEmpty) ...[
-                      const SizedBox(width: 12),
-                      Text(plate, style: navy),
-                    ],
+                    Expanded(
+                        child: Text(dashIfEmpty(loanTypeName), style: navy)),
+                    const SizedBox(width: 12),
+                    // `-` rather than an absent widget: a missing plate is a
+                    // data gap to report, not a layout variant.
+                    Text(dashIfEmpty(plate), style: navy),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -308,7 +309,7 @@ class LoanPaymentContractHeader extends StatelessWidget {
                     Text('เลขที่สัญญา', style: grey),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(contractNo,
+                      child: Text(dashIfEmpty(contractNo),
                           textAlign: TextAlign.end, style: grey),
                     ),
                   ],

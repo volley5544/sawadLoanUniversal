@@ -21,6 +21,34 @@ import '../../loan_register/components/loan_register_styles.dart';
 import '../../p_loan/application/components/p_loan_components.dart';
 import '../models/loan_detail_summary.dart';
 
+/// **A missing value renders as `-`, never as another field's value and never
+/// as a blank cell** (policy set 2026-09-19).
+///
+/// ⚠ This deliberately **replaced several cross-field fallbacks** on the loan
+/// detail and loan payment screens — `overdue_date` degrading to
+/// `current_due_date`, `last_due_date` degrading to `contract_close_date`. The
+/// reasoning behind those was that a blank date under a bill is the one
+/// outcome that is certainly wrong; the reasoning now is that a *substituted*
+/// date is worse, because it is wrong **silently**. A `-` is reported to the
+/// data team and fixed at source; a plausible-looking neighbouring date is
+/// not, and the customer cannot tell the difference.
+///
+/// Applies to text the API supplies. Amounts are untouched — `0.00` is a real
+/// figure, not a missing one — and so are message fallbacks like
+/// `TopupDetail.ineligibleReason`, where the alternative is not another
+/// field's data but a sentence telling the customer what to do.
+String dashIfEmpty(String? value) {
+  final text = (value ?? '').trim();
+  return text.isEmpty || text == 'null' ? '-' : text;
+}
+
+/// [formatThaiDate], with an unparseable or absent date as `-`.
+///
+/// `formatThaiDate` itself returns an empty string, which renders as a blank
+/// cell — indistinguishable from a rendering fault. Shared by both screens so
+/// one of them cannot quietly keep showing blanks.
+String thaiDateOrDash(String? raw) => dashIfEmpty(formatThaiDate(raw));
+
 /// The srisawad mobile app's own colours for this screen. See the library note.
 class LoanDetailPalette {
   LoanDetailPalette._();
@@ -483,7 +511,7 @@ class LoanDetailTotalPayableSection extends StatelessWidget {
           if (summary.showsOverdueSection) ...[
             const SizedBox(height: 10),
             _blockHeading(
-                'ส่วนค้างชำระตั้งแต่วันที่ ${formatThaiDate(summary.overdueSectionDate)}'),
+                'ส่วนค้างชำระตั้งแต่วันที่ ${thaiDateOrDash(summary.overdueSectionDate)}'),
             _row('ค่างวดค้างชำระ', summary.overdueInstallmentAmount),
             if (summary.showsOverdueCollectionFeeRow)
               _row('ค่าติดตามค้างชำระ', summary.overdueCollectionFee),
@@ -494,7 +522,7 @@ class LoanDetailTotalPayableSection extends StatelessWidget {
           if (summary.showsUpcomingSection) ...[
             const SizedBox(height: 10),
             _blockHeading(
-                'ส่วนที่จะครบกำหนดชำระในวันที่ ${formatThaiDate(summary.upcomingSectionDate)}'),
+                'ส่วนที่จะครบกำหนดชำระในวันที่ ${thaiDateOrDash(summary.upcomingSectionDate)}'),
             // ⚠ The design labels this row `ค่างวดค้างชำระ` too, under a
             // heading that says the opposite. Reproduced as drawn rather than
             // corrected to `ค่างวด` — see the note in CLAUDE.md; this constant

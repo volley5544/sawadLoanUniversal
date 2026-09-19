@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 499 tests (models, payloads, headers, NDID terms +
+flutter test               # 506 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3164,6 +3164,46 @@ its rows.
 ⚠ A failed history load shows a **retry**. The source renders an empty
 `Container()` on that branch, making a failure indistinguishable from a
 contract with no payments. Deliberately not reproduced.
+
+#### A missing value is `-`, never a neighbour's value
+
+Policy set **2026-09-19**, on request: *"if any field is empty string or null,
+show `-` instead of a fallback — if data is not sent we will tell the data team
+to send correcting data."* `dashIfEmpty` / `thaiDateOrDash`
+(`loan_detail_components.dart`) are the two helpers, shared by the loan detail
+and loan payment screens.
+
+⚠ **This reversed three cross-field fallbacks**, each of which had a recorded
+reason:
+
+| Field | Used to borrow | Now |
+| --- | --- | --- |
+| `overdue_date` (payment screen's arrears block) | `current_due_date` | `-` |
+| `overdue_date` (loan detail's ยอดรวมต้องชำระ) | `current_due_date` | `-` |
+| `last_due_date` (วันงวดสุดท้าย) | `contract_close_date` | `-` |
+
+The old reasoning was that a blank date under a bill is the one outcome that
+is certainly wrong — a real contract (2026-09-14, `000จYC69020100002NFX`) came
+back with an empty `overdue_date` while the old build rendered a date there.
+The new reasoning is better: a **substituted** date is wrong *silently*, and
+the customer cannot tell it from the real thing, whereas a `-` is visible,
+reported and fixed at source.
+
+Also converted, from blank cells to `-`: วันที่ทำสัญญา, กลุ่มสินค้า,
+ยี่ห้อสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันชำระครั้งล่าสุด, ชำระภายในวันที่,
+and the payment header's product / plate / contract number. สาขาที่ทำสัญญา
+renders `-` when **both** halves are absent rather than an empty `( )`.
+
+⚠ **Out of scope, deliberately:**
+
+- **Amounts.** `0.00` is a real figure, not a missing one.
+- **Message fallbacks.** `TopupDetail.ineligibleReason` still degrades to
+  กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652 — the alternative there is not
+  another field's data but a sentence telling the customer what to do, and a
+  `-` under a refusal would help nobody.
+- **The other flows.** Top-up, P-Loan and the wizard are untouched; this is
+  the loan detail and loan payment screens only.
+- **The `_old` pages**, which stay frozen and still fall back.
 
 #### This screen carries its own palette
 
