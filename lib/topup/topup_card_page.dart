@@ -753,11 +753,14 @@ class _TopupContractCard extends StatelessWidget {
   /// layout exists to avoid. There is no button, on purpose — the action is a
   /// phone call.
   Widget _ineligible() {
-    final code = contract.topupDetail.canTopupCode;
-    // Second line is the API's own reason — see TopupDetail.ineligibleReason,
-    // which also holds the fallback for a refusal that names none.
+    // ⚠ Three fixed parts (set 2026-09-19, from the design): the refusal, the
+    // standing guidance, and `can_topup_msg` on the `Code :` line below. The
+    // second line is **not** the API's message any more — it carried
+    // `can_topup_msg` for five days, and with that value moved to the code
+    // line the card would otherwise print it twice.
+    final code = contract.topupDetail.ineligibleCode;
     final message = 'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
-        '${topupRefusalReason(contract)}';
+        '${TopupDetail.contactBranchFallback}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -796,7 +799,7 @@ class _TopupContractCard extends StatelessWidget {
                 ],
               ),
               // Hidden when the API sends no code — see
-              // TopupDetail.canTopupCode. A `Code :` with nothing after it
+              // TopupDetail.ineligibleCode. A `Code :` with nothing after it
               // tells the branch less than no line at all.
               if (code.isNotEmpty)
                 Padding(

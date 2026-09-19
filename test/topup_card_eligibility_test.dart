@@ -89,26 +89,14 @@ void main() {
     });
   });
 
-  group('topupRefusalReason', () {
-    test('quotes can_topup_msg when can_topup is what refused', () {
-      final base = mockContracts()
-          .firstWhere((c) => c.contractNo == 'MOCK-C-6701002')
-          .rawJson;
-      final refused = LoanContract.fromJson({
-        ...base,
-        'topup_detail': {
-          ...(base['topup_detail'] as Map<String, dynamic>),
-          'can_topup': 'N',
-          'can_topup_msg': 'ยอดค้างชำระเกินกำหนด',
-        },
-      });
-      expect(topupRefusalReason(refused), 'ยอดค้างชำระเกินกำหนด');
-    });
-
-    // ⚠ On a loan-type refusal the contract is `can_topup == 'Y'`, so any
-    // `can_topup_msg` it carries describes something else — the same reason
-    // the amount screen withholds that message above a working button.
-    test('a loan-type refusal does not borrow an unrelated can_topup_msg', () {
+  // ⚠ `topupRefusalReason` was **removed 2026-09-19**: the refusal card's
+  // second line is now the fixed TopupDetail.contactBranchFallback whatever
+  // refused the contract, so there is nothing left to choose between. What
+  // still matters is that the loan-type rule keeps refusing — pinned above —
+  // and that `can_topup_msg` is not quoted as the reason on a contract the
+  // API says is eligible.
+  group('a loan-type refusal does not borrow can_topup_msg', () {
+    test('the message is left for the Code : line, not the reason line', () {
       final base = mockContracts()
           .firstWhere((c) => c.contractNo == 'MOCK-C-6701002')
           .rawJson;
@@ -125,15 +113,8 @@ void main() {
         },
       });
       expect(canTopupInApp(wrongType), isFalse);
-      expect(topupRefusalReason(wrongType), TopupDetail.contactBranchFallback);
-    });
-
-    test('a can_topup refusal with no message falls back to the branch line',
-        () {
-      expect(
-        topupRefusalReason(_contract(canTopup: 'N')),
-        TopupDetail.contactBranchFallback,
-      );
+      expect(wrongType.topupDetail.ineligibleReason,
+          TopupDetail.contactBranchFallback);
     });
   });
 }

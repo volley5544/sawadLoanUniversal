@@ -79,14 +79,13 @@ bool canTopupInApp(LoanContract contract) =>
         .contains(contract.contractDetails.loanTypeCode.trim()) &&
     contract.isEligible;
 
-/// Why the refusal card is being shown, as its second line.
+/// ⚠ **Removed 2026-09-19.** The refusal card's second line is now the fixed
+/// `TopupDetail.contactBranchFallback`, whatever refused the contract — a
+/// loan type this flow cannot service, or `can_topup` itself — so there is
+/// nothing left to choose between. `can_topup_msg` moved to the card's
+/// `Code :` line (`TopupDetail.ineligibleCode`).
 ///
-/// ⚠ `can_topup_msg` is only quoted when `can_topup` is what refused. On a
-/// contract the API says is eligible but whose **loan type** this flow cannot
-/// service, that message either does not exist or describes something else
-/// entirely — the same reason the amount screen withholds it above a working
-/// button. Naming an unrelated cause is worse than naming none, so the
-/// loan-type refusal falls back to the branch line.
-String topupRefusalReason(LoanContract contract) => contract.isEligible
-    ? TopupDetail.contactBranchFallback
-    : contract.topupDetail.ineligibleReason;
+/// The distinction it used to draw is still worth knowing if the second line
+/// ever becomes dynamic again: on a **loan-type** refusal the contract is
+/// `can_topup == 'Y'`, so any `can_topup_msg` it carries describes something
+/// else entirely and must not be quoted as the reason.

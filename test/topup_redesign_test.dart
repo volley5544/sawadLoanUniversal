@@ -88,19 +88,43 @@ void main() {
     });
   });
 
-  group('TopupDetail.canTopupCode — the Code : xxx line', () {
+  group('TopupDetail.ineligibleCode — the Code : xxx line', () {
     TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
 
-    test('reads can_topup_code when present', () {
-      expect(parse({'can_topup_code': 'E204'}).canTopupCode, 'E204');
+    // ⚠ **It is `can_topup_msg`** (2026-09-19, from the design). There is no
+    // `can_topup_code` on the wire — that name was a guess made before any
+    // sample was available, and it matched nothing.
+    test('reads can_topup_msg', () {
+      expect(
+        parse({'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา'}).ineligibleCode,
+        'ระบบขัดข้อง กรุณาติดต่อสาขา',
+      );
     });
 
-    test('falls back to a bare code', () {
-      expect(parse({'code': 'E204'}).canTopupCode, 'E204');
+    // Verified against a live refusal: the slug lives on its own field and is
+    // deliberately not shown — the design asks for what a customer and a
+    // branch can act on, and an internal reason slug is neither.
+    test('ignores can_topup_reason_code', () {
+      expect(
+        parse({
+          'can_topup': 'N',
+          'can_topup_type': 'ไม่เข้าเงื่อนไข',
+          'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา',
+          'can_topup_reason_code': 'contract_not_found_in_vloan',
+        }).ineligibleCode,
+        'ระบบขัดข้อง กรุณาติดต่อสาขา',
+      );
     });
 
-    test('is empty when the API sends neither — the line is then hidden', () {
-      expect(parse({'can_topup': 'N'}).canTopupCode, isEmpty);
+    test('the old guessed key no longer grants anything', () {
+      expect(parse({'can_topup_code': 'E204'}).ineligibleCode, isEmpty);
+      expect(parse({'code': 'E204'}).ineligibleCode, isEmpty);
+    });
+
+    // Empty draws no line at all — a `Code :` with nothing after it tells a
+    // branch less than no line.
+    test('absent renders empty, so the card draws no code line', () {
+      expect(parse({'can_topup': 'N'}).ineligibleCode, isEmpty);
     });
   });
 
@@ -172,34 +196,23 @@ void main() {
   group('TopupDetail.ineligibleReason — the can_topup = N second line', () {
     TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
 
-    test("shows the API's own reason when it sends one", () {
-      // It names why, where the hardcoded line could only say "phone the
-      // branch" — a customer told the reason may not need to phone at all.
+    // ⚠ **Always the fixed guidance** (reverted 2026-09-19). It carried
+    // `can_topup_msg` for five days; that value now renders on the `Code :`
+    // line, and a card showing it in both places would say the same thing
+    // twice — a live sample reads "ระบบขัดข้อง กรุณาติดต่อสาขา", which is
+    // already the guidance.
+    test('is the branch line whatever the API sends', () {
+      expect(parse({'can_topup': 'N'}).ineligibleReason,
+          TopupDetail.contactBranchFallback);
       expect(
-        parse({'can_topup': 'N', 'can_topup_msg': 'อยู่ระหว่างตรวจสอบเอกสาร'})
+        parse({'can_topup': 'N', 'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา'})
             .ineligibleReason,
-        'อยู่ระหว่างตรวจสอบเอกสาร',
+        TopupDetail.contactBranchFallback,
       );
     });
 
-    test('falls back when the refusal names no reason', () {
-      // ⚠ Load-bearing: the card's first line says only that this cannot be
-      // done in the app, so without the fallback the customer would be refused
-      // with no idea what to do next.
-      for (final json in <Map<String, dynamic>>[
-        {'can_topup': 'N'},
-        {'can_topup': 'N', 'can_topup_msg': ''},
-        {'can_topup': 'N', 'can_topup_msg': '   '},
-      ]) {
-        expect(parse(json).ineligibleReason, TopupDetail.contactBranchFallback);
-      }
-    });
-
-    test('trims, so a padded message does not indent the card', () {
-      expect(
-        parse({'can_topup_msg': '  ติดต่อสาขา  '}).ineligibleReason,
-        'ติดต่อสาขา',
-      );
+    test('the message is still parsed, for the code line', () {
+      expect(parse({'can_topup_msg': 'ระบบขัดข้อง'}).canTopupMsg, 'ระบบขัดข้อง');
     });
   });
 }
