@@ -168,7 +168,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 504 tests (models, payloads, headers, NDID terms +
+flutter test               # 505 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2957,13 +2957,23 @@ screenshot review catches.
 field the header card shows as `รวมต้องชำระ`**, deliberately: one screen must
 not carry two numbers for one thing.
 
-⚠ **The upcoming row is the remainder, not `installment_amount`.** Total minus
-the arrears subtotal, so the rows always add up to the figure beneath them.
-Reading the scheduled instalment instead would put rows above a total that
-disagrees with them — worse than either figure alone, and the same rule the
-top-up card's payout follows. It is **clamped at zero**, since a
-`current_due_amount` below the arrears it contains would otherwise render a
-negative instalment.
+⚠ **The upcoming row is `contract_details.installment_amount`** — the
+scheduled instalment (confirmed 2026-09-19: *"ค่างวดค้างชำระ ของหัวข้อที่จะครบ
+กำหนดชำระ จะเป็นค่างวดต่องวด"*).
+
+⚠ **It was the remainder** (`total − arrears subtotal`) between 2026-09-17 and
+2026-09-19, which guaranteed the two blocks added up to the total beneath them.
+They are **no longer guaranteed to sum**: each row now names a real field
+rather than one being derived to make the arithmetic close. On the design's own
+figures they agree (`1,060.25 + 1,440.00 = 2,500.25`) and a test pins that, but
+nothing enforces it — a contract where they disagree renders all three as the
+server sent them, which is a data question rather than something to paper over
+in the client.
+
+⚠ **`contract_details`, not `payment_details`** — the two carry an identically
+named `installment_amount` and this is the scheduled one, the same field the
+header card's `ค่างวดปัจจุบัน` reads. `payment_details.installment_amount` is
+what is due *now*, and they differ on a contract in arrears.
 
 ⚠ **Each fee row is withheld at zero**, which is how the design's
 *กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row — and how a
@@ -2983,10 +2993,11 @@ shapes both *do* show it, because the upcoming block carries no subtotal. All
 five shapes come straight from the design and a test pins each.
 
 ⚠ **The upcoming block's row is labelled `ค่างวดค้างชำระ` in the design**, under
-a heading that says the opposite (it is *not* in arrears). Reproduced as drawn
-rather than corrected to `ค่างวด` — but it looks like a copy-paste in the mock,
-so confirm it with the BA. It is one string literal in
-`LoanDetailTotalPayableSection`.
+a heading that says the opposite (it is *not* in arrears). Reproduced as drawn.
+The **value** was confirmed on 2026-09-19 — it is the per-instalment amount —
+but the wording was not revisited, so it still reads as a copy-paste from the
+block above. One string literal in `LoanDetailTotalPayableSection` if the BA
+wants it changed.
 
 ⚠ **The arrears block is dated by `overdue_date`, falling back to
 `current_due_date`** — the same rule the loan payment screen's arrears block

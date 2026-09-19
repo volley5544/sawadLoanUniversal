@@ -394,11 +394,15 @@ LoanContract _payable({
   num penaltyFee = 10.25,
   String overdueDate = '2026-08-20',
   String currentDueDate = '2026-09-20',
+  num installmentAmount = 1440,
 }) =>
     LoanContract.fromJson({
       'contract_no': 'MLOAN-TEST-02',
       'db_name': 'MLOAN',
-      'contract_details': {'loan_type_code': 'M', 'installment_amount': 1440},
+      'contract_details': {
+        'loan_type_code': 'M',
+        'installment_amount': installmentAmount,
+      },
       'payment_details': {
         'current_due_amount': currentDueAmount,
         'overdue_amount': overdueAmount,
@@ -439,9 +443,14 @@ void _totalPayableTests() {
     // "กรณีมีค่างวดค้างอย่างเดียว" — and the asymmetry worth pinning: the
     // grand total is withheld, because รวมค้างชำระ already states the same
     // figure one line above it.
+    // "ส่วนที่จะครบกำหนดชำระ" is now `contract_details.installment_amount`, so
+    // an arrears-only contract is one with no scheduled instalment left.
     test('arrears only withholds the grand-total row', () {
       final s = LoanDetailSummary(_payable(
-          collectionFee: 0, penaltyFee: 0, currentDueAmount: 1000));
+          collectionFee: 0,
+          penaltyFee: 0,
+          currentDueAmount: 1000,
+          installmentAmount: 0));
       expect(s.showsOverdueSection, isTrue);
       expect(s.showsUpcomingSection, isFalse);
       expect(s.showsTotalPayableRow, isFalse);
@@ -467,31 +476,43 @@ void _totalPayableTests() {
           overdueAmount: 0,
           collectionFee: 0,
           penaltyFee: 0,
-          currentDueAmount: 0));
+          currentDueAmount: 0,
+          installmentAmount: 0));
       expect(s.showsOverdueSection, isFalse);
       expect(s.showsUpcomingSection, isFalse);
       expect(s.showsTotalPayableRow, isTrue);
       expect(s.totalPayableAmount, 0);
     });
 
-    // ⚠ The whole reason the upcoming row is a remainder rather than
-    // `installment_amount`: the rows must add up to the total under them.
-    test('the rows always sum to the grand total', () {
-      for (final due in [2500.25, 1500, 1060.25, 0]) {
-        final s = LoanDetailSummary(_payable(currentDueAmount: due));
-        if (s.showsUpcomingSection) {
-          expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount,
-              reason: 'current_due_amount $due');
-        }
-      }
+    // ⚠ **The rows are no longer guaranteed to sum to the total** (changed
+    // 2026-09-19). Each names a real field — the arrears block its own
+    // figures, the upcoming block `contract_details.installment_amount` —
+    // rather than one being derived to make the arithmetic close. On the
+    // design's figures they agree; nothing enforces it.
+    test("the design's own figures still reconcile", () {
+      final s = LoanDetailSummary(_payable());
+      expect(s.overdueSubtotal, 1060.25);
+      expect(s.upcomingDueAmount, 1440);
+      expect(s.totalPayableAmount, 2500.25);
+      expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount);
     });
 
-    // current_due_amount below the arrears it contains would otherwise render
-    // a negative instalment under "ส่วนที่จะครบกำหนดชำระ".
-    test('an upcoming amount never goes negative', () {
+    test('but a contract where they disagree still renders both', () {
+      // current_due_amount is the server's answer and is shown as-is; the two
+      // block figures are the server's too. A mismatch is a data question,
+      // not something to paper over here.
+      final s = LoanDetailSummary(_payable(currentDueAmount: 9999));
+      expect(s.overdueSubtotal, 1060.25);
+      expect(s.upcomingDueAmount, 1440);
+      expect(s.totalPayableAmount, 9999);
+    });
+
+    // The upcoming row reads a field directly now, so it cannot go negative
+    // the way a subtraction could.
+    test('the upcoming row is the scheduled instalment, not a subtraction', () {
       final s = LoanDetailSummary(_payable(currentDueAmount: 500));
-      expect(s.upcomingDueAmount, 0);
-      expect(s.showsUpcomingSection, isFalse);
+      expect(s.upcomingDueAmount, 1440);
+      expect(s.showsUpcomingSection, isTrue);
     });
 
     // One screen must not carry two numbers for one thing: the section's grand

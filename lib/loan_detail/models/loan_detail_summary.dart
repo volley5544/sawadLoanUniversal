@@ -210,19 +210,26 @@ class LoanDetailSummary {
   /// The whole `ส่วนค้างชำระตั้งแต่วันที่ …` block.
   bool get showsOverdueSection => overdueSubtotal != 0;
 
-  /// ⚠ **The remainder, not `installment_amount`** (settled 2026-09-17:
-  /// *"ยอดรวมต้องชำระ is current_due_amount — this field is sum of all to
-  /// current"*). So the arrears subtotal and this row always add up to the
-  /// total beneath them; reading the scheduled instalment instead would put
-  /// three rows above a total that disagrees with them, which is worse than
-  /// either figure alone.
+  /// `ค่างวดค้างชำระ` under `ส่วนที่จะครบกำหนดชำระ` — **the scheduled
+  /// instalment**, `contract_details.installment_amount` (confirmed
+  /// 2026-09-19: *"ค่างวดค้างชำระ ของหัวข้อที่จะครบกำหนดชำระ จะเป็นค่างวด
+  /// ต่องวด"*).
   ///
-  /// Clamped at zero: `current_due_amount` below the arrears it contains would
-  /// otherwise render a negative instalment.
-  double get upcomingDueAmount {
-    final remainder = totalPayableAmount - overdueSubtotal;
-    return remainder > 0 ? remainder : 0;
-  }
+  /// ⚠ **It was the remainder** (`totalPayableAmount - overdueSubtotal`)
+  /// between 2026-09-17 and 2026-09-19. That guaranteed the two blocks added
+  /// up to the total beneath them; this does not. On the design's own figures
+  /// they agree — `1,060.25 + 1,440.00 = 2,500.25` — but nothing enforces it,
+  /// so on a real contract the rows can visibly fail to sum to
+  /// [totalPayableAmount]. That is the stated intent: each row names a real
+  /// field rather than one being derived to make the arithmetic close.
+  ///
+  /// ⚠ **`contract_details`, not `payment_details`** — the two carry an
+  /// identically named field and this is the scheduled instalment, the same
+  /// one [currentInstallmentAmount] and the header card's `ค่างวดปัจจุบัน`
+  /// read. `payment_details.installment_amount` is what is due now, and the
+  /// two differ on a contract in arrears.
+  double get upcomingDueAmount =>
+      contract.contractDetails.installmentAmount.toDouble();
 
   /// The `ส่วนที่จะครบกำหนดชำระในวันที่ …` block.
   bool get showsUpcomingSection => upcomingDueAmount != 0;
