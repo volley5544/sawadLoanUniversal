@@ -398,7 +398,7 @@ class TopupDetail {
     this.interestYield = 0,
     this.interestPaidFlag = '',
     this.canTopupMsg = '',
-    this.ineligibleCode = '',
+    this.ineligibleDetail = '',
     this.maxTransferAmount = 0,
     this.products = const [],
     this.defaultTransferAmount = 0,
@@ -449,7 +449,7 @@ class TopupDetail {
   /// the grounds that the API's own sentence names the actual reason where a
   /// hardcoded line can only say "phone the branch". Reverted after checking
   /// the design again: `can_topup_msg` now renders on the `Code :` line
-  /// instead (see [ineligibleCode]), and a card that showed it in both places
+  /// instead (see [ineligibleDetail]), and a card that showed it in both places
   /// would say the same thing twice — a live sample reads
   /// `"ระบบขัดข้อง กรุณาติดต่อสาขา"`, which is already the guidance.
   ///
@@ -457,11 +457,16 @@ class TopupDetail {
   /// site so the card keeps asking the model what to say.
   String get ineligibleReason => contactBranchFallback;
 
-  /// What the redesigned card prints on its `Code : xxx` line.
+  /// The small line under the guidance on the **can_topup = N** card.
   ///
-  /// ⚠ **It is `can_topup_msg`** (set 2026-09-19, from the design). There is
-  /// **no** `can_topup_code` on the wire — that name was a guess made when no
-  /// sample was available, and it never matched anything.
+  /// ⚠ **It is `can_topup_msg`**, printed **bare** (set 2026-09-19, from the
+  /// design). There is **no** `can_topup_code` on the wire — that name was a
+  /// guess made when no sample was available, and it never matched anything.
+  ///
+  /// ⚠ The design labelled this line `Code : xxx`; **that label is gone**. The
+  /// value is a sentence — `"ระบบขัดข้อง กรุณาติดต่อสาขา"` — and prefixing a
+  /// sentence with `Code :` reads as a malformed error code. The label was
+  /// drawn for a field that turned out not to exist.
   ///
   /// ⚠ A live refusal carries *three* related fields, and only this one is
   /// shown:
@@ -476,9 +481,9 @@ class TopupDetail {
   /// **not** used: the design asks for what the customer and the branch can act
   /// on, and an internal reason slug is neither. Nothing reads it today.
   ///
-  /// Empty renders **no line at all** — a `Code :` with nothing after it tells
-  /// a branch less than no line.
-  final String ineligibleCode;
+  /// Empty renders **no line at all**, rather than a blank line under the
+  /// guidance.
+  final String ineligibleDetail;
   final int maxTransferAmount;
 
   /// Add-on products offered with the limit. Not used by this flow (the
@@ -503,7 +508,7 @@ class TopupDetail {
         interestYield: asDouble(json['yield']),
         interestPaidFlag: asString(json['interest_paid_flag']),
         canTopupMsg: asString(json['can_topup_msg']),
-        ineligibleCode: asString(json['can_topup_msg']),
+        ineligibleDetail: asString(json['can_topup_msg']),
         maxTransferAmount: asInt(json['max_transfer_amount']),
         products: asMapList(json['products'])
             .map(LoanProduct.fromJson)

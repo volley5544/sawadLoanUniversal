@@ -88,15 +88,17 @@ void main() {
     });
   });
 
-  group('TopupDetail.ineligibleCode — the Code : xxx line', () {
+  group('TopupDetail.ineligibleDetail — the line under the guidance', () {
     TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
 
-    // ⚠ **It is `can_topup_msg`** (2026-09-19, from the design). There is no
+    // ⚠ **It is `can_topup_msg`, printed bare** (2026-09-19). There is no
     // `can_topup_code` on the wire — that name was a guess made before any
-    // sample was available, and it matched nothing.
+    // sample was available, and it matched nothing. The design's `Code :`
+    // label went with it: the value is a sentence, and `Code : <sentence>`
+    // reads as a malformed error code.
     test('reads can_topup_msg', () {
       expect(
-        parse({'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา'}).ineligibleCode,
+        parse({'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา'}).ineligibleDetail,
         'ระบบขัดข้อง กรุณาติดต่อสาขา',
       );
     });
@@ -111,20 +113,20 @@ void main() {
           'can_topup_type': 'ไม่เข้าเงื่อนไข',
           'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา',
           'can_topup_reason_code': 'contract_not_found_in_vloan',
-        }).ineligibleCode,
+        }).ineligibleDetail,
         'ระบบขัดข้อง กรุณาติดต่อสาขา',
       );
     });
 
     test('the old guessed key no longer grants anything', () {
-      expect(parse({'can_topup_code': 'E204'}).ineligibleCode, isEmpty);
-      expect(parse({'code': 'E204'}).ineligibleCode, isEmpty);
+      expect(parse({'can_topup_code': 'E204'}).ineligibleDetail, isEmpty);
+      expect(parse({'code': 'E204'}).ineligibleDetail, isEmpty);
     });
 
     // Empty draws no line at all — a `Code :` with nothing after it tells a
     // branch less than no line.
-    test('absent renders empty, so the card draws no code line', () {
-      expect(parse({'can_topup': 'N'}).ineligibleCode, isEmpty);
+    test('absent renders empty, so the card draws no line at all', () {
+      expect(parse({'can_topup': 'N'}).ineligibleDetail, isEmpty);
     });
   });
 

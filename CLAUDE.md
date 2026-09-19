@@ -1970,12 +1970,16 @@ live `can_topup: "N"` payload):
 | --- | --- |
 | 1 | `ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้` — fixed |
 | 2 | `กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652` — fixed (`TopupDetail.contactBranchFallback`) |
-| `Code :` | **`can_topup_msg`** (`TopupDetail.ineligibleCode`) |
+| 3 (small, right) | **`can_topup_msg`**, bare (`TopupDetail.ineligibleDetail`) |
+
+⚠ **There is no `Code :` label.** The design drew one, but the value is a
+sentence — `"ระบบขัดข้อง กรุณาติดต่อสาขา"` — and `Code : <sentence>` reads as a
+malformed error code. The label was drawn for `can_topup_code`, a field that
+turned out not to exist.
 
 ⚠ **Line 2 carried `can_topup_msg` between 2026-09-14 and 2026-09-19** and no
-longer does. With that value moved to the `Code :` line the card would
-otherwise print it twice — and a live sample reads
-`"ระบบขัดข้อง กรุณาติดต่อสาขา"`, which *is* the guidance.
+longer does. With that value on line 3 the card would otherwise print it
+twice — and the live sample *is* the guidance.
 
 ⚠ **There is no `can_topup_code` on the wire.** That name was a guess made
 before any sample existed and matched nothing; `TopupDetail.canTopupCode` and
@@ -1985,7 +1989,7 @@ its bare-`code` fallback are deleted.
 
 ```jsonc
 "can_topup_type":        "ไม่เข้าเงื่อนไข",              // matches the pill, still a literal
-"can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",   // ← the Code : line
+"can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",   // ← the small third line
 "can_topup_reason_code": "contract_not_found_in_vloan",  // internal slug, unused
 ```
 
@@ -1995,8 +1999,8 @@ internal slug is neither. Nothing reads it today. `can_topup_type` matches the
 `ไม่เข้าเงื่อนไข` pill exactly, which is still a literal; reading it from the
 API is a one-line change if the wording ever moves.
 
-⚠ **An empty `can_topup_msg` draws no `Code :` line at all** — a `Code :` with
-nothing after it tells a branch less than no line.
+⚠ **An empty `can_topup_msg` draws no third line at all**, rather than a blank
+line under the guidance.
 
 ⚠ **The card's title is เติมวงเงิน**, not สินเชื่อเพิ่ม (changed 2026-09-12).
 It matches the button the customer pressed to get here — the srisawad app's
@@ -2244,7 +2248,7 @@ different furniture.
 | Status pill | ยังไม่ได้ทำรายการเติมวงเงิน | `request_status`, or มีคำขออยู่ระหว่างดำเนินการ when blank, + ⏱ | ไม่เข้าเงื่อนไข + ⏱ |
 | Figures | วงเงินสินเชื่อใหม่สูงสุด, −เงินต้น, −อากรแสตมป์ | **ยอดที่ขอไว้** only | **วงเงินสินเชื่อเดิม** (`credit_limit`) only |
 | Payout strip + `*เมื่อชำระ…` | ✅ | — | — |
-| `Code : xxx` | — | — | only when `can_topup_msg` is non-empty |
+| the small third line | — | — | `can_topup_msg`, only when non-empty |
 | Button | **เติมวงเงิน** | **ดูสถานะคำขอ** | **none** — the action is a phone call |
 
 Separately, the **สิทธิพิเศษเฉพาะคุณ** grid in the card body
