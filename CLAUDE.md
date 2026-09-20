@@ -46,6 +46,15 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 
 ## Current state (read this first)
 
+- ⚠ **The 2026-09-20 phase is top-up, loan detail and loan payment.** Those
+  three are what is being tested and shipped now; **P-Loan, P-Loan Extra and
+  NDID are parked** — still built, still working, not in this round. Their
+  Outstanding items stay open but are not the critical path. The prod blockers
+  for the three that *are* in scope are #35 + #17 (prod has no
+  `public_config` and no registered web app, so `is_show_payButton` and
+  `comcode_config` default off), #34 (`openExternalUrl` needs an app release)
+  and #10.
+
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan

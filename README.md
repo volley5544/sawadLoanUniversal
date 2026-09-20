@@ -21,6 +21,11 @@ scaffolding still exists, but the **web build is what ships**.
 > `LoanDetailPage` and `SelectPaymentPage`. UI text/data is Thai; code comments
 > are English.
 >
+> **This phase (2026-09-20) tests and ships three of them: top-up, loan detail
+> and จ่ายเงินค่างวด.** P-Loan, P-Loan Extra and NDID are parked — still in the
+> build and still working, but not what this round covers. See *Testing this
+> phase* below.
+>
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
 > whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
 > bearer-authenticated call on the mobile API base, `multipart/form-data` since
@@ -34,7 +39,7 @@ scaffolding still exists, but the **web build is what ships**.
 ```sh
 flutter pub get
 flutter analyze --no-pub                      # only pre-existing flutter_lints infos
-flutter test                                  # 458 tests
+flutter test                                  # 505 tests
 flutter build web --release --pwa-strategy=none
 ```
 
@@ -405,6 +410,147 @@ tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
                                 `uat`) run a deploy, so whichever finishes
                                 last wins — see CLAUDE.md
 ```
+
+## Testing this phase (2026-09-20)
+
+**In scope: top-up, loan detail, จ่ายเงินค่างวด.** P-Loan, P-Loan Extra and
+NDID are **parked** — they are still in the build and still work, but they are
+not what this round tests or ships.
+
+| Screen | URL |
+| --- | --- |
+| เติมวงเงิน (top-up) | `/topup?hashThaiId=…&token=…` — add `&contNo=` to open on one contract |
+| รายละเอียดสินเชื่อ | `/loanDetail?contNo=…&hashThaiId=…&token=…` (optional `&dbName=`) |
+| ชำระเงิน | `/loanPayment?contNo=…&hashThaiId=…&token=…` |
+| ชำระเงิน — **pre-redesign**, for comparison | `/loanPayment/old?contNo=…` |
+
+No WebView needed for any of them: the mobile API sends
+`access-control-allow-origin: *`, so a plain browser works. Take `contNo` (and
+`dbName`) from `GET /loan/list?hash_thai_id=<HASH>` with bearer `<JWT>`.
+`&token=` is **required** — without it `/user/detail` answers 401.
+
+### What changed that a tester should look at first
+
+⚠⚠ **ชำระเต็มจำนวน now quotes a smaller figure** on any contract carrying a
+collection fee. It is `current_due_amount` alone; it used to add the collection
+fee on top, which double-counted it. **This is real money** — check it against
+a live contract in arrears, with `/loanPayment/old` open beside it for the old
+figure.
+
+⚠ **ยอดค้างชำระ now includes the penalty fee** as well as the collection fee.
+See the known gap below.
+
+⚠ **Missing data renders `-`**, never a neighbouring field's value. If a date
+or a text field shows `-`, that is the app reporting that the API sent nothing
+— **please report it rather than treating it as a UI bug**; it is how these get
+fixed at source.
+
+### Known gaps — expected, not bugs
+
+| What you will see | Why |
+| --- | --- |
+| **ค่าเบี้ยปรับค้างชำระ never appears** | `payment_details.penalty_fee` is a **guessed wire name** — no sample has ever carried it. If a contract with a real penalty shows no such row, that confirms the guess is wrong. ⚠ It also means ยอดค้างชำระ under-bills by the penalty, silently. |
+| **สัญญาเงินกู้ / กรมธรรม์ ดาวน์โหลด say "เวอร์ชันแอปนี้ยังไม่รองรับ"** | They need the host's `openExternalUrl` handler, which ships in an **app release**. Works only inside a host build carrying it. |
+| **No ชำระเงิน / สัญญาเงินกู้ button on prod** | prod has no `public_config` document yet, so `is_show_payButton` and `comcode_config` both default to off. uat is seeded. |
+| **คู่สัญญา button is gone from the bottom bar** | Disabled on request; the document moved to the **สัญญาเงินกู้** row at the foot of the ข้อมูลสินเชื่อ tab, same condition and same action. |
+| **The three blocks of ยอดรวมต้องชำระ may not add up** | Each row names a real field the server sent; none is derived to make the arithmetic close. A mismatch is a data question — please report the contract number. |
+| **บันทึกรูปภาพ on the QR screens** | Needs the host's `saveImageToGallery`, also an app release. In a browser it falls back to a download. |
+
+## Recent changes — 2026-09-16 → 2026-09-20
+
+**Top-up entry points, then a run of loan detail / payment design changes**, and
+a policy change about missing data that touches both screens.
+
+### `?contNo=` opens the top-up carousel on one contract
+
+The srisawad host now deep-links it from the loan card's **เติมวงเงิน** and from
+the new **วงเงินอเนกประสงค์ (M35)** tile. The route already accepted `contNo`;
+what changed here is that **both sides are trimmed before comparing** —
+`LoanContract.contractNo` goes through `asString` (which trims) while the host
+assigns `json['contract_no']` raw, so a padded number missed. An unmatched
+`contNo` is not an error: it falls back to the first card, so the failure was a
+screen that loaded perfectly and quoted somebody else's contract.
+
+### A top-up needs loan type M or C **as well as** `can_topup == 'Y'`
+
+`canTopupInApp`. Anything else — land/house, a blank — gets the refusal card
+even when the API says `Y`. Deliberately **not** a widening of
+`LoanContract.isEligible`, which the P-Loan Extra flow shares: a loan type the
+top-up cannot service says nothing about that product.
+
+⚠ This makes `TopupOutcome.lead`'s `L`/`H` arm unreachable from the card. The
+arm stays as defence in depth; the lead branch is still live through its other
+two conditions.
+
+### The refusal card, settled against a live payload
+
+Line 1 and line 2 are now **fixed text**; `can_topup_msg` prints **bare** on a
+small third line. There is **no `can_topup_code`** on the wire — that was a
+guess made before any sample existed. The same payload carries
+`can_topup_reason_code` (an internal slug, unused) and `can_topup_type`
+(`"ไม่เข้าเงื่อนไข"`, matching the pill, still a literal).
+
+### PDPA consents moved out of step 7
+
+The host funnels **every** top-up entry point through its own `/consent` page
+now, so both answers are settled before step 1 and asking again put the same
+question twice. The checkboxes are **commented out**, and both flags default to
+`true` — which is what the payload sends.
+
+⚠ That is **not** the source's hardcoded `'Y'`: the source had no consent screen
+anywhere, where this consent is real and collected one screen earlier.
+⚠ A plain browser bypasses that page, so it is a testing exposure — an
+`NDID_SIMULATE`-shaped define defaulting off is the fix.
+
+### Loan detail — three changes
+
+- **สัญญาเงินกู้** row at the foot of ข้อมูลสินเชื่อ, carrying the คู่สัญญา
+  document's *same* condition and action; the bottom-bar button is disabled
+  behind a flag. Both read one predicate so they cannot diverge.
+- **ยอดรวมต้องชำระ** section on ข้อมูลการชำระ: the arrears block, the upcoming
+  block and the total. All five shapes live on `LoanDetailSummary`, not in the
+  widget. The upcoming row is `contract_details.installment_amount` — **not**
+  the identically named field on `payment_details`.
+- The header card **withholds ค้างชำระ and ค่างวดปัจจุบัน** (the amount row;
+  งวดปัจจุบัน, the instalment *number*, stays). Done with a flag defaulting to
+  `true` so the frozen `_old` payment screen is untouched. กรมธรรม์ is
+  unaffected — four widget tests pin that.
+
+### ชำระเงิน rebuilt, with the old screen kept at `/loanPayment/old`
+
+Options are now **accordions** (the detail sits inside the bordered card), a
+**compact header** replaces `LoanDetailHeaderCard`, and the arrears block leads
+with the date and carries four rows plus a bold `รวม`.
+
+⚠ **Both fixed amounts changed** — see *What changed that a tester should look
+at first*.
+
+The `_old` page keeps **private copies of its components and its model**, which
+is stricter than the top-up `_old` pair: this redesign changed the *amounts*, so
+a shared model would have carried that into the page kept for comparison.
+**Delete the three `_old` files together** when the redesign is signed off.
+
+### Missing data renders `-`, never a neighbour's value
+
+Policy set 2026-09-19. `dashIfEmpty` / `thaiDateOrDash`, shared by both screens.
+It **reversed three cross-field fallbacks** — `overdue_date` borrowing
+`current_due_date` on both screens, `last_due_date` borrowing
+`contract_close_date`. The old reasoning was that a blank date under a bill is
+certainly wrong; the better reasoning is that a *substituted* date is wrong
+**silently**, and the customer cannot tell.
+
+Out of scope on purpose: amounts (`0.00` is a real figure), message fallbacks,
+the other flows, and the `_old` pages.
+
+### Also
+
+- A round of history archiving into [`docs/HISTORY.md`](docs/HISTORY.md) —
+  CLAUDE.md 281k → 266k characters, eight new sections, every anchor verified.
+  ⚠ It still exceeds the 150k target and **another archiving round will not fix
+  that**; the next move is splitting per-feature docs, which is recorded but not
+  done.
+- Three stale claims corrected while archiving, each of which would have misled
+  someone acting on it.
 
 ## Recent changes — 2026-09-14 → 2026-09-15
 
