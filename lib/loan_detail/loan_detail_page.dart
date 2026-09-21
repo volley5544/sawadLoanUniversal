@@ -43,6 +43,7 @@ import '../p_loan/application/models/loan_contract.dart';
 import '../loan_payment/models/loan_payment_seed.dart';
 import '../router/app_router.dart';
 import '../services/app_config_api.dart';
+import '../services/auth_token.dart';
 import '../services/diagnostics.dart';
 import '../services/external_url.dart';
 import '../services/loan_detail_api.dart';
@@ -102,14 +103,6 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   static const String kBranchIssuedLoanTypeCode = 'O';
 
   LoanContract? _contract;
-
-  /// The `GET /loan/list` response this screen was built from, kept verbatim
-  /// for the non-prod response dialog. Captured the moment the call returns
-  /// rather than read off [SrisawadApi.lastLoanListExchange] later, so it is
-  /// this screen's own exchange and not whatever another screen fetched after
-  /// it. Null in mock mode, and until the first live call lands.
-  RawApiExchange? _loanListExchange;
-
   ComcodeConfig _comcodeConfig = const ComcodeConfig();
   String? _contractUrl;
   bool _showPayButton = false;
@@ -124,7 +117,21 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // A post-frame callback rather than a direct call: the first thing this
+    // does on a non-prod build is open a dialog, and `Navigator.of` cannot
+    // look up its inherited widget from `initState`.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  /// The bearer dialog first, then the contract.
+  ///
+  /// Sequential, not parallel: the point of showing the token is to copy it
+  /// and reproduce this screen's own calls by hand, so it has to be readable
+  /// before the screen starts making them.
+  Future<void> _start() async {
+    await _showAuthToken();
+    if (!mounted) return;
+    await _load();
   }
 
   Future<void> _load() async {
@@ -155,15 +162,11 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         hashThaiId: appState.hashThaiId,
         token: appState.authToken,
       );
-      _loanListExchange = SrisawadApi.lastLoanListExchange;
       final match = _pick(contracts, wanted);
       if (match == null) {
-        if (!mounted) return;
-        setState(() => _error = 'ไม่พบสัญญาเลขที่ $wanted');
-        // Shown on this branch too, and it earns its place most here: the
-        // question a "contract not found" raises is what the list *did*
-        // contain, which is exactly what the body answers.
-        await _showLoanListResponse();
+        if (mounted) {
+          setState(() => _error = 'ไม่พบสัญญาเลขที่ $wanted');
+        }
         return;
       }
       // The config read is memoised and never throws, so it costs nothing on a
@@ -177,7 +180,6 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         _contractUrl = config.contractUrl;
         _showPayButton = config.isShowPayButton;
       });
-      await _showLoanListResponse();
     } on SrisawadApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     }
@@ -340,29 +342,37 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     await openExternalDocument(context, url);
   }
 
-  // ── the /loan/list response (non-prod) ────────────────────────────────
+  // ── the bearer token (non-prod) ───────────────────────────────────────
 
-  /// Shows the raw `GET /loan/list` body this screen was built from, with a
-  /// copy button.
+  /// Shows the bearer this screen is about to call with, with a copy button.
   ///
-  /// It opens **on page load**, because that is when the question it answers
-  /// is asked: every row on the first two tabs is read straight off this
-  /// response — the screen makes no `loan/detail` call — so "where does this
-  /// figure come from?" and "why is this one blank?" are both answered by the
-  /// body and by nothing else on the device.
+  /// It is **for testing**: the mobile API sends `access-control-allow-origin:
+  /// *`, so with this token and a contract number every call the screen makes
+  /// can be replayed by hand — which is the only way to tell a payload problem
+  /// from a gateway one. Nothing on a device otherwise surfaces it: the launch
+  /// `?token=` is gone from `window.location` after the first navigation, and
+  /// the live one is resolved per request from the host bridge.
   ///
-  /// ⚠ **Non-prod only**, the same rule `EnvVersionTag`, the diagnostics sheet
-  /// and the `/ploan` failure report follow: this is the customer's contract
-  /// in full, and a dialog in front of their own loan detail screen is not
-  /// something to ship to them. The URL is masked ([RawApiExchange.report]);
-  /// the body cannot be, and the dialog says so.
+  /// ⚠ The copy button copies the token **alone** — no label, no URL, nothing
+  /// to strip — because it is pasted into an `Authorization: Bearer` header.
   ///
-  /// Silent when there is nothing to show — a mock-mode build, or a failure
-  /// that never produced a response.
-  Future<void> _showLoanListResponse() async {
+  /// ⚠⚠ **Non-prod only**, and this one is not a privacy rule but a credential
+  /// one: the value is a live bearer for the customer's own account, and prod
+  /// must not put it on screen or on a clipboard. Every other debug affordance
+  /// here (`EnvVersionTag`, the diagnostics sheet, the two failure reports)
+  /// hides on prod for weaker reasons than this.
+  ///
+  /// It resolves the **live** token through [AuthToken], the same seam
+  /// `SrisawadApi.authHeaders` uses, so what is copied is what the next request
+  /// actually sends rather than the hour-old launch param.
+  Future<void> _showAuthToken() async {
     if (AppEnvironment.current.isProd) return;
-    final exchange = _loanListExchange;
-    if (exchange == null || !mounted) return;
+    final token = await AuthToken.resolve(AppState().authToken);
+    if (!mounted) return;
+
+    // An empty token is a finding, not an empty dialog: it is why the calls
+    // that follow are about to 401.
+    final hasToken = token.isNotEmpty;
 
     await showDialog<void>(
       context: context,
@@ -371,7 +381,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         title: Text(
-          'GET /loan/list',
+          'Token (สำหรับทดสอบ)',
           style: GoogleFonts.notoSansThai(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -385,16 +395,6 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                SelectableText(
-                  '${exchange.method} ${maskUrlSecrets(exchange.url)}\n'
-                  'HTTP ${exchange.statusCode}',
-                  style: GoogleFonts.robotoMono(
-                    fontSize: 11.5,
-                    height: 1.4,
-                    color: LoanDetailPalette.muted,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
@@ -403,14 +403,17 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SelectableText(
-                    exchange.prettyBody,
+                    hasToken ? token : 'ไม่พบ token',
                     style: GoogleFonts.robotoMono(fontSize: 11, height: 1.4),
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '⚠ ข้อมูลนี้เป็นข้อมูลส่วนบุคคลของลูกค้า '
-                  'ใช้สำหรับตรวจสอบปัญหาเท่านั้น',
+                  hasToken
+                      ? '⚠ นี่คือ bearer token ของลูกค้า ใช้สำหรับทดสอบ API '
+                          'เท่านั้น ห้ามเผยแพร่'
+                      : '⚠ ไม่มี token — การเรียก API หลังจากนี้จะได้ 401 '
+                          'ตรวจสอบ ?token= ที่เปิดหน้านี้มา',
                   style: GoogleFonts.notoSansThai(
                     fontSize: 11.5,
                     height: 1.4,
@@ -422,18 +425,19 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
           ),
         ),
         actions: [
-          TextButton.icon(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: exchange.report));
-              if (dialogContext.mounted) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('คัดลอกแล้ว')),
-                );
-              }
-            },
-            icon: const Icon(Icons.copy, size: 18),
-            label: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
-          ),
+          if (hasToken)
+            TextButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: token));
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('คัดลอก token แล้ว')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.copy, size: 18),
+              label: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('ปิด', style: GoogleFonts.notoSansThai()),
@@ -449,23 +453,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: loanDetailAppBar(
-        context,
-        'รายละเอียดสินเชื่อ',
-        onBack: _onBack,
-        // Closing the dialog must not be one-way: the body is long, and the
-        // thing someone came to read is usually further down than they got
-        // before dismissing it. Hidden on prod along with the dialog itself.
-        extraActions: [
-          if (!AppEnvironment.current.isProd && _loanListExchange != null)
-            IconButton(
-              onPressed: _showLoanListResponse,
-              icon: const Icon(Icons.data_object, size: 20),
-              color: LoanDetailPalette.muted,
-              tooltip: 'ดู response ของ /loan/list',
-            ),
-        ],
-      ),
+      appBar: loanDetailAppBar(context, 'รายละเอียดสินเชื่อ', onBack: _onBack),
       body: _body(),
     );
   }

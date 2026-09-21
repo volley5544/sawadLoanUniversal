@@ -85,7 +85,6 @@ AppBar loanDetailAppBar(
   BuildContext context,
   String title, {
   VoidCallback? onBack,
-  List<Widget> extraActions = const [],
 }) =>
     AppBar(
       backgroundColor: Colors.white,
@@ -100,7 +99,7 @@ AppBar loanDetailAppBar(
           color: LoanDetailPalette.label,
         ),
       ),
-      actions: [...extraActions, const EnvVersionTag()],
+      actions: const [EnvVersionTag()],
     );
 
 // ── formatting ────────────────────────────────────────────────────────

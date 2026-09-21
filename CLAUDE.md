@@ -177,7 +177,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 509 tests (models, payloads, headers, NDID terms +
+flutter test               # 505 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3249,51 +3249,34 @@ renders `-` when **both** halves are absent rather than an empty `( )`.
   the loan detail and loan payment screens only.
 - **The `_old` pages**, which stay frozen and still fall back.
 
-#### The `/loan/list` response dialog (non-prod)
+#### The token dialog (non-prod, for testing)
 
-**The raw response opens in a dialog on page load** (added 2026-09-22), with a
-**คัดลอก** button. Everything on the first two tabs is read straight off that
-one response — the screen makes no `loan/detail` call — so *"where does this
-figure come from?"* and *"why is this row blank?"* are both answered by the
-body and by nothing else on the device.
+**Entering the screen opens a dialog with the bearer token and a คัดลอก
+button, before anything else happens** (added 2026-09-22; it replaced a
+`/loan/list` response-body dialog the same day, which was reverted in full).
+`_load()` runs only after it is dismissed — the point of showing the token is
+to replay this screen's own calls by hand, so it has to be readable before the
+screen starts making them.
 
-| Line | Value |
-| --- | --- |
-| `GET <url>` | the resolved endpoint, **hash masked** |
-| `HTTP <status>` | so a non-2xx body is still inspectable |
-| the body | indented when it is JSON, **as sent** when it is not |
+⚠ **The copy button copies the token alone** — no label, no URL, nothing to
+strip — because it is pasted straight into an `Authorization: Bearer` header.
+With it and a contract number every call this screen makes can be reproduced
+in Postman or curl, the mobile API sending `access-control-allow-origin: *`;
+that is the only way to tell a payload problem from a gateway one.
 
-⚠ **It is the body as it came off the wire**, kept by
-`SrisawadApi.lastLoanListExchange` (a `RawApiExchange`, filled from a new
-`onResponse` hook on `SrisawadApi.send` — the only point where the undecoded
-body still exists, since `send` returns parsed JSON and a failure throws).
-Deliberately **not** a re-encoding of the parsed `LoanContract`s: a
-reconstruction can only contain the fields this build already reads, which is
-the opposite of what someone opens the dialog to find out — a field the API
-added, or one it has stopped sending.
+⚠ **It is the *resolved* token**, through `AuthToken.resolve` — the same seam
+`SrisawadApi.authHeaders` uses — not `appState.authToken`. The launch `?token=`
+is an hour-lived credential that is also gone from `window.location` after the
+first navigation, so the launch param is the fallback, not the answer.
 
-⚠ **Non-prod only**, the rule `EnvVersionTag`, the diagnostics sheet and the
-two failure reports all follow. This is the customer's own contract in full,
-and a debug dialog in front of their own loan detail screen is not something
-to ship to them.
+⚠ **An empty token gets a dialog too**, saying so: that is the finding, and it
+is why the calls after it are about to 401.
 
-⚠ **The URL is masked, the body cannot be.** `maskUrlSecrets` now covers
-`hash_thai_id` as well as `hashThaiId` — the mobile API spells it snake_case —
-because the copy button puts that request line into whatever chat the report
-is pasted into. It moved to `services/url_masking.dart` so a service can mask
-without importing a page's dialog code; `external_url.dart` re-exports it, so
-every existing caller and its tests are untouched. The body carries personal
-data that no masking could preserve the usefulness of, so the dialog says so
-in red instead.
-
-⚠ **It opens on the "contract not found" branch too**, and earns its place
-most there: the question that error raises is what the list *did* contain.
-
-⚠ **Mock mode fills nothing** (`kPLoanUseMockData` serves fixtures without a
-call), so the dialog is silent there rather than presenting fixtures as a
-gateway response. A 🔁 `data_object` button in the AppBar reopens it — the body
-is long, and what someone came to read is usually further down than they got
-before dismissing it.
+⚠⚠ **Non-prod only** — and here that is a credential rule, not the privacy one
+`EnvVersionTag`, the diagnostics sheet and the two failure reports follow. The
+value is a live bearer for the customer's own account; prod must not put it on
+screen or on a clipboard. `AppEnvironment.current.isProd` returns before the
+token is even resolved.
 
 #### This screen carries its own palette
 

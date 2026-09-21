@@ -1227,16 +1227,6 @@ void main() {
       expect(masked, contains('&b=2'));
     });
 
-    test('masks the mobile API\'s snake_case spelling too', () {
-      // `GET /loan/list?hash_thai_id=…` — the loan detail screen's response
-      // dialog copies that request line, so both spellings have to be covered
-      // or the customer's hash travels in the paste.
-      final masked =
-          maskUrlSecrets('https://api/loan/list?hash_thai_id=7693c1');
-      expect(masked, isNot(contains('7693c1')));
-      expect(masked, contains('hash_thai_id=<redacted:6 chars>'));
-    });
-
     test('leaves a URL with no credentials untouched', () {
       const plain = 'https://pt.swpfin.com/portal/contract?contno=C-1&comcode=S22';
       expect(maskUrlSecrets(plain), plain);
