@@ -3249,35 +3249,6 @@ renders `-` when **both** halves are absent rather than an empty `( )`.
   the loan detail and loan payment screens only.
 - **The `_old` pages**, which stay frozen and still fall back.
 
-#### The token dialog (non-prod, for testing)
-
-**Entering the screen opens a dialog with the bearer token and a คัดลอก
-button, before anything else happens** (added 2026-09-22; it replaced a
-`/loan/list` response-body dialog the same day, which was reverted in full).
-`_load()` runs only after it is dismissed — the point of showing the token is
-to replay this screen's own calls by hand, so it has to be readable before the
-screen starts making them.
-
-⚠ **The copy button copies the token alone** — no label, no URL, nothing to
-strip — because it is pasted straight into an `Authorization: Bearer` header.
-With it and a contract number every call this screen makes can be reproduced
-in Postman or curl, the mobile API sending `access-control-allow-origin: *`;
-that is the only way to tell a payload problem from a gateway one.
-
-⚠ **It is the *resolved* token**, through `AuthToken.resolve` — the same seam
-`SrisawadApi.authHeaders` uses — not `appState.authToken`. The launch `?token=`
-is an hour-lived credential that is also gone from `window.location` after the
-first navigation, so the launch param is the fallback, not the answer.
-
-⚠ **An empty token gets a dialog too**, saying so: that is the finding, and it
-is why the calls after it are about to 401.
-
-⚠⚠ **Non-prod only** — and here that is a credential rule, not the privacy one
-`EnvVersionTag`, the diagnostics sheet and the two failure reports follow. The
-value is a live bearer for the customer's own account; prod must not put it on
-screen or on a clipboard. `AppEnvironment.current.isProd` returns before the
-token is even resolved.
-
 #### This screen carries its own palette
 
 `LoanDetailPalette` — navy `#003063`, label grey `#404040`, muted `#8A98A7`,

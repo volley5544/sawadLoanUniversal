@@ -31,19 +31,16 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
-import '../config/app_environment.dart';
 import '../models/comcode_config.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../loan_payment/models/loan_payment_seed.dart';
 import '../router/app_router.dart';
 import '../services/app_config_api.dart';
-import '../services/auth_token.dart';
 import '../services/diagnostics.dart';
 import '../services/external_url.dart';
 import '../services/loan_detail_api.dart';
@@ -117,21 +114,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   @override
   void initState() {
     super.initState();
-    // A post-frame callback rather than a direct call: the first thing this
-    // does on a non-prod build is open a dialog, and `Navigator.of` cannot
-    // look up its inherited widget from `initState`.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
-  }
-
-  /// The bearer dialog first, then the contract.
-  ///
-  /// Sequential, not parallel: the point of showing the token is to copy it
-  /// and reproduce this screen's own calls by hand, so it has to be readable
-  /// before the screen starts making them.
-  Future<void> _start() async {
-    await _showAuthToken();
-    if (!mounted) return;
-    await _load();
+    _load();
   }
 
   Future<void> _load() async {
@@ -340,111 +323,6 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     final url = _contractDocumentUrl;
     if (url == null) return;
     await openExternalDocument(context, url);
-  }
-
-  // ── the bearer token (non-prod) ───────────────────────────────────────
-
-  /// Shows the bearer this screen is about to call with, with a copy button.
-  ///
-  /// It is **for testing**: the mobile API sends `access-control-allow-origin:
-  /// *`, so with this token and a contract number every call the screen makes
-  /// can be replayed by hand — which is the only way to tell a payload problem
-  /// from a gateway one. Nothing on a device otherwise surfaces it: the launch
-  /// `?token=` is gone from `window.location` after the first navigation, and
-  /// the live one is resolved per request from the host bridge.
-  ///
-  /// ⚠ The copy button copies the token **alone** — no label, no URL, nothing
-  /// to strip — because it is pasted into an `Authorization: Bearer` header.
-  ///
-  /// ⚠⚠ **Non-prod only**, and this one is not a privacy rule but a credential
-  /// one: the value is a live bearer for the customer's own account, and prod
-  /// must not put it on screen or on a clipboard. Every other debug affordance
-  /// here (`EnvVersionTag`, the diagnostics sheet, the two failure reports)
-  /// hides on prod for weaker reasons than this.
-  ///
-  /// It resolves the **live** token through [AuthToken], the same seam
-  /// `SrisawadApi.authHeaders` uses, so what is copied is what the next request
-  /// actually sends rather than the hour-old launch param.
-  Future<void> _showAuthToken() async {
-    if (AppEnvironment.current.isProd) return;
-    final token = await AuthToken.resolve(AppState().authToken);
-    if (!mounted) return;
-
-    // An empty token is a finding, not an empty dialog: it is why the calls
-    // that follow are about to 401.
-    final hasToken = token.isNotEmpty;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        title: Text(
-          'Token (สำหรับทดสอบ)',
-          style: GoogleFonts.notoSansThai(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: LoanDetailPalette.navy,
-          ),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F6F8),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SelectableText(
-                    hasToken ? token : 'ไม่พบ token',
-                    style: GoogleFonts.robotoMono(fontSize: 11, height: 1.4),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  hasToken
-                      ? '⚠ นี่คือ bearer token ของลูกค้า ใช้สำหรับทดสอบ API '
-                          'เท่านั้น ห้ามเผยแพร่'
-                      : '⚠ ไม่มี token — การเรียก API หลังจากนี้จะได้ 401 '
-                          'ตรวจสอบ ?token= ที่เปิดหน้านี้มา',
-                  style: GoogleFonts.notoSansThai(
-                    fontSize: 11.5,
-                    height: 1.4,
-                    color: LoanDetailPalette.alert,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          if (hasToken)
-            TextButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: token));
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('คัดลอก token แล้ว')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.copy, size: 18),
-              label: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
-            ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('ปิด', style: GoogleFonts.notoSansThai()),
-          ),
-        ],
-      ),
-    );
   }
 
   // ── build ─────────────────────────────────────────────────────────────
