@@ -5,6 +5,7 @@ import '../p_loan/application/models/loan_contract.dart';
 import 'api_transport.dart';
 import 'app_config_api.dart';
 import 'auth_token.dart';
+import 'url_masking.dart';
 
 /// Shared plumbing for the srisawad **mobile API** groups ([TopupApi],
 /// [PLoanApi] and [UserApi]).
@@ -26,6 +27,19 @@ import 'auth_token.dart';
 /// call may wait on that one request and later calls resolve immediately.
 class SrisawadApi {
   SrisawadApi._();
+
+  /// The most recent `GET /loan/list` exchange, **as it came off the wire**.
+  ///
+  /// Kept so the loan detail screen can show the raw response on a non-prod
+  /// build (its `/loan/list` response dialog). It is the transport's own body
+  /// rather than a re-encoding of the parsed [LoanContract]s on purpose: a
+  /// reconstruction can only contain the fields this build already knows
+  /// about, which is the opposite of what someone opens that dialog to find
+  /// out — a field the API added, or one it stopped sending.
+  ///
+  /// Null until a live call has been made. **Mock mode never fills it**, so a
+  /// fixture-served list cannot be mistaken for a gateway response.
+  static RawApiExchange? lastLoanListExchange;
 
   /// Endpoint every group below hangs off. No trailing slash.
   static Future<String> baseUrl() async {
@@ -87,12 +101,19 @@ class SrisawadApi {
       );
 
   /// GET/POST returning decoded JSON, or throwing [SrisawadApiException].
+  ///
+  /// [onResponse] receives the transport result **before** it is decoded or
+  /// status-checked, which is the only place the untouched body still exists —
+  /// [send] returns parsed JSON and a failure throws. It fires for every
+  /// response, 2xx or not; a request that never produced one (a timeout, a
+  /// rejected URL) throws past it, as there is nothing to hand over.
   static Future<dynamic> send(
     String method,
     Uri url, {
     required String token,
     Map<String, dynamic>? body,
     Map<String, String> extraHeaders = const {},
+    void Function(ApiHttpResult response)? onResponse,
   }) async {
     final ApiHttpResult res;
     try {
@@ -109,6 +130,7 @@ class SrisawadApi {
     } on ApiTransportException catch (e) {
       throw SrisawadApiException('mobile API ${e.message}');
     }
+    onResponse?.call(res);
 
     final json = decode(res.body);
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -138,11 +160,18 @@ class SrisawadApi {
     required String token,
   }) async {
     final base = await baseUrl();
+    final url = Uri.parse(
+        '$base/loan/list?hash_thai_id=${Uri.encodeQueryComponent(hashThaiId)}');
     final json = await send(
       'GET',
-      Uri.parse(
-          '$base/loan/list?hash_thai_id=${Uri.encodeQueryComponent(hashThaiId)}'),
+      url,
       token: token,
+      onResponse: (res) => lastLoanListExchange = RawApiExchange(
+        method: 'GET',
+        url: url.toString(),
+        statusCode: res.statusCode,
+        body: res.body,
+      ),
     );
     final results = json is Map<String, dynamic> ? json['results'] : null;
     if (results is! List) {
@@ -177,4 +206,48 @@ class SrisawadApiException implements Exception {
 
   @override
   String toString() => 'SrisawadApiException: $message';
+}
+
+/// One request/response exchange kept verbatim, for a screen that offers to
+/// show what the gateway actually said.
+///
+/// [body] is the transport's own string — never re-encoded from a parsed
+/// model, so it still carries fields this build does not read and reveals one
+/// the API has stopped sending. [prettyBody] only re-indents it for display;
+/// the content is unchanged, and a body that is not JSON is shown as sent
+/// rather than swallowed.
+///
+/// ⚠ It is the customer's own data. Treat it like `Diagnostics.report`: show
+/// it on non-prod only, and mask credentials in anything derived from it —
+/// [report] runs the URL through `maskUrlSecrets` for exactly that reason.
+class RawApiExchange {
+  const RawApiExchange({
+    required this.method,
+    required this.url,
+    required this.statusCode,
+    required this.body,
+  });
+
+  final String method;
+  final String url;
+  final int statusCode;
+  final String body;
+
+  /// [body] re-indented when it parses as JSON, as sent when it does not.
+  String get prettyBody {
+    final decoded = SrisawadApi.decode(body);
+    if (decoded == null) return body;
+    try {
+      return const JsonEncoder.withIndent('  ').convert(decoded);
+    } catch (_) {
+      return body;
+    }
+  }
+
+  /// The whole exchange as one block of text — what a copy button hands over.
+  ///
+  /// The URL is masked: `hash_thai_id` identifies the customer, and this
+  /// string exists to be pasted into a chat.
+  String get report =>
+      '$method ${maskUrlSecrets(url)}\nHTTP $statusCode\n\n$prettyBody';
 }

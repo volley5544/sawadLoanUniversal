@@ -43,4 +43,40 @@ void main() {
       expect(h['Authorization'], 'Bearer jwt');
     });
   });
+
+  /// The `/loan/list` body kept for the loan detail screen's response dialog.
+  /// The dialog is copyable, so what `report` contains is a security property,
+  /// not a formatting preference.
+  group('RawApiExchange', () {
+    const exchange = RawApiExchange(
+      method: 'GET',
+      url: 'https://api/loan/list?hash_thai_id=7693c1abc',
+      statusCode: 200,
+      body: '{"results":[{"contract_no":"C-1"}]}',
+    );
+
+    test('re-indents a JSON body without changing it', () {
+      expect(exchange.prettyBody, contains('"contract_no": "C-1"'));
+      expect(exchange.prettyBody, contains('\n'), reason: 'indented');
+    });
+
+    test('shows a non-JSON body as sent', () {
+      // An HTML 500 page is exactly when the body matters most; swallowing it
+      // because it will not parse would throw away the answer.
+      const html = RawApiExchange(
+        method: 'GET',
+        url: 'https://api/loan/list',
+        statusCode: 500,
+        body: '<html>Internal Server Error</html>',
+      );
+      expect(html.prettyBody, '<html>Internal Server Error</html>');
+    });
+
+    test('report masks the customer hash and keeps the status', () {
+      expect(exchange.report, isNot(contains('7693c1abc')));
+      expect(exchange.report, startsWith('GET https://api/loan/list?'));
+      expect(exchange.report, contains('HTTP 200'));
+      expect(exchange.report, contains('"contract_no": "C-1"'));
+    });
+  });
 }

@@ -18,6 +18,9 @@ import 'app_config_api.dart';
 import 'auth_token.dart';
 import 'diagnostics.dart';
 import 'native_bridge.dart';
+import 'url_masking.dart';
+
+export 'url_masking.dart' show maskUrlSecrets;
 
 /// Opens [url] outside this WebView, reporting the three outcomes the bridge
 /// distinguishes.
@@ -45,28 +48,6 @@ Future<void> openExternalDocument(BuildContext context, String url) async {
     return;
   }
   await _showUrlFailureDialog(context, message: message, url: url, why: why);
-}
-
-/// The URL with its credentials masked, for anything a human will read.
-///
-/// ⚠ **The application-status URL carries a live bearer token in its
-/// fragment.** Printing it raw would put a working credential on screen and,
-/// via the copy button, on the clipboard and into whatever chat the report is
-/// pasted into. The length is kept so "no token" and "token present" stay
-/// distinguishable — the same masking `Diagnostics.report` applies, and for
-/// the same reason.
-String maskUrlSecrets(String url) {
-  var masked = url;
-  // Fragment first: `#token=…` is how the status page takes it.
-  masked = masked.replaceAllMapped(
-    RegExp(r'([#&?]token=)([^&#]*)'),
-    (m) => '${m[1]}<redacted:${m[2]!.length} chars>',
-  );
-  masked = masked.replaceAllMapped(
-    RegExp(r'([?&]hashThaiId=)([^&#]*)'),
-    (m) => '${m[1]}<redacted:${m[2]!.length} chars>',
-  );
-  return masked;
 }
 
 Future<void> _showUrlFailureDialog(

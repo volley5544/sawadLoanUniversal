@@ -31,10 +31,12 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../app_state.dart';
+import '../config/app_environment.dart';
 import '../models/comcode_config.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
@@ -100,6 +102,14 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   static const String kBranchIssuedLoanTypeCode = 'O';
 
   LoanContract? _contract;
+
+  /// The `GET /loan/list` response this screen was built from, kept verbatim
+  /// for the non-prod response dialog. Captured the moment the call returns
+  /// rather than read off [SrisawadApi.lastLoanListExchange] later, so it is
+  /// this screen's own exchange and not whatever another screen fetched after
+  /// it. Null in mock mode, and until the first live call lands.
+  RawApiExchange? _loanListExchange;
+
   ComcodeConfig _comcodeConfig = const ComcodeConfig();
   String? _contractUrl;
   bool _showPayButton = false;
@@ -145,11 +155,15 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         hashThaiId: appState.hashThaiId,
         token: appState.authToken,
       );
+      _loanListExchange = SrisawadApi.lastLoanListExchange;
       final match = _pick(contracts, wanted);
       if (match == null) {
-        if (mounted) {
-          setState(() => _error = 'ไม่พบสัญญาเลขที่ $wanted');
-        }
+        if (!mounted) return;
+        setState(() => _error = 'ไม่พบสัญญาเลขที่ $wanted');
+        // Shown on this branch too, and it earns its place most here: the
+        // question a "contract not found" raises is what the list *did*
+        // contain, which is exactly what the body answers.
+        await _showLoanListResponse();
         return;
       }
       // The config read is memoised and never throws, so it costs nothing on a
@@ -163,6 +177,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
         _contractUrl = config.contractUrl;
         _showPayButton = config.isShowPayButton;
       });
+      await _showLoanListResponse();
     } on SrisawadApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     }
@@ -325,13 +340,132 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     await openExternalDocument(context, url);
   }
 
+  // ── the /loan/list response (non-prod) ────────────────────────────────
+
+  /// Shows the raw `GET /loan/list` body this screen was built from, with a
+  /// copy button.
+  ///
+  /// It opens **on page load**, because that is when the question it answers
+  /// is asked: every row on the first two tabs is read straight off this
+  /// response — the screen makes no `loan/detail` call — so "where does this
+  /// figure come from?" and "why is this one blank?" are both answered by the
+  /// body and by nothing else on the device.
+  ///
+  /// ⚠ **Non-prod only**, the same rule `EnvVersionTag`, the diagnostics sheet
+  /// and the `/ploan` failure report follow: this is the customer's contract
+  /// in full, and a dialog in front of their own loan detail screen is not
+  /// something to ship to them. The URL is masked ([RawApiExchange.report]);
+  /// the body cannot be, and the dialog says so.
+  ///
+  /// Silent when there is nothing to show — a mock-mode build, or a failure
+  /// that never produced a response.
+  Future<void> _showLoanListResponse() async {
+    if (AppEnvironment.current.isProd) return;
+    final exchange = _loanListExchange;
+    if (exchange == null || !mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        title: Text(
+          'GET /loan/list',
+          style: GoogleFonts.notoSansThai(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: LoanDetailPalette.navy,
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SelectableText(
+                  '${exchange.method} ${maskUrlSecrets(exchange.url)}\n'
+                  'HTTP ${exchange.statusCode}',
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: LoanDetailPalette.muted,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F6F8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    exchange.prettyBody,
+                    style: GoogleFonts.robotoMono(fontSize: 11, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '⚠ ข้อมูลนี้เป็นข้อมูลส่วนบุคคลของลูกค้า '
+                  'ใช้สำหรับตรวจสอบปัญหาเท่านั้น',
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: LoanDetailPalette.alert,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: exchange.report));
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('คัดลอกแล้ว')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: Text('คัดลอก', style: GoogleFonts.notoSansThai()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('ปิด', style: GoogleFonts.notoSansThai()),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── build ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: loanDetailAppBar(context, 'รายละเอียดสินเชื่อ', onBack: _onBack),
+      appBar: loanDetailAppBar(
+        context,
+        'รายละเอียดสินเชื่อ',
+        onBack: _onBack,
+        // Closing the dialog must not be one-way: the body is long, and the
+        // thing someone came to read is usually further down than they got
+        // before dismissing it. Hidden on prod along with the dialog itself.
+        extraActions: [
+          if (!AppEnvironment.current.isProd && _loanListExchange != null)
+            IconButton(
+              onPressed: _showLoanListResponse,
+              icon: const Icon(Icons.data_object, size: 20),
+              color: LoanDetailPalette.muted,
+              tooltip: 'ดู response ของ /loan/list',
+            ),
+        ],
+      ),
       body: _body(),
     );
   }
