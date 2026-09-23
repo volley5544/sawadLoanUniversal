@@ -312,7 +312,7 @@ class _LoanPaymentPageState extends State<LoanPaymentPage> {
               children: [
                 LoanPaymentDetailRow(
                   label: summary.currentInstallmentLabel,
-                  value: '${formatMoney(summary.installmentAmount)} บาท',
+                  value: '${formatMoney(summary.currentDueAmount)} บาท',
                 ),
                 LoanPaymentDetailRow(
                   label: 'วันครบกำหนดชำระ',

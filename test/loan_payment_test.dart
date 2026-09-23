@@ -7,6 +7,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dar
 /// A `/loan/list` row shaped like the ones the payment screen reads.
 LoanContract _contract({
   num currentDueAmount = 4585,
+  num totalDueAmount = 4585,
   num overdueAmount = 0,
   num collectionFee = 0,
   num penaltyFee = 0,
@@ -28,6 +29,7 @@ LoanContract _contract({
       },
       'payment_details': {
         'current_due_amount': currentDueAmount,
+        'total_due_amount': totalDueAmount,
         'overdue_amount': overdueAmount,
         'collection_fee': collectionFee,
         'penalty_fee': penaltyFee,
@@ -48,15 +50,29 @@ void main() {
       collectionFee: 50,
     ));
 
-    // ⚠ **Changed 2026-09-17 with the redesign, and it is a billing change.**
-    // `current_due_amount` "includes all the customer need to pay", so adding
-    // the collection fee on top double-counted it. It is also the field the
-    // loan detail screen shows as `รวมต้องชำระ` one tap away, and the two must
-    // not disagree. `loan_payment_page_old.dart` keeps the old formula through
-    // its own copy of this class.
-    test('ชำระเต็มจำนวน is current_due_amount alone', () {
-      expect(summary.fullAmount, 4585);
-      expect(summary.amountFor(LoanPaymentOption.full, ''), 4585);
+    // ⚠ **Changed 2026-09-23, and it is a billing change.** ชำระเต็มจำนวน
+    // bills `total_due_amount` — the field the loan detail screen shows as
+    // รวมต้องชำระ / ยอดรวมต้องชำระ one tap away; the two must not disagree.
+    // It was `current_due_amount` alone from 2026-09-17.
+    test('ชำระเต็มจำนวน is total_due_amount, not current_due_amount', () {
+      final s = LoanPaymentSummary(
+          _contract(currentDueAmount: 1440, totalDueAmount: 2500.25));
+      expect(s.fullAmount, 2500.25);
+      expect(s.amountFor(LoanPaymentOption.full, ''), 2500.25);
+      // ค่างวดปัจจุบัน reads current_due_amount, like loan detail's
+      // ส่วนที่จะครบกำหนดชำระ row.
+      expect(s.currentDueAmount, 1440);
+    });
+
+    // Mapped ahead of the backend: absent, the option has nothing to bill.
+    test('no total_due_amount disables ชำระเต็มจำนวน', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'payment_details': {'current_due_amount': 1440},
+      });
+      final s = LoanPaymentSummary(c);
+      expect(s.fullAmount, 0);
+      expect(s.isDisabled(LoanPaymentOption.full, ''), isTrue);
     });
 
     test('ยอดค้างชำระ is the arrears plus both fees', () {
@@ -73,15 +89,15 @@ void main() {
     // ชำระเต็มจำนวน headline.
     test("the design's figures reconcile", () {
       final s = LoanPaymentSummary(_contract(
-        currentDueAmount: 2500.25,
+        totalDueAmount: 2500.25,
+        currentDueAmount: 1440,
         overdueAmount: 1000,
         collectionFee: 50,
         penaltyFee: 10.25,
-        installmentAmount: 1440,
       ));
       expect(s.overdueTotal, 1060.25);
       expect(s.fullAmount, 2500.25);
-      expect(s.overdueTotal + s.installmentAmount, s.fullAmount);
+      expect(s.overdueTotal + s.currentDueAmount, s.fullAmount);
     });
 
     test('กำหนดยอดชำระเอง is whatever was typed, separators stripped', () {
@@ -93,9 +109,8 @@ void main() {
       expect(summary.amountFor(LoanPaymentOption.custom, ''), 0);
     });
 
-    // ⚠ The fees ride on the **arrears** option only now. They used to ride on
-    // both — see the note on fullAmount; current_due_amount already contains
-    // them, so ชำระเต็มจำนวน must not add them a second time.
+    // ⚠ The fees ride on the **arrears** option only; ชำระเต็มจำนวน bills the
+    // server's total as sent and never adds them a second time.
     test('the fees ride on the arrears option, not on ชำระเต็มจำนวน', () {
       final noArrears = LoanPaymentSummary(_contract(
           currentDueAmount: 4585, collectionFee: 50, penaltyFee: 10));
@@ -230,7 +245,7 @@ void main() {
       expect(summary.isDisabled(LoanPaymentOption.overdue, ''), isTrue,
           reason: 'no arrears and no fee — there is no bill to raise');
       expect(summary.isDisabled(LoanPaymentOption.full, ''), isFalse);
-      final paidUp = LoanPaymentSummary(_contract(currentDueAmount: 0));
+      final paidUp = LoanPaymentSummary(_contract(totalDueAmount: 0));
       expect(paidUp.isDisabled(LoanPaymentOption.full, ''), isTrue);
     });
 

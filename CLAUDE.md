@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 509 tests (models, payloads, headers, NDID terms +
+flutter test               # 510 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2992,10 +2992,10 @@ as `payment_details.penalty_fee` by a live sample (2026-09-23).
 arrears + upcoming ≠ total renders all three as sent — a data question, not
 something to paper over in the client.
 
-⚠ **The payment screen's ชำระเต็มจำนวน still bills `current_due_amount`**,
-which is now the *upcoming* row here, not this screen's total. If the two
-screens should agree on the total, that option needs `total_due_amount` too —
-not changed, since it moves what the customer is billed.
+⚠ **The payment screen moved with it** (same day, on request): ชำระเต็มจำนวน
+bills `total_due_amount` and its ค่างวดปัจจุบัน row shows `current_due_amount`,
+so both screens quote one total and one upcoming figure. ⚠ Until the backend
+sends `total_due_amount`, **ชำระเต็มจำนวน is 0.00 and disabled**.
 
 ⚠ **Each fee row is withheld at zero**, which is how the design's
 *กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row — and how a
@@ -3346,7 +3346,7 @@ that make it safe:
 
 | Option | Amount |
 | --- | --- |
-| **ชำระเต็มจำนวน** | `current_due_amount` |
+| **ชำระเต็มจำนวน** | `total_due_amount` (since 2026-09-23) |
 | **ยอดค้างชำระ** | `overdue_amount + collection_fee + penalty_fee` |
 | **กำหนดยอดชำระเอง** | what the customer types |
 
@@ -3354,6 +3354,11 @@ The source holds these as a `[true, false, false]` bool list and recomputes
 each amount inline at **four** call sites — the radio's label, the option's own
 detail block, the button's disabled test and the push to the QR page. They are
 gathered onto `LoanPaymentSummary` so those four cannot disagree.
+
+⚠⚠ **ชำระเต็มจำนวน changed again on 2026-09-23: it bills
+`payment_details.total_due_amount`** (tester round), the field the loan detail
+screen now shows as รวมต้องชำระ / ยอดรวมต้องชำระ. The ค่างวดปัจจุบัน row reads
+`current_due_amount`. The 2026-09-17 notes below are history.
 
 ⚠⚠ **Both fixed amounts changed on 2026-09-17 with the redesign, and that is a
 billing change.** ชำระเต็มจำนวน used to add the collection fee on top of

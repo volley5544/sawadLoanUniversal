@@ -34,8 +34,15 @@ class LoanPaymentSummary {
 
   // ── the figures the options are built from ──────────────────────────
 
-  /// `payment_details.current_due_amount` — due this instalment.
+  /// `payment_details.current_due_amount` — due this instalment. Shown under
+  /// ค่างวดปัจจุบัน since 2026-09-23, matching the loan detail screen's
+  /// ส่วนที่จะครบกำหนดชำระ row.
   double get currentDueAmount => contract.paymentDetails.currentDueAmount;
+
+  /// `payment_details.total_due_amount` — everything owed now. The
+  /// ชำระเต็มจำนวน amount since 2026-09-23. ⚠ Mapped ahead of the backend:
+  /// until the field lands it is 0, which disables that option.
+  double get totalDueAmount => contract.paymentDetails.totalDueAmount;
 
   /// `payment_details.overdue_amount` — arrears.
   double get overdueAmount => contract.paymentDetails.overdueAmount;
@@ -48,12 +55,9 @@ class LoanPaymentSummary {
   /// wire name is unconfirmed, and 0 withholds the row.
   double get penaltyFee => contract.paymentDetails.penaltyFee;
 
-  /// `payment_details.installment_amount` — the scheduled instalment, shown
-  /// under ค่างวดปัจจุบัน.
-  ///
-  /// ⚠ Not [currentDueAmount], which is what is *owed* now. The two differ on
-  /// a contract in arrears, and the source reads them from these two separate
-  /// fields — see the same distinction on `LoanDetailSummary`.
+  /// `payment_details.installment_amount` — the scheduled instalment. **No
+  /// longer rendered** by the live screen (ค่างวดปัจจุบัน reads
+  /// [currentDueAmount] since 2026-09-23).
   int get installmentAmount => contract.paymentDetails.installmentAmount;
 
   /// `contract_details.os_balance` — the ceiling a typed amount is clamped to.
@@ -67,22 +71,19 @@ class LoanPaymentSummary {
 
   // ── per-option amounts ──────────────────────────────────────────────
 
-  /// ชำระเต็มจำนวน: **`current_due_amount` alone.**
+  /// ชำระเต็มจำนวน: **`payment_details.total_due_amount`** (2026-09-23,
+  /// tester round).
   ///
-  /// ⚠ **Changed 2026-09-17, and it is a billing change.** It used to add the
-  /// collection fee on top. That field "includes all the customer need to
-  /// pay" (confirmed with the API owner while building the redesign), so
-  /// adding the fee double-counted it — the redesign's own figures only
-  /// reconcile without it: `1,060.25` arrears + `1,440.00` instalment =
-  /// `2,500.25`, which is exactly `current_due_amount`.
+  /// It is the **same field** the loan detail screen shows as `รวมต้องชำระ`
+  /// and `ยอดรวมต้องชำระ`. Those two screens are one tap apart over one
+  /// contract, so a customer must not see two totals — which is why this moved
+  /// with them.
   ///
-  /// It is also the **same field** the loan detail screen shows as
-  /// `รวมต้องชำระ` and breaks down as `ยอดรวมต้องชำระ`. Those two screens are
-  /// one tap apart over one contract, so a customer must not see two totals.
-  ///
-  /// ⚠ `loan_payment_page_old.dart` keeps the old formula, via its own copy of
-  /// this class — that is what the `_old` pair is for.
-  double get fullAmount => currentDueAmount;
+  /// History: `current_due_amount` + collection fee until 2026-09-17, then
+  /// `current_due_amount` alone until 2026-09-23. Each change is a billing
+  /// change. `loan_payment_page_old.dart` keeps the oldest formula via its own
+  /// copy of this class.
+  double get fullAmount => totalDueAmount;
 
   /// ยอดค้างชำระ: the arrears **plus both fees**.
   ///
