@@ -35,6 +35,7 @@ cross-referenced throughout it. Do not renumber either list.
 - [`pdfx` 2.9.2 leaks every document the step-6 sheet opens](#pdfx-leak)
 - [Step 6's `สรุปยอดสินเชื่อใหม่`, and which `fee_amount` wins](#step6-summary-rows)
 - [Pentest 2026-08-11 — the full finding list](#pentest-2026-08-11)
+- [The two loan-detail debug dialogs, built and removed the same day](#loan-detail-debug-dialogs)
 
 ---
 
@@ -642,3 +643,61 @@ reverted the same day: it charged the duty for a larger amount than the
 customer is borrowing. Step 2 folds the calculator's in with
 `detail.copyWith(feeAmount: plan.feeAmount)`, so `LoanAmountDetail.feeAmount` is
 the calculator's from then on.
+
+---
+
+## <a id="loan-detail-debug-dialogs"></a>The two loan-detail debug dialogs, built and removed the same day
+
+**2026-09-22.** Two debug affordances were added to `loan_detail_page.dart`,
+one after the other, and **both were removed before the build went to the
+tester team**. The screen is byte-for-byte what it was at `1269887`. This is
+recorded because the need behind them recurs — *"what did the gateway actually
+send?"* and *"what token is this screen calling with?"* are the two questions a
+tester report cannot answer — so the next person to want one should know what
+was built, and why it is not there.
+
+| Commit | What |
+| --- | --- |
+| `8cfcaca` | a dialog on page load showing the raw `GET /loan/list` body, with a copy button |
+| `020146a` | that reverted in full, replaced by a dialog showing the bearer token, with a copy button |
+| `1c88872` | the token dialog removed too — nothing in front of the contract for testers |
+
+**Why the response dialog existed.** Every row on the first two tabs is read
+straight off that one response — the screen makes no `loan/detail` call — so
+the body answers *"where does this figure come from?"* and *"why is this row
+blank?"*, and nothing else on a device does.
+
+Two details worth keeping if it is rebuilt:
+
+- **It captured the body as it came off the wire**, through a new `onResponse`
+  hook on `SrisawadApi.send` — the one point where the undecoded body still
+  exists, since `send` returns parsed JSON and a failure throws. It was
+  deliberately **not** a re-encoding of the parsed `LoanContract`s: a
+  reconstruction can only carry the fields this build already reads, which is
+  the opposite of what the dialog is opened to find out — a field the API
+  added, or one it has stopped sending.
+- **The request line had to be masked.** `maskUrlSecrets` covered `hashThaiId`
+  but not the mobile API's snake_case `hash_thai_id`, and the copy button puts
+  that line into whatever chat the report is pasted into. Widening it meant
+  moving it out of `services/external_url.dart` (which imports Flutter and a
+  page's styles) into a UI-free file, re-exported so no caller changed. ⚠ **If
+  the dialog is rebuilt, that widening has to come back with it** — it went
+  away with the revert.
+
+**Why the token dialog replaced it**, then went too. The token is the more
+useful half: with it and a contract number, every call the screen makes can be
+replayed by hand against the mobile API (which sends
+`access-control-allow-origin: *`), which is the only way to separate a payload
+problem from a gateway one. Nothing on a device otherwise surfaces it — the
+launch `?token=` is gone from `window.location` after the first navigation, and
+the live one is resolved per request from the host bridge, so it was resolved
+through `AuthToken` and the copy button copied the token **alone**, ready for an
+`Authorization` header.
+
+It came out because a dialog demanding dismissal on entry is the first thing a
+tester would report, and because a live bearer on screen is a credential on a
+clipboard. Both were non-prod-only; neither ever shipped to prod.
+
+**If one is wanted again**, the shape to keep: non-prod-only, opened from the
+`(UAT ver…)` tag's diagnostics sheet rather than on page load, so a tester has
+to ask for it.

@@ -417,6 +417,13 @@ tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
 NDID are **parked** — they are still in the build and still work, but they are
 not what this round tests or ships.
 
+> **Status 2026-09-22: the tester team has it.** The build under test is uat
+> **`WEB_VERSION` 178** — read it off the `(UAT ver…)` tag in any AppBar, or
+> off the `SawadLoanUniversalWebVersion:<n>` line in the WebView console, and
+> quote it in a report. Fixes for what comes back start the next session.
+> ⚠ `.deploy-version-uat` says 131; that file records what the local hook
+> *built*, and CI has shipped since. The live number is the one that counts.
+
 | Screen | URL |
 | --- | --- |
 | เติมวงเงิน (top-up) | `/topup?hashThaiId=…&token=…` — add `&contNo=` to open on one contract |
@@ -455,6 +462,32 @@ fixed at source.
 | **คู่สัญญา button is gone from the bottom bar** | Disabled on request; the document moved to the **สัญญาเงินกู้** row at the foot of the ข้อมูลสินเชื่อ tab, same condition and same action. |
 | **The three blocks of ยอดรวมต้องชำระ may not add up** | Each row names a real field the server sent; none is derived to make the arithmetic close. A mismatch is a data question — please report the contract number. |
 | **บันทึกรูปภาพ on the QR screens** | Needs the host's `saveImageToGallery`, also an app release. In a browser it falls back to a download. |
+
+## Recent changes — 2026-09-22
+
+**No functional change.** Two debug dialogs were added to the loan detail
+screen and both taken out again before the build went to testers, so
+`lib/loan_detail/loan_detail_page.dart` is byte-for-byte what it was at
+`1269887`. 505 tests, 39 analyzer infos — the baseline, unmoved.
+
+### Two loan-detail debug dialogs, built and removed
+
+| Commit | What |
+| --- | --- |
+| `8cfcaca` | on page load, the raw `GET /loan/list` body in a dialog with a copy button |
+| `020146a` | that reverted in full; the **bearer token** shown instead, copy button, before the screen loads |
+| `1c88872` | the token dialog removed too — nothing in front of the contract for testers |
+
+Both were non-prod-only and neither ever reached prod. They came out because a
+dialog demanding dismissal on entry is the first thing a tester would report,
+and because a live bearer on screen is a credential on a clipboard.
+
+The need behind them is real, though, and recurs: *"what did the gateway
+actually send?"* and *"what token is this screen calling with?"* are the two
+questions a tester report cannot answer. What was built, the two details worth
+keeping if one is rebuilt, and the shape to rebuild it in (behind the
+`(UAT ver…)` diagnostics sheet, not on page load) are in
+[docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs).
 
 ## Recent changes — 2026-09-16 → 2026-09-20
 

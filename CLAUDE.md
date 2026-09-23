@@ -55,6 +55,23 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `comcode_config` default off), #34 (`openExternalUrl` needs an app release)
   and #10.
 
+- ⚠ **The tester team has the build; the next session starts from their
+  reports** (handed over 2026-09-22). What they are testing is uat
+  **`WEB_VERSION` 178** — verified live by grepping the bundle, not by reading
+  `.deploy-version-uat`, which still says 131 and is a CI-run mismatch, not a
+  problem (see *Auto-deploy to uat*). Before changing anything, re-check what
+  is live: the number moves on any turn that touches source.
+
+  ⚠ **The 2026-09-22 session left no functional change.** Two debug dialogs
+  were built on the loan detail screen and both removed again before the
+  handover, so `loan_detail_page.dart` is byte-for-byte what it was at
+  `1269887`. If a tester report makes you want to see a raw response or the
+  bearer token on a device, read
+  [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs) first — it has
+  what was built, the two details worth keeping (the body captured *as sent*,
+  and the `hash_thai_id` masking that has to come back with it), and why it
+  is not on page load.
+
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan
