@@ -3269,9 +3269,9 @@ renders `-` when **both** halves are absent rather than an empty `( )`.
   `LoanDetailHeaderCard.showsPayNowWhenOverdue` (default `false`, so the
   frozen `_old` payment page keeps its date);
 - the payment screen's arrears **วันครบกำหนดชำระ** reads ชำระทันที when
-  `overdue_date` is empty/null (`LoanPaymentSummary.overdueDueDate`). Still
-  no borrowed date — "due now" is a statement, not a neighbour's value.
-  Unparseable junk still renders `-`.
+  `overdue_date` is empty, null **or unreadable**
+  (`LoanPaymentSummary.overdueDueDate`). Still no borrowed date — "due now"
+  is a statement, not a neighbour's value.
 
 ⚠ **Out of scope, deliberately:**
 

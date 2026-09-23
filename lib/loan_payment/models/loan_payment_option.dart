@@ -155,13 +155,13 @@ class LoanPaymentSummary {
   /// it apart from the real thing. `-` is visible, gets reported, and gets
   /// fixed at source. The loan detail screen's arrears block changed with it.
   ///
-  /// ⚠ **An empty `overdue_date` now reads ชำระทันที, not `-`** (2026-09-23,
-  /// tester round, on request). Still no borrowed date — arrears with no due
-  /// date on file are due now, which is a statement, not a substitute value.
+  /// ⚠ **An empty or unreadable `overdue_date` reads ชำระทันที, not `-`**
+  /// (2026-09-23, tester round, on request). Still no borrowed date — arrears
+  /// with no usable due date on file are due now, which is a statement, not a
+  /// substitute value.
   String get overdueDueDate {
-    final raw = contract.paymentDetails.overdueDate.trim();
-    if (raw.isEmpty) return payNowLabel;
-    return thaiDateOrDash(raw);
+    final formatted = thaiDateOrDash(contract.paymentDetails.overdueDate);
+    return formatted == '-' ? payNowLabel : formatted;
   }
 
   static const String payNowLabel = 'ชำระทันที';

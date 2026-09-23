@@ -169,9 +169,9 @@ void main() {
       expect(summary.currentDueDate, '05/10/2569');
     });
 
-    // ⚠ **No borrowed date since 2026-09-19.** An empty overdue_date reads
-    // ชำระทันที since 2026-09-23; unparseable junk still renders `-`.
-    test('an empty overdue_date reads ชำระทันที, junk renders as -', () {
+    // ⚠ **No borrowed date since 2026-09-19.** An empty or unreadable
+    // overdue_date reads ชำระทันที since 2026-09-23.
+    test('an empty or unreadable overdue_date reads ชำระทันที', () {
       expect(
         LoanPaymentSummary(_contract(overdueDate: '', currentDueDate: '2026-09-11'))
             .overdueDueDate,
@@ -185,7 +185,7 @@ void main() {
         LoanPaymentSummary(_contract(
                 overdueDate: 'nonsense', currentDueDate: '2026-09-11'))
             .overdueDueDate,
-        '-',
+        'ชำระทันที',
       );
       // The instalment block's own date is unaffected.
       expect(
