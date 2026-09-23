@@ -120,6 +120,8 @@ class LoanDetailHeaderCard extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           contract.contractDetails.loanTypeName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansThai(
             fontSize: 16,
             fontWeight: FontWeight.w600,

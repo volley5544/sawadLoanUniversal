@@ -206,22 +206,27 @@ class LoanDetailSummaryRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Flexible(
-          child: Text(
-            label,
-            style: GoogleFonts.notoSansThai(
-              fontSize: 14,
-              height: 1.5,
-              color: LoanDetailPalette.label,
-            ),
+        // ⚠ **One line per row, the value ellipsised** (2026-09-23, tester
+        // round): a long contract number used to wrap onto a second line.
+        // The label keeps its natural width — labels are short and fixed —
+        // and the value takes what is left, ending in `…` when it runs out.
+        Text(
+          label,
+          style: GoogleFonts.notoSansThai(
+            fontSize: 14,
+            height: 1.5,
+            color: LoanDetailPalette.label,
           ),
         ),
         const SizedBox(width: 8),
         trailing ??
-            Flexible(
+            Expanded(
               child: Text(
                 value,
                 textAlign: TextAlign.end,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansThai(
                   fontSize: 14,
                   height: 1.5,

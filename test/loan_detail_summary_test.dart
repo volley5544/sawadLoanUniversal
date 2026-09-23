@@ -55,6 +55,7 @@ void main() {
   _dashPolicyTests();
   _headerCardRenderTests();
   _payNowTests();
+  _ellipsisTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -769,5 +770,35 @@ void _payNowTests() {
         isFalse,
       );
     });
+  });
+}
+
+/// Header values stay on one line and end in `…` (2026-09-23): a long
+/// contract number used to wrap onto a second line at phone width.
+void _ellipsisTests() {
+  testWidgets('a long contract number is ellipsised, not wrapped',
+      (tester) async {
+    const longNo = '000จฐV69080100001NFX-EXTRA-LONG-CONTRACT-NUMBER';
+    final json = _contract().rawJson;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 420,
+            child: LoanDetailHeaderCard(
+              contract: LoanContract.fromJson({...json, 'contract_no': longNo}),
+              showsNotIssuedNotice: false,
+              onDownloadContract: null,
+              onViewInsurances: _noop,
+              showsArrearsAndInstalmentRows: false,
+            ),
+          ),
+        ),
+      ),
+    ));
+    expect(tester.takeException(), isNull);
+    final text = tester.widget<Text>(find.text(longNo));
+    expect(text.maxLines, 1);
+    expect(text.overflow, TextOverflow.ellipsis);
   });
 }
