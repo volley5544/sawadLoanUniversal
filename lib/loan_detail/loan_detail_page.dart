@@ -356,6 +356,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
           // breaks both of them down in full, so the card restated them.
           // งวดปัจจุบัน — the instalment number — is a different row and stays.
           showsArrearsAndInstalmentRows: false,
+          showsPayNowWhenOverdue: true,
           onDownloadContract:
               _contractDocumentUrl == null ? null : _openContractDocument,
           onViewInsurances: () => Navigator.of(context).push(

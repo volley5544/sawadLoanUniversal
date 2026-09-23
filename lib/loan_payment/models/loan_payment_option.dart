@@ -154,8 +154,17 @@ class LoanPaymentSummary {
   /// the instalment block is wrong **silently**, and the customer cannot tell
   /// it apart from the real thing. `-` is visible, gets reported, and gets
   /// fixed at source. The loan detail screen's arrears block changed with it.
-  String get overdueDueDate =>
-      thaiDateOrDash(contract.paymentDetails.overdueDate);
+  ///
+  /// ⚠ **An empty `overdue_date` now reads ชำระทันที, not `-`** (2026-09-23,
+  /// tester round, on request). Still no borrowed date — arrears with no due
+  /// date on file are due now, which is a statement, not a substitute value.
+  String get overdueDueDate {
+    final raw = contract.paymentDetails.overdueDate.trim();
+    if (raw.isEmpty) return payNowLabel;
+    return thaiDateOrDash(raw);
+  }
+
+  static const String payNowLabel = 'ชำระทันที';
 
   /// Due date of the instalment coming up (`current_due_date`).
   String get currentDueDate =>

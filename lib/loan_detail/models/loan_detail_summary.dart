@@ -80,6 +80,14 @@ class LoanDetailSummary {
   /// The due date is shown red once it has passed.
   bool get payByDateIsOverdue => !dueDateInFuture;
 
+  /// True when `payment_details.overdue_amount > 0` — the customer is already
+  /// in arrears, so there is no date left to pay *by*: the row reads
+  /// **ชำระทันที** instead (2026-09-23, tester round). Only the loan detail
+  /// screen consults it — see `LoanDetailHeaderCard.showsPayNowWhenOverdue`.
+  bool get showsPayNow => contract.paymentDetails.overdueAmount > 0;
+
+  static const String payNowLabel = 'ชำระทันที';
+
   // ── ค้างชำระ (งวดที่ F-T) ───────────────────────────────────────────
 
   int get overdueFrom => int.tryParse(contract.paymentDetails.overdueFrom.trim()) ?? 0;

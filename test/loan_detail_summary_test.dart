@@ -54,6 +54,7 @@ LoanContract _contract({
 void main() {
   _dashPolicyTests();
   _headerCardRenderTests();
+  _payNowTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -711,6 +712,62 @@ void _dashPolicyTests() {
         'payment_details': {'current_due_date': '', 'current_date_time': ''},
       });
       expect(LoanDetailSummary(c).payByDateLabel, '-');
+    });
+  });
+}
+
+/// ชำระภายในวันที่ reads **ชำระทันที** once `overdue_amount > 0` — on the loan
+/// detail screen only (2026-09-23). The `_old` payment page, the card's other
+/// caller, keeps the date.
+void _payNowTests() {
+  Future<void> pump(WidgetTester tester, LoanContract contract,
+          {bool payNow = true}) =>
+      tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: LoanDetailHeaderCard(
+              contract: contract,
+              showsNotIssuedNotice: false,
+              onDownloadContract: null,
+              onViewInsurances: _noop,
+              showsArrearsAndInstalmentRows: false,
+              showsPayNowWhenOverdue: payNow,
+            ),
+          ),
+        ),
+      ));
+
+  group('ชำระภายในวันที่ → ชำระทันที', () {
+    test('keys on overdue_amount > 0', () {
+      expect(LoanDetailSummary(_contract(overdueAmount: 1)).showsPayNow, isTrue);
+      expect(LoanDetailSummary(_contract()).showsPayNow, isFalse);
+    });
+
+    testWidgets('overdue: the row reads ชำระทันที', (tester) async {
+      await pump(tester, _contract(overdueAmount: 9170));
+      expect(find.text('ชำระทันที'), findsOneWidget);
+      expect(find.text('05/10/2569'), findsNothing);
+    });
+
+    testWidgets('nothing overdue: the date stays', (tester) async {
+      await pump(tester, _contract());
+      expect(find.text('ชำระทันที'), findsNothing);
+      expect(find.text('05/10/2569'), findsOneWidget);
+    });
+
+    testWidgets('off by default, so the _old payment page keeps the date',
+        (tester) async {
+      await pump(tester, _contract(overdueAmount: 9170), payNow: false);
+      expect(find.text('ชำระทันที'), findsNothing);
+      expect(
+        LoanDetailHeaderCard(
+          contract: _contract(),
+          showsNotIssuedNotice: false,
+          onDownloadContract: null,
+          onViewInsurances: _noop,
+        ).showsPayNowWhenOverdue,
+        isFalse,
+      );
     });
   });
 }

@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 505 tests (models, payloads, headers, NDID terms +
+flutter test               # 509 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3254,6 +3254,17 @@ Also converted, from blank cells to `-`: วันที่ทำสัญญา
 ยี่ห้อสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันชำระครั้งล่าสุด, ชำระภายในวันที่,
 and the payment header's product / plate / contract number. สาขาที่ทำสัญญา
 renders `-` when **both** halves are absent rather than an empty `( )`.
+
+⚠ **Two rows say ชำระทันที instead** (2026-09-23, tester round):
+
+- loan detail header **ชำระภายในวันที่** reads ชำระทันที (red) whenever
+  `overdue_amount > 0` — `LoanDetailSummary.showsPayNow`, opted into with
+  `LoanDetailHeaderCard.showsPayNowWhenOverdue` (default `false`, so the
+  frozen `_old` payment page keeps its date);
+- the payment screen's arrears **วันครบกำหนดชำระ** reads ชำระทันที when
+  `overdue_date` is empty/null (`LoanPaymentSummary.overdueDueDate`). Still
+  no borrowed date — "due now" is a statement, not a neighbour's value.
+  Unparseable junk still renders `-`.
 
 ⚠ **Out of scope, deliberately:**
 

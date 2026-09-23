@@ -32,6 +32,7 @@ class LoanDetailHeaderCard extends StatelessWidget {
     required this.onDownloadContract,
     required this.onViewInsurances,
     this.showsArrearsAndInstalmentRows = true,
+    this.showsPayNowWhenOverdue = false,
   });
 
   final LoanContract contract;
@@ -52,6 +53,13 @@ class LoanDetailHeaderCard extends StatelessWidget {
   /// this card entirely. A default of `false` would silently restyle the thing
   /// the `_old` pair exists to be compared against.
   final bool showsArrearsAndInstalmentRows;
+
+  /// Whether **ชำระภายในวันที่** reads **ชำระทันที** (in red) when
+  /// `overdue_amount > 0` — [LoanDetailSummary.showsPayNow]. `true` on the
+  /// loan detail screen since 2026-09-23; defaults to `false` for the same
+  /// reason as [showsArrearsAndInstalmentRows]: the frozen `_old` payment
+  /// page is the only other caller.
+  final bool showsPayNowWhenOverdue;
 
   /// Null when the config names no contract portal, in which case the notice's
   /// `download` link is rendered as plain text rather than a dead tap.
@@ -105,6 +113,9 @@ class LoanDetailHeaderCard extends StatelessWidget {
     );
   }
 
+  bool _payNow(LoanDetailSummary summary) =>
+      showsPayNowWhenOverdue && summary.showsPayNow;
+
   List<Widget> _rows(BuildContext context, LoanDetailSummary summary) => [
         const SizedBox(height: 3),
         Text(
@@ -123,8 +134,8 @@ class LoanDetailHeaderCard extends StatelessWidget {
         const SizedBox(height: 3),
         LoanDetailSummaryRow(
           label: 'ชำระภายในวันที่',
-          value: summary.payByDateLabel,
-          valueColor: summary.payByDateIsOverdue
+          value: _payNow(summary) ? LoanDetailSummary.payNowLabel : summary.payByDateLabel,
+          valueColor: _payNow(summary) || summary.payByDateIsOverdue
               ? LoanDetailPalette.alert
               : LoanDetailPalette.label,
         ),

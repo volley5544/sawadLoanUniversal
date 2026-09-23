@@ -169,14 +169,17 @@ void main() {
       expect(summary.currentDueDate, '05/10/2569');
     });
 
-    // ⚠ **No fallback since 2026-09-19.** It used to borrow
-    // `current_due_date`; a date taken from the instalment block is wrong
-    // silently, where `-` is visible and gets reported to the data team.
-    test('an absent or unparseable overdue_date renders as -', () {
+    // ⚠ **No borrowed date since 2026-09-19.** An empty overdue_date reads
+    // ชำระทันที since 2026-09-23; unparseable junk still renders `-`.
+    test('an empty overdue_date reads ชำระทันที, junk renders as -', () {
       expect(
         LoanPaymentSummary(_contract(overdueDate: '', currentDueDate: '2026-09-11'))
             .overdueDueDate,
-        '-',
+        'ชำระทันที',
+      );
+      expect(
+        LoanPaymentSummary(_contract(overdueDate: '  ')).overdueDueDate,
+        'ชำระทันที',
       );
       expect(
         LoanPaymentSummary(_contract(
