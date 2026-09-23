@@ -2978,6 +2978,12 @@ screenshot review catches.
 | `ยอดรวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
 | header `รวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
 
+⚠ **Mapped ahead of the backend** — `total_due_amount` is not on `/loan/list`
+yet (2026-09-23; backend adding it "soon"). Until it lands it parses as 0, so
+**ยอดรวมต้องชำระ shows `0.00` and the header's รวมต้องชำระ row is withheld**.
+That is expected, not a bug — check the response for the field before chasing
+it.
+
 `ยอดรวมต้องชำระ` and the header's `รวมต้องชำระ` still read **one** field, so
 the screen cannot carry two numbers for one thing. `penalty_fee` is confirmed
 as `payment_details.penalty_fee` by a live sample (2026-09-23).
