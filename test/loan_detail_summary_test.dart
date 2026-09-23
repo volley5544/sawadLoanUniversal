@@ -24,6 +24,7 @@ LoanContract _contract({
   String overdueTo = '0',
   num contractInstallmentAmount = 3250,
   num currentDueAmount = 3250,
+  num totalDueAmount = 3250,
   String carSeries = 'WAVE 110i',
   String carCc = '110',
   List<Map<String, dynamic>> insurances = const [],
@@ -46,6 +47,7 @@ LoanContract _contract({
         'overdue_from': overdueFrom,
         'overdue_to': overdueTo,
         'current_due_amount': currentDueAmount,
+        'total_due_amount': totalDueAmount,
       },
       'car_details': {'car_series': carSeries, 'car_cc': carCc},
       'insurances': insurances,
@@ -91,7 +93,7 @@ void main() {
       );
       // …and on any installment where there is nothing due.
       expect(
-        LoanDetailSummary(_contract(currentDueAmount: 0)).showsTotalDueRow,
+        LoanDetailSummary(_contract(totalDueAmount: 0)).showsTotalDueRow,
         isFalse,
       );
     });
@@ -242,10 +244,14 @@ void main() {
       // The two fields share a name and differ in meaning: the contract's is
       // the scheduled installment, payment_details' is what is due now.
       final summary = LoanDetailSummary(
-          _contract(contractInstallmentAmount: 3250, currentDueAmount: 9750));
+          _contract(
+              contractInstallmentAmount: 3250,
+              currentDueAmount: 9750,
+              totalDueAmount: 12000));
       expect(summary.currentInstallmentAmount, 3250);
       expect(summary.currentInstallmentAmountLabel, '3,250.00');
-      expect(summary.totalDueLabel, '9,750.00');
+      // รวมต้องชำระ is total_due_amount since 2026-09-23.
+      expect(summary.totalDueLabel, '12,000.00');
       expect(
         LoanDetailSummary(_contract(contractInstallmentAmount: 0))
             .showsCurrentInstallmentAmountRow,
@@ -386,26 +392,28 @@ void main() {
 
 /// A row shaped for the **ยอดรวมต้องชำระ** breakdown on the ข้อมูลการชำระ tab.
 ///
-/// `current_due_amount` is the grand total — "this field is sum of all to
-/// current" (settled 2026-09-17) — so these fixtures set it to the intended
-/// total and let the upcoming row fall out as the remainder.
+/// Since 2026-09-23: the upcoming row is `payment_details.current_due_amount`
+/// and the grand total is `payment_details.total_due_amount`.
+/// `contract_details.installment_amount` is set to a distinct value to prove
+/// it is no longer read.
 LoanContract _payable({
-  num currentDueAmount = 2500.25,
+  num totalDueAmount = 2500.25,
+  num currentDueAmount = 1440,
   num overdueAmount = 1000,
   num collectionFee = 50,
   num penaltyFee = 10.25,
   String overdueDate = '2026-08-20',
   String currentDueDate = '2026-09-20',
-  num installmentAmount = 1440,
 }) =>
     LoanContract.fromJson({
       'contract_no': 'MLOAN-TEST-02',
       'db_name': 'MLOAN',
       'contract_details': {
         'loan_type_code': 'M',
-        'installment_amount': installmentAmount,
+        'installment_amount': 7777,
       },
       'payment_details': {
+        'total_due_amount': totalDueAmount,
         'current_due_amount': currentDueAmount,
         'overdue_amount': overdueAmount,
         'collection_fee': collectionFee,
@@ -435,37 +443,33 @@ void _totalPayableTests() {
     // The design's "กรณีมีค่างวดค้าง และค่างวดงวดถัดไป แต่ไม่มีค่าธรรมเนียม".
     test('no fees leaves the arrears block a single row', () {
       final s = LoanDetailSummary(
-          _payable(collectionFee: 0, penaltyFee: 0, currentDueAmount: 2440));
+          _payable(collectionFee: 0, penaltyFee: 0, totalDueAmount: 2440));
       expect(s.showsOverdueCollectionFeeRow, isFalse);
       expect(s.showsOverduePenaltyFeeRow, isFalse);
       expect(s.overdueSubtotal, 1000);
       expect(s.upcomingDueAmount, 1440);
     });
 
-    // "กรณีมีค่างวดค้างอย่างเดียว" — and the asymmetry worth pinning: the
-    // grand total is withheld, because รวมค้างชำระ already states the same
-    // figure one line above it.
-    // "ส่วนที่จะครบกำหนดชำระ" is now `contract_details.installment_amount`, so
-    // an arrears-only contract is one with no scheduled instalment left.
+    // "กรณีมีค่างวดค้างอย่างเดียว" — the grand total is withheld, because
+    // รวมค้างชำระ already states the same figure one line above it.
     test('arrears only withholds the grand-total row', () {
       final s = LoanDetailSummary(_payable(
           collectionFee: 0,
           penaltyFee: 0,
-          currentDueAmount: 1000,
-          installmentAmount: 0));
+          totalDueAmount: 1000,
+          currentDueAmount: 0));
       expect(s.showsOverdueSection, isTrue);
       expect(s.showsUpcomingSection, isFalse);
       expect(s.showsTotalPayableRow, isFalse);
     });
 
-    // "กรณีมีค่างวดงวดถัดไปอย่างเดียว" — which *does* show it, since the
-    // upcoming block carries no subtotal of its own.
+    // "กรณีมีค่างวดงวดถัดไปอย่างเดียว" — which *does* show it.
     test('upcoming only still shows the grand total', () {
       final s = LoanDetailSummary(_payable(
           overdueAmount: 0,
           collectionFee: 0,
           penaltyFee: 0,
-          currentDueAmount: 1440));
+          totalDueAmount: 1440));
       expect(s.showsOverdueSection, isFalse);
       expect(s.showsUpcomingSection, isTrue);
       expect(s.upcomingDueAmount, 1440);
@@ -478,43 +482,28 @@ void _totalPayableTests() {
           overdueAmount: 0,
           collectionFee: 0,
           penaltyFee: 0,
-          currentDueAmount: 0,
-          installmentAmount: 0));
+          totalDueAmount: 0,
+          currentDueAmount: 0));
       expect(s.showsOverdueSection, isFalse);
       expect(s.showsUpcomingSection, isFalse);
       expect(s.showsTotalPayableRow, isTrue);
       expect(s.totalPayableAmount, 0);
     });
 
-    // ⚠ **The rows are no longer guaranteed to sum to the total** (changed
-    // 2026-09-19). Each names a real field — the arrears block its own
-    // figures, the upcoming block `contract_details.installment_amount` —
-    // rather than one being derived to make the arithmetic close. On the
-    // design's figures they agree; nothing enforces it.
-    test("the design's own figures still reconcile", () {
+    // 2026-09-23: the upcoming row is current_due_amount, the total is
+    // total_due_amount — neither is contract_details.installment_amount.
+    test('the rows read current_due_amount and total_due_amount', () {
       final s = LoanDetailSummary(_payable());
-      expect(s.overdueSubtotal, 1060.25);
-      expect(s.upcomingDueAmount, 1440);
-      expect(s.totalPayableAmount, 2500.25);
+      expect(s.upcomingDueAmount, isNot(7777));
+      expect(s.totalPayableAmount, isNot(7777));
       expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount);
     });
 
-    test('but a contract where they disagree still renders both', () {
-      // current_due_amount is the server's answer and is shown as-is; the two
-      // block figures are the server's too. A mismatch is a data question,
-      // not something to paper over here.
-      final s = LoanDetailSummary(_payable(currentDueAmount: 9999));
+    test('a contract where they disagree still renders all three', () {
+      final s = LoanDetailSummary(_payable(totalDueAmount: 9999));
       expect(s.overdueSubtotal, 1060.25);
       expect(s.upcomingDueAmount, 1440);
       expect(s.totalPayableAmount, 9999);
-    });
-
-    // The upcoming row reads a field directly now, so it cannot go negative
-    // the way a subtraction could.
-    test('the upcoming row is the scheduled instalment, not a subtraction', () {
-      final s = LoanDetailSummary(_payable(currentDueAmount: 500));
-      expect(s.upcomingDueAmount, 1440);
-      expect(s.showsUpcomingSection, isTrue);
     });
 
     // One screen must not carry two numbers for one thing: the section's grand
@@ -522,6 +511,7 @@ void _totalPayableTests() {
     test('the grand total is the header card figure', () {
       final s = LoanDetailSummary(_payable());
       expect(s.totalPayableAmount, s.totalDueAmount);
+      expect(s.totalDueAmount, 2500.25);
     });
 
     // penalty_fee is unconfirmed on payment_details, so it must degrade to a

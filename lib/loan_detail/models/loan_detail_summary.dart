@@ -143,7 +143,9 @@ class LoanDetailSummary {
 
   // ── รวมต้องชำระ ─────────────────────────────────────────────────────
 
-  double get totalDueAmount => contract.paymentDetails.currentDueAmount;
+  /// `payment_details.total_due_amount` (2026-09-23, tester round; it was
+  /// `current_due_amount`).
+  double get totalDueAmount => contract.paymentDetails.totalDueAmount;
 
   /// Withheld on the last installment: there is nothing left to total, and the
   /// note below the card explains why the figure above it is not a payoff.
@@ -218,33 +220,20 @@ class LoanDetailSummary {
   /// The whole `ส่วนค้างชำระตั้งแต่วันที่ …` block.
   bool get showsOverdueSection => overdueSubtotal != 0;
 
-  /// `ค่างวดค้างชำระ` under `ส่วนที่จะครบกำหนดชำระ` — **the scheduled
-  /// instalment**, `contract_details.installment_amount` (confirmed
-  /// 2026-09-19: *"ค่างวดค้างชำระ ของหัวข้อที่จะครบกำหนดชำระ จะเป็นค่างวด
-  /// ต่องวด"*).
+  /// `ค่างวดค้างชำระ` under `ส่วนที่จะครบกำหนดชำระ` —
+  /// **`payment_details.current_due_amount`** (2026-09-23, tester round).
   ///
-  /// ⚠ **It was the remainder** (`totalPayableAmount - overdueSubtotal`)
-  /// between 2026-09-17 and 2026-09-19. That guaranteed the two blocks added
-  /// up to the total beneath them; this does not. On the design's own figures
-  /// they agree — `1,060.25 + 1,440.00 = 2,500.25` — but nothing enforces it,
-  /// so on a real contract the rows can visibly fail to sum to
-  /// [totalPayableAmount]. That is the stated intent: each row names a real
-  /// field rather than one being derived to make the arithmetic close.
-  ///
-  /// ⚠ **`contract_details`, not `payment_details`** — the two carry an
-  /// identically named field and this is the scheduled instalment, the same
-  /// one [currentInstallmentAmount] and the header card's `ค่างวดปัจจุบัน`
-  /// read. `payment_details.installment_amount` is what is due now, and the
-  /// two differ on a contract in arrears.
-  double get upcomingDueAmount =>
-      contract.contractDetails.installmentAmount.toDouble();
+  /// History: the remainder (`total − arrears`) 2026-09-17 → 09-19, then
+  /// `contract_details.installment_amount` until 2026-09-23. Each row names a
+  /// real field; nothing forces the two blocks to sum to [totalPayableAmount].
+  double get upcomingDueAmount => contract.paymentDetails.currentDueAmount;
 
   /// The `ส่วนที่จะครบกำหนดชำระในวันที่ …` block.
   bool get showsUpcomingSection => upcomingDueAmount != 0;
 
   /// `ยอดรวมต้องชำระ` — **the same figure the header card shows as
   /// `รวมต้องชำระ`**, deliberately: one screen must not carry two numbers for
-  /// one thing. Both read `payment_details.current_due_amount`.
+  /// one thing. Both read `payment_details.total_due_amount`.
   double get totalPayableAmount => totalDueAmount;
 
   /// ⚠ **Withheld when arrears are the only thing on the list.** In that shape

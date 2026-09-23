@@ -286,6 +286,7 @@ class PaymentDetails {
     this.currentDateTime = '',
     this.collectionFee = 0,
     this.penaltyFee = 0,
+    this.totalDueAmount = 0,
   });
 
   final int installmentAmount;
@@ -328,6 +329,11 @@ class PaymentDetails {
   /// top-up, not this contract's arrears.
   final double penaltyFee;
 
+  /// `total_due_amount` — everything owed now, arrears included. The loan
+  /// detail screen's `รวมต้องชำระ` (header) and `ยอดรวมต้องชำระ` read it
+  /// (2026-09-23, tester round; both were `current_due_amount` before).
+  final double totalDueAmount;
+
   factory PaymentDetails.fromJson(Map<String, dynamic> json) => PaymentDetails(
         installmentAmount: asInt(json['installment_amount']),
         overdueAmount: asDouble(json['overdue_amount']),
@@ -346,6 +352,7 @@ class PaymentDetails {
         currentDateTime: asString(json['current_date_time']),
         collectionFee: asDouble(json['collection_fee']),
         penaltyFee: asDouble(json['penalty_fee']),
+        totalDueAmount: asDouble(json['total_due_amount']),
       );
 }
 

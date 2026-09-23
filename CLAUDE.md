@@ -2966,31 +2966,30 @@ screenshot review catches.
 | Block | Rows |
 | --- | --- |
 | `ส่วนค้างชำระตั้งแต่วันที่ …` | ค่างวดค้างชำระ (`overdue_amount`), ค่าติดตามค้างชำระ (`collection_fee`), ค่าเบี้ยปรับค้างชำระ (`penalty_fee`), then **`รวมค้างชำระ`** |
-| `ส่วนที่จะครบกำหนดชำระในวันที่ …` | one row — the remainder, see below |
+| `ส่วนที่จะครบกำหนดชำระในวันที่ …` | one row — `payment_details.current_due_amount` |
 | — | **`ยอดรวมต้องชำระ`** |
 
-⚠ **`ยอดรวมต้องชำระ` is `payment_details.current_due_amount`** — settled
-2026-09-17: *"this field is sum of all to current"*. It is therefore **the same
-field the header card shows as `รวมต้องชำระ`**, deliberately: one screen must
-not carry two numbers for one thing.
+⚠ **Field mapping changed 2026-09-23** (tester round, on request):
 
-⚠ **The upcoming row is `contract_details.installment_amount`** — the
-scheduled instalment (confirmed 2026-09-19: *"ค่างวดค้างชำระ ของหัวข้อที่จะครบ
-กำหนดชำระ จะเป็นค่างวดต่องวด"*).
+| Row | Field now | Was |
+| --- | --- | --- |
+| `รวมค้างชำระ` | `overdue_amount + collection_fee + penalty_fee` (confirmed correct) | same |
+| upcoming `ค่างวดค้างชำระ` | **`payment_details.current_due_amount`** | `contract_details.installment_amount` (09-19 → 09-23); the remainder before that |
+| `ยอดรวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
+| header `รวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
 
-⚠ **It was the remainder** (`total − arrears subtotal`) between 2026-09-17 and
-2026-09-19, which guaranteed the two blocks added up to the total beneath them.
-They are **no longer guaranteed to sum**: each row now names a real field
-rather than one being derived to make the arithmetic close. On the design's own
-figures they agree (`1,060.25 + 1,440.00 = 2,500.25`) and a test pins that, but
-nothing enforces it — a contract where they disagree renders all three as the
-server sent them, which is a data question rather than something to paper over
-in the client.
+`ยอดรวมต้องชำระ` and the header's `รวมต้องชำระ` still read **one** field, so
+the screen cannot carry two numbers for one thing. `penalty_fee` is confirmed
+as `payment_details.penalty_fee` by a live sample (2026-09-23).
 
-⚠ **`contract_details`, not `payment_details`** — the two carry an identically
-named `installment_amount` and this is the scheduled one, the same field the
-header card's `ค่างวดปัจจุบัน` reads. `payment_details.installment_amount` is
-what is due *now*, and they differ on a contract in arrears.
+⚠ **The rows are not forced to sum.** Each names a real field; a contract where
+arrears + upcoming ≠ total renders all three as sent — a data question, not
+something to paper over in the client.
+
+⚠ **The payment screen's ชำระเต็มจำนวน still bills `current_due_amount`**,
+which is now the *upcoming* row here, not this screen's total. If the two
+screens should agree on the total, that option needs `total_due_amount` too —
+not changed, since it moves what the customer is billed.
 
 ⚠ **Each fee row is withheld at zero**, which is how the design's
 *กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row — and how a
