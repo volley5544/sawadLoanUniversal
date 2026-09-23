@@ -457,32 +457,21 @@ class TopupDetail {
   /// site so the card keeps asking the model what to say.
   String get ineligibleReason => contactBranchFallback;
 
-  /// The small line under the guidance on the **can_topup = N** card.
+  /// The small line under the guidance on the **can_topup = N** card,
+  /// rendered as `Code : <value>`.
   ///
-  /// ⚠ **It is `can_topup_msg`**, printed **bare** (set 2026-09-19, from the
-  /// design). There is **no** `can_topup_code` on the wire — that name was a
-  /// guess made when no sample was available, and it never matched anything.
-  ///
-  /// ⚠ The design labelled this line `Code : xxx`; **that label is gone**. The
-  /// value is a sentence — `"ระบบขัดข้อง กรุณาติดต่อสาขา"` — and prefixing a
-  /// sentence with `Code :` reads as a malformed error code. The label was
-  /// drawn for a field that turned out not to exist.
-  ///
-  /// ⚠ A live refusal carries *three* related fields, and only this one is
-  /// shown:
+  /// ⚠ **It is `can_topup_reason_code`** (changed 2026-09-23, tester round,
+  /// matching the design's `Code : xxx`). Between 2026-09-19 and then it was
+  /// `can_topup_msg` printed bare; that sentence is not shown on the card any
+  /// more — it still feeds the amount screen's note via `canTopupMsg`.
   ///
   /// ```jsonc
   /// "can_topup_type":        "ไม่เข้าเงื่อนไข",
-  /// "can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",   // ← this line
-  /// "can_topup_reason_code": "contract_not_found_in_vloan",
+  /// "can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",
+  /// "can_topup_reason_code": "contract_not_found_in_vloan",  // ← this line
   /// ```
   ///
-  /// `can_topup_reason_code` looks more like an error code and is deliberately
-  /// **not** used: the design asks for what the customer and the branch can act
-  /// on, and an internal reason slug is neither. Nothing reads it today.
-  ///
-  /// Empty renders **no line at all**, rather than a blank line under the
-  /// guidance.
+  /// Empty renders **no line at all**, rather than a bare `Code :`.
   final String ineligibleDetail;
   final int maxTransferAmount;
 
@@ -508,7 +497,7 @@ class TopupDetail {
         interestYield: asDouble(json['yield']),
         interestPaidFlag: asString(json['interest_paid_flag']),
         canTopupMsg: asString(json['can_topup_msg']),
-        ineligibleDetail: asString(json['can_topup_msg']),
+        ineligibleDetail: asString(json['can_topup_reason_code']),
         maxTransferAmount: asInt(json['max_transfer_amount']),
         products: asMapList(json['products'])
             .map(LoanProduct.fromJson)

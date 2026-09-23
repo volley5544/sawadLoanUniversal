@@ -784,11 +784,9 @@ class _TopupContractCard extends StatelessWidget {
   /// layout exists to avoid. There is no button, on purpose — the action is a
   /// phone call.
   Widget _ineligible() {
-    // ⚠ Three parts (set 2026-09-19, from the design): the refusal, the
-    // standing guidance, and `can_topup_msg` on the small line below. The
-    // second line is **not** the API's message any more — it carried
-    // `can_topup_msg` for five days, and with that value moved to the code
-    // line the card would otherwise print it twice.
+    // ⚠ Three parts (from the design): the refusal, the standing guidance,
+    // and `Code : can_topup_reason_code` on the small line below (2026-09-23;
+    // it was `can_topup_msg` bare from 2026-09-19).
     final detail = contract.topupDetail.ineligibleDetail;
     final message = 'ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้\n'
         '${TopupDetail.contactBranchFallback}';
@@ -829,19 +827,13 @@ class _TopupContractCard extends StatelessWidget {
                   ),
                 ],
               ),
-              // ⚠ **No `Code :` label** (2026-09-19): the value is
-              // `can_topup_msg`, a sentence — "ระบบขัดข้อง กรุณาติดต่อสาขา" —
-              // and prefixing a sentence with `Code :` reads as a malformed
-              // error code. The design's own label went with the field name
-              // it was drawn for, which turned out not to exist.
-              //
-              // Withheld entirely when the API sends nothing, rather than
-              // leaving an empty line under the guidance.
+              // Withheld entirely when the API sends no reason code, rather
+              // than leaving a bare `Code :` under the guidance.
               if (detail.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    detail,
+                    'Code : $detail',
                     textAlign: TextAlign.right,
                     style: GoogleFonts.notoSansThai(
                         fontSize: 12, color: LoanRegisterStyles.label),

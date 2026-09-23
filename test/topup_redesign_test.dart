@@ -88,45 +88,32 @@ void main() {
     });
   });
 
-  group('TopupDetail.ineligibleDetail — the line under the guidance', () {
+  group('TopupDetail.ineligibleDetail — the Code : line', () {
     TopupDetail parse(Map<String, dynamic> json) => TopupDetail.fromJson(json);
 
-    // ⚠ **It is `can_topup_msg`, printed bare** (2026-09-19). There is no
-    // `can_topup_code` on the wire — that name was a guess made before any
-    // sample was available, and it matched nothing. The design's `Code :`
-    // label went with it: the value is a sentence, and `Code : <sentence>`
-    // reads as a malformed error code.
-    test('reads can_topup_msg', () {
-      expect(
-        parse({'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา'}).ineligibleDetail,
-        'ระบบขัดข้อง กรุณาติดต่อสาขา',
-      );
+    // ⚠ **It is `can_topup_reason_code`** since 2026-09-23 (it was
+    // `can_topup_msg` bare from 2026-09-19). The card prefixes `Code : `.
+    test('reads can_topup_reason_code, not can_topup_msg', () {
+      final d = parse({
+        'can_topup': 'N',
+        'can_topup_type': 'ไม่เข้าเงื่อนไข',
+        'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา',
+        'can_topup_reason_code': 'contract_not_found_in_vloan',
+      });
+      expect(d.ineligibleDetail, 'contract_not_found_in_vloan');
+      // can_topup_msg still reaches the amount screen's note.
+      expect(d.canTopupMsg, 'ระบบขัดข้อง กรุณาติดต่อสาขา');
     });
 
-    // Verified against a live refusal: the slug lives on its own field and is
-    // deliberately not shown — the design asks for what a customer and a
-    // branch can act on, and an internal reason slug is neither.
-    test('ignores can_topup_reason_code', () {
-      expect(
-        parse({
-          'can_topup': 'N',
-          'can_topup_type': 'ไม่เข้าเงื่อนไข',
-          'can_topup_msg': 'ระบบขัดข้อง กรุณาติดต่อสาขา',
-          'can_topup_reason_code': 'contract_not_found_in_vloan',
-        }).ineligibleDetail,
-        'ระบบขัดข้อง กรุณาติดต่อสาขา',
-      );
-    });
-
-    test('the old guessed key no longer grants anything', () {
+    test('the old guessed keys grant nothing', () {
       expect(parse({'can_topup_code': 'E204'}).ineligibleDetail, isEmpty);
       expect(parse({'code': 'E204'}).ineligibleDetail, isEmpty);
     });
 
-    // Empty draws no line at all — a `Code :` with nothing after it tells a
-    // branch less than no line.
+    // Empty draws no line at all — a bare `Code :` tells a branch nothing.
     test('absent renders empty, so the card draws no line at all', () {
-      expect(parse({'can_topup': 'N'}).ineligibleDetail, isEmpty);
+      expect(parse({'can_topup': 'N', 'can_topup_msg': 'x'}).ineligibleDetail,
+          isEmpty);
     });
   });
 

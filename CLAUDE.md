@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 510 tests (models, payloads, headers, NDID terms +
+flutter test               # 509 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1991,44 +1991,29 @@ the band is the promise, the rows are the arithmetic behind it.
 The card shows only the combined limit (PDF pp.10/11 differ solely in the
 figures); the amount screen breaks it back out.
 
-**The refusal card's three parts** (settled 2026-09-19 against the design and a
-live `can_topup: "N"` payload):
+**The refusal card's three parts** (changed 2026-09-23, tester round):
 
 | Line | Value |
 | --- | --- |
 | 1 | `ขออภัย รายการนี้ยังไม่สามารถทำผ่านแอปได้` — fixed |
 | 2 | `กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652` — fixed (`TopupDetail.contactBranchFallback`) |
-| 3 (small, right) | **`can_topup_msg`**, bare (`TopupDetail.ineligibleDetail`) |
-
-⚠ **There is no `Code :` label.** The design drew one, but the value is a
-sentence — `"ระบบขัดข้อง กรุณาติดต่อสาขา"` — and `Code : <sentence>` reads as a
-malformed error code. The label was drawn for `can_topup_code`, a field that
-turned out not to exist.
-
-⚠ **Line 2 carried `can_topup_msg` between 2026-09-14 and 2026-09-19** and no
-longer does. With that value on line 3 the card would otherwise print it
-twice — and the live sample *is* the guidance.
-
-⚠ **There is no `can_topup_code` on the wire.** That name was a guess made
-before any sample existed and matched nothing; `TopupDetail.canTopupCode` and
-its bare-`code` fallback are deleted.
-
-⚠ **A live refusal carries three related fields and only one is shown:**
+| 3 (small, right) | **`Code : ` + `can_topup_reason_code`** (`TopupDetail.ineligibleDetail`) |
 
 ```jsonc
 "can_topup_type":        "ไม่เข้าเงื่อนไข",              // matches the pill, still a literal
-"can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",   // ← the small third line
-"can_topup_reason_code": "contract_not_found_in_vloan",  // internal slug, unused
+"can_topup_msg":         "ระบบขัดข้อง กรุณาติดต่อสาขา",   // amount screen's note only
+"can_topup_reason_code": "contract_not_found_in_vloan",  // ← Code : line
 ```
 
-`can_topup_reason_code` *looks* more like an error code and is deliberately not
-used — the design asks for what a customer and a branch can act on, and an
-internal slug is neither. Nothing reads it today. `can_topup_type` matches the
-`ไม่เข้าเงื่อนไข` pill exactly, which is still a literal; reading it from the
-API is a one-line change if the wording ever moves.
+⚠ **Line 3 was `can_topup_msg`, bare, from 2026-09-19 to 2026-09-23** — the
+`Code :` label had been dropped because that value is a sentence. The tester
+round asked for the design's `Code : xxx` with the reason slug instead, so the
+label is back and `can_topup_msg` is no longer on the card (it still feeds the
+amount screen's note through `canTopupMsg`). Line 2 carried `can_topup_msg`
+between 2026-09-14 and 2026-09-19. There is **no `can_topup_code`** on the wire.
 
-⚠ **An empty `can_topup_msg` draws no third line at all**, rather than a blank
-line under the guidance.
+⚠ **An empty `can_topup_reason_code` draws no third line at all**, never a
+bare `Code :`.
 
 ⚠ **The card's title is เติมวงเงิน**, not สินเชื่อเพิ่ม (changed 2026-09-12).
 It matches the button the customer pressed to get here — the srisawad app's
@@ -2258,11 +2243,10 @@ depth (and because it is the source's); the lead branch itself is still live
 through its other two conditions, a `can_topup` that flips to non-`Y` after
 the detail/recal call and a payout over `max_transfer_amount`.
 
-⚠ **The refusal's second line is only `can_topup_msg` when `can_topup` is what
-refused** (`topupRefusalReason`). On a loan-type refusal the contract is
-`can_topup == 'Y'`, so any message it carries describes something else — the
-same reason the amount screen withholds that message above a working button.
-That case falls back to กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652.
+⚠ **The refusal's `Code :` line shows `can_topup_reason_code` whenever the
+contract carries one**, including a loan-type refusal where `can_topup` is
+`Y` — a reason slug there may describe something else. Line 2 is always the
+fixed guidance (`topupRefusalReason` was removed 2026-09-19).
 
 ⚠ **`_start` re-applies the identical rule** before building a flow, so a
 button that should never have rendered still cannot open one.
@@ -2281,7 +2265,7 @@ different furniture.
 | Status pill | ยังไม่ได้ทำรายการเติมวงเงิน | `request_status`, or มีคำขออยู่ระหว่างดำเนินการ when blank, + ⏱ | ไม่เข้าเงื่อนไข + ⏱ |
 | Figures | วงเงินสินเชื่อใหม่สูงสุด, −เงินต้น, −อากรแสตมป์ | **ยอดที่ขอไว้** only | **วงเงินสินเชื่อเดิม** (`credit_limit`) only |
 | Payout strip + `*เมื่อชำระ…` | ✅ | — | — |
-| the small third line | — | — | `can_topup_msg`, only when non-empty |
+| the small third line | — | — | `Code : can_topup_reason_code`, only when non-empty |
 | Button | **เติมวงเงิน** | **ดูสถานะคำขอ** | **none** — the action is a phone call |
 
 Separately, the **สิทธิพิเศษเฉพาะคุณ** grid in the card body
