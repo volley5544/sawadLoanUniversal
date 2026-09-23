@@ -10,6 +10,7 @@ import '../p_loan/application/components/p_loan_components.dart';
 import '../p_loan/application/models/loan_contract.dart';
 import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../router/app_router.dart';
+import '../services/app_config_api.dart';
 import '../services/external_url.dart';
 import '../services/native_bridge.dart';
 import '../services/srisawad_api.dart';
@@ -60,6 +61,13 @@ class TopupCardPage extends StatefulWidget {
   /// True when the native host opened this route directly, so back has nothing
   /// beneath it and must close the WebView instead.
   final bool fromHost;
+
+  /// Built-in fallbacks for the no-contract state; the live wording is
+  /// `topup_empty_title` / `topup_empty_message` in `public_config`.
+  static const String emptyTitle = '“ยังไม่เข้าเงื่อนไข”';
+  static const String emptyMessage =
+      'ขอให้สอบถามข้อมูลหรือขอคำปรึกษาจากสาขาเจ้าของบัญชี '
+      'หรือ แอดLine @srisawad หรือ โทร 1652';
 
   /// Index of [contractNo] in [contracts], or 0 when it isn't there.
   ///
@@ -131,6 +139,9 @@ class _TopupCardPageState extends State<TopupCardPage> {
           TopupApi.listContracts(hashThaiId: hash, token: token);
       final customer = await profileRequest;
       final contracts = await contractsRequest;
+      // The no-contract wording is config-driven; make sure it has landed
+      // before the empty state renders. Memoised and never throws.
+      await AppConfigApi.ensureLoaded();
       if (!mounted) return;
       final selectable =
           contracts.where((c) => c.isSelectable).toList(growable: false);
@@ -316,15 +327,35 @@ class _TopupCardPageState extends State<TopupCardPage> {
     if (contracts.isEmpty) {
       // The conditions still belong here: they are often *why* there is
       // nothing to show (pay on time, keep the credit record).
+      //
+      // Both lines come from `public_config` (`topup_empty_title` /
+      // `topup_empty_message`, 2026-09-23) so the wording can change without
+      // a release; the built-in text is the degrade-to — prod has no config
+      // document yet (Outstanding #35).
+      final config = AppState().appConfig;
       return ListView(
         children: [
           const TopupConditionsCard(),
           Padding(
-            padding: const EdgeInsets.all(32),
-            child: Text(
-              'ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้',
-              textAlign: TextAlign.center,
-              style: TopupTheme.body(size: 15, color: LoanRegisterStyles.label),
+            padding: const EdgeInsets.fromLTRB(32, 56, 32, 32),
+            child: Column(
+              children: [
+                Text(
+                  config?.topupEmptyTitle ?? TopupCardPage.emptyTitle,
+                  textAlign: TextAlign.center,
+                  style: TopupTheme.body(
+                      size: 15, color: LoanRegisterStyles.label),
+                ),
+                const SizedBox(height: 40),
+                Text(
+                  config?.topupEmptyMessage ?? TopupCardPage.emptyMessage,
+                  textAlign: TextAlign.center,
+                  // Darker than the title above it, as drawn — the one text
+                  // colour on this page outside TopupTheme's four.
+                  style: TopupTheme.heading(
+                      size: 22, color: const Color(0xFF666666)),
+                ),
+              ],
             ),
           ),
         ],

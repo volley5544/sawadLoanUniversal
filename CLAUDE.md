@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 509 tests (models, payloads, headers, NDID terms +
+flutter test               # 510 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1513,6 +1513,8 @@ endpoints are editable in Firestore with no rebuild, and both have moved. As of
 | `comcode_config` | *(map)* | the loan detail screen's two visibility rules — see **Loan detail** |
 | `is_show_payButton` | `true` | whether the loan detail screen offers **ชำระเงิน**. ⚠ Defaults to false when absent |
 
+| `topup_empty_title` / `topup_empty_message` | `“ยังไม่เข้าเงื่อนไข”` / `ขอให้สอบถามข้อมูล…โทร 1652` | the top-up card's no-contract state (2026-09-23; seed with `tools/firestore-import/seed-topup-empty-text.mjs`). Built-in text is the fallback |
+
 | `ndid_as_id_uat` | `A18AC373-9CCB-47B3-A285-9ADBA29AFEFC` | uat builds — pins the AS, see **NDID API client** |
 
 Every key above takes a `_uat` variant; `topup_product_icons_uat`,
@@ -2218,8 +2220,13 @@ customer's own pending request is the more useful answer.
 
 ⚠ **Before any of that, `_load()` filters to `isSelectable`** —
 `account_status == 'A'` and `account_type != 'L'`. A contract failing either
-gets no card at all, and an empty result is the notice
-ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้.
+gets no card at all, and an empty result shows two lines under the conditions
+panel — `“ยังไม่เข้าเงื่อนไข”` then `ขอให้สอบถามข้อมูล…หรือ แอดLine @srisawad
+หรือ โทร 1652` (2026-09-23; it was ไม่พบสัญญาที่สามารถขอสินเชื่อเพิ่มได้). Both
+come from `public_config` (`topup_empty_title` / `topup_empty_message`, `_uat`
+variants honoured), with `TopupCardPage.emptyTitle` / `emptyMessage` as the
+degrade-to. ⚠ **prod's document does not exist yet** (#35), so prod renders the
+built-in text; seed it there with `--project=sawad-loan-universal-prod`.
 
 **Eligibility is two conditions, not one** (`canTopupInApp`, instructed
 2026-09-17): `contract_details.loan_type_code` is **`M` or `C`** *and*

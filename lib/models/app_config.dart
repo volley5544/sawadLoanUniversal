@@ -28,7 +28,15 @@ class AppConfig {
     String? ndidAsNameUat,
     String? topupProductIconDefault,
     String? topupProductIconDefaultUat,
-  })  : _ndidRequestType = ndidRequestType,
+    String? topupEmptyTitle,
+    String? topupEmptyTitleUat,
+    String? topupEmptyMessage,
+    String? topupEmptyMessageUat,
+  })  : _topupEmptyTitle = topupEmptyTitle,
+        _topupEmptyTitleUat = topupEmptyTitleUat,
+        _topupEmptyMessage = topupEmptyMessage,
+        _topupEmptyMessageUat = topupEmptyMessageUat,
+        _ndidRequestType = ndidRequestType,
         _ndidRequestTypeUat = ndidRequestTypeUat,
         _ndidAsId = ndidAsId,
         _ndidAsIdUat = ndidAsIdUat,
@@ -196,6 +204,29 @@ class AppConfig {
     return topupProductIconDefault;
   }
 
+  /// `topup_empty_title` / `topup_empty_message` — the two lines the top-up
+  /// card shows when the customer has **no contract to top up** (2026-09-23).
+  /// Config-driven so the wording can change without a release; null falls
+  /// back to the built-in text on `TopupCardPage`.
+  String? get topupEmptyTitle =>
+      _pickEnv(_topupEmptyTitle, _topupEmptyTitleUat);
+  String? get topupEmptyMessage =>
+      _pickEnv(_topupEmptyMessage, _topupEmptyMessageUat);
+
+  static String? _pickEnv(String? bare, String? uat) {
+    if (!AppEnvironment.current.isProd) {
+      final u = uat?.trim();
+      if (u != null && u.isNotEmpty) return u;
+    }
+    final raw = bare?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  final String? _topupEmptyTitle;
+  final String? _topupEmptyTitleUat;
+  final String? _topupEmptyMessage;
+  final String? _topupEmptyMessageUat;
+
   String? get ndidRequestType {
     if (!AppEnvironment.current.isProd) {
       final uat = _ndidRequestTypeUat?.trim();
@@ -272,6 +303,10 @@ class AppConfig {
           decoded['topup_product_icon_default']?.toString(),
       topupProductIconDefaultUat:
           decoded['topup_product_icon_default_uat']?.toString(),
+      topupEmptyTitle: decoded['topup_empty_title']?.toString(),
+      topupEmptyTitleUat: decoded['topup_empty_title_uat']?.toString(),
+      topupEmptyMessage: decoded['topup_empty_message']?.toString(),
+      topupEmptyMessageUat: decoded['topup_empty_message_uat']?.toString(),
       isShowPayButton: decoded['is_show_payButton'] == true ||
           decoded['is_show_pay_button'] == true,
       comcodeConfig: ComcodeConfig.fromDecoded(

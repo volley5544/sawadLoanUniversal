@@ -114,6 +114,18 @@ void main() {
     });
   });
 
+  group('top-up no-contract wording', () {
+    test('reads topup_empty_title / _message, blank reads as unset', () {
+      final c = AppConfig.fromDecoded({
+        'topup_empty_title': ' “ยังไม่เข้าเงื่อนไข” ',
+        'topup_empty_message': '',
+      });
+      expect(c.topupEmptyTitle, '“ยังไม่เข้าเงื่อนไข”');
+      expect(c.topupEmptyMessage, isNull);
+      expect(const AppConfig().topupEmptyTitle, isNull);
+    });
+  });
+
   group('NDID request type', () {
     test('reads ndid_request_type from the document top level', () {
       // Top level, not inside api_url — it is not a URL.
