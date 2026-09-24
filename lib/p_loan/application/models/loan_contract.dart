@@ -334,6 +334,16 @@ class PaymentDetails {
   /// (2026-09-23, tester round; both were `current_due_amount` before).
   final double totalDueAmount;
 
+  /// **The total the loan detail + loan payment screens quote** — header
+  /// `รวมต้องชำระ`, `ยอดรวมต้องชำระ`, and the ชำระเต็มจำนวน amount.
+  ///
+  /// ⚠ **Interim (2026-09-24):** the backend does not send [totalDueAmount]
+  /// yet, so this is `overdue_amount + collection_fee + penalty_fee +
+  /// current_due_amount`. When the field lands, return [totalDueAmount]
+  /// here — this is the single seam, nothing else changes.
+  double get payableTotal =>
+      overdueAmount + collectionFee + penaltyFee + currentDueAmount;
+
   factory PaymentDetails.fromJson(Map<String, dynamic> json) => PaymentDetails(
         installmentAmount: asInt(json['installment_amount']),
         overdueAmount: asDouble(json['overdue_amount']),

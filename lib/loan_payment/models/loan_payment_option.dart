@@ -39,10 +39,9 @@ class LoanPaymentSummary {
   /// ส่วนที่จะครบกำหนดชำระ row.
   double get currentDueAmount => contract.paymentDetails.currentDueAmount;
 
-  /// `payment_details.total_due_amount` — everything owed now. The
-  /// ชำระเต็มจำนวน amount since 2026-09-23. ⚠ Mapped ahead of the backend:
-  /// until the field lands it is 0, which disables that option.
-  double get totalDueAmount => contract.paymentDetails.totalDueAmount;
+  /// Everything owed now — the ชำระเต็มจำนวน amount. [PaymentDetails.payableTotal],
+  /// an interim sum until the backend sends `total_due_amount` (2026-09-24).
+  double get totalDueAmount => contract.paymentDetails.payableTotal;
 
   /// `payment_details.overdue_amount` — arrears.
   double get overdueAmount => contract.paymentDetails.overdueAmount;
@@ -71,8 +70,9 @@ class LoanPaymentSummary {
 
   // ── per-option amounts ──────────────────────────────────────────────
 
-  /// ชำระเต็มจำนวน: **`payment_details.total_due_amount`** (2026-09-23,
-  /// tester round).
+  /// ชำระเต็มจำนวน: **[PaymentDetails.payableTotal]** — interim
+  /// `overdue + collection + penalty + current_due_amount` until the backend
+  /// sends `total_due_amount` (2026-09-24).
   ///
   /// It is the **same field** the loan detail screen shows as `รวมต้องชำระ`
   /// and `ยอดรวมต้องชำระ`. Those two screens are one tap apart over one

@@ -93,7 +93,7 @@ void main() {
       );
       // …and on any installment where there is nothing due.
       expect(
-        LoanDetailSummary(_contract(totalDueAmount: 0)).showsTotalDueRow,
+        LoanDetailSummary(_contract(currentDueAmount: 0)).showsTotalDueRow,
         isFalse,
       );
     });
@@ -250,8 +250,9 @@ void main() {
               totalDueAmount: 12000));
       expect(summary.currentInstallmentAmount, 3250);
       expect(summary.currentInstallmentAmountLabel, '3,250.00');
-      // รวมต้องชำระ is total_due_amount since 2026-09-23.
-      expect(summary.totalDueLabel, '12,000.00');
+      // รวมต้องชำระ is the interim sum (2026-09-24): no arrears here, so it
+      // is current_due_amount — total_due_amount is ignored until wired.
+      expect(summary.totalDueLabel, '9,750.00');
       expect(
         LoanDetailSummary(_contract(contractInstallmentAmount: 0))
             .showsCurrentInstallmentAmountRow,
@@ -490,20 +491,16 @@ void _totalPayableTests() {
       expect(s.totalPayableAmount, 0);
     });
 
-    // 2026-09-23: the upcoming row is current_due_amount, the total is
-    // total_due_amount — neither is contract_details.installment_amount.
-    test('the rows read current_due_amount and total_due_amount', () {
-      final s = LoanDetailSummary(_payable());
-      expect(s.upcomingDueAmount, isNot(7777));
-      expect(s.totalPayableAmount, isNot(7777));
-      expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount);
-    });
-
-    test('a contract where they disagree still renders all three', () {
+    // ⚠ Interim (2026-09-24): the total is overdue + collection + penalty +
+    // current_due_amount. total_due_amount is parsed but **not** read until
+    // the backend sends it — PaymentDetails.payableTotal is the seam.
+    test('the total is the interim sum, and ignores total_due_amount', () {
       final s = LoanDetailSummary(_payable(totalDueAmount: 9999));
       expect(s.overdueSubtotal, 1060.25);
       expect(s.upcomingDueAmount, 1440);
-      expect(s.totalPayableAmount, 9999);
+      expect(s.totalPayableAmount, 2500.25);
+      expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount);
+      expect(s.upcomingDueAmount, isNot(7777));
     });
 
     // One screen must not carry two numbers for one thing: the section's grand

@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 510 tests (models, payloads, headers, NDID terms +
+flutter test               # 508 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2975,14 +2975,18 @@ screenshot review catches.
 | --- | --- | --- |
 | `รวมค้างชำระ` | `overdue_amount + collection_fee + penalty_fee` (confirmed correct) | same |
 | upcoming `ค่างวดค้างชำระ` | **`payment_details.current_due_amount`** | `contract_details.installment_amount` (09-19 → 09-23); the remainder before that |
-| `ยอดรวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
-| header `รวมต้องชำระ` | **`payment_details.total_due_amount`** | `current_due_amount` |
+| `ยอดรวมต้องชำระ` | **`payableTotal`** (interim sum, see below; target `total_due_amount`) | `current_due_amount` |
+| header `รวมต้องชำระ` | **`payableTotal`** (same) | `current_due_amount` |
 
-⚠ **Mapped ahead of the backend** — `total_due_amount` is not on `/loan/list`
-yet (2026-09-23; backend adding it "soon"). Until it lands it parses as 0, so
-**ยอดรวมต้องชำระ shows `0.00` and the header's รวมต้องชำระ row is withheld**.
-That is expected, not a bug — check the response for the field before chasing
-it.
+⚠⚠ **Interim until the backend sends `total_due_amount`** (2026-09-24, on
+request — *"I will tell you to show total_due_amount when backend sends
+it"*): every "total" row — header `รวมต้องชำระ`, `ยอดรวมต้องชำระ`, and the
+payment screen's ชำระเต็มจำนวน — reads **`PaymentDetails.payableTotal`** =
+`overdue_amount + collection_fee + penalty_fee + current_due_amount`.
+`total_due_amount` is parsed onto `PaymentDetails.totalDueAmount` but read by
+nothing. **When the user says to switch, change `payableTotal` to return
+`totalDueAmount`** — that one getter is the seam, and the tests pinning
+"ignores total_due_amount" flip with it.
 
 `ยอดรวมต้องชำระ` and the header's `รวมต้องชำระ` still read **one** field, so
 the screen cannot carry two numbers for one thing. `penalty_fee` is confirmed
@@ -2992,10 +2996,9 @@ as `payment_details.penalty_fee` by a live sample (2026-09-23).
 arrears + upcoming ≠ total renders all three as sent — a data question, not
 something to paper over in the client.
 
-⚠ **The payment screen moved with it** (same day, on request): ชำระเต็มจำนวน
-bills `total_due_amount` and its ค่างวดปัจจุบัน row shows `current_due_amount`,
-so both screens quote one total and one upcoming figure. ⚠ Until the backend
-sends `total_due_amount`, **ชำระเต็มจำนวน is 0.00 and disabled**.
+⚠ **The payment screen moved with it** (on request): ชำระเต็มจำนวน bills
+`payableTotal` and its ค่างวดปัจจุบัน row shows `current_due_amount`, so both
+screens quote one total and one upcoming figure.
 
 ⚠ **Each fee row is withheld at zero**, which is how the design's
 *กรณี…แต่ไม่มีค่าธรรมเนียม* case is an arrears block of one row — and how a
@@ -3346,7 +3349,7 @@ that make it safe:
 
 | Option | Amount |
 | --- | --- |
-| **ชำระเต็มจำนวน** | `total_due_amount` (since 2026-09-23) |
+| **ชำระเต็มจำนวน** | `PaymentDetails.payableTotal` — interim `overdue + collection + penalty + current_due_amount` (2026-09-24) |
 | **ยอดค้างชำระ** | `overdue_amount + collection_fee + penalty_fee` |
 | **กำหนดยอดชำระเอง** | what the customer types |
 
@@ -3355,8 +3358,8 @@ each amount inline at **four** call sites — the radio's label, the option's ow
 detail block, the button's disabled test and the push to the QR page. They are
 gathered onto `LoanPaymentSummary` so those four cannot disagree.
 
-⚠⚠ **ชำระเต็มจำนวน changed again on 2026-09-23: it bills
-`payment_details.total_due_amount`** (tester round), the field the loan detail
+⚠⚠ **ชำระเต็มจำนวน changed again on 2026-09-23/24: it bills
+`PaymentDetails.payableTotal`** (interim sum until `total_due_amount` ships), the field the loan detail
 screen now shows as รวมต้องชำระ / ยอดรวมต้องชำระ. The ค่างวดปัจจุบัน row reads
 `current_due_amount`. The 2026-09-17 notes below are history.
 

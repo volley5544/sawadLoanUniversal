@@ -50,29 +50,23 @@ void main() {
       collectionFee: 50,
     ));
 
-    // ⚠ **Changed 2026-09-23, and it is a billing change.** ชำระเต็มจำนวน
-    // bills `total_due_amount` — the field the loan detail screen shows as
-    // รวมต้องชำระ / ยอดรวมต้องชำระ one tap away; the two must not disagree.
-    // It was `current_due_amount` alone from 2026-09-17.
-    test('ชำระเต็มจำนวน is total_due_amount, not current_due_amount', () {
-      final s = LoanPaymentSummary(
-          _contract(currentDueAmount: 1440, totalDueAmount: 2500.25));
+    // ⚠ **A billing change (2026-09-24, interim).** ชำระเต็มจำนวน bills
+    // overdue + collection + penalty + current_due_amount — the same figure
+    // the loan detail screen shows as รวมต้องชำระ one tap away.
+    // total_due_amount is parsed but not read until the backend sends it.
+    test('ชำระเต็มจำนวน is the interim sum, ignoring total_due_amount', () {
+      final s = LoanPaymentSummary(_contract(
+        currentDueAmount: 1440,
+        overdueAmount: 1000,
+        collectionFee: 50,
+        penaltyFee: 10.25,
+        totalDueAmount: 9999,
+      ));
       expect(s.fullAmount, 2500.25);
       expect(s.amountFor(LoanPaymentOption.full, ''), 2500.25);
       // ค่างวดปัจจุบัน reads current_due_amount, like loan detail's
       // ส่วนที่จะครบกำหนดชำระ row.
       expect(s.currentDueAmount, 1440);
-    });
-
-    // Mapped ahead of the backend: absent, the option has nothing to bill.
-    test('no total_due_amount disables ชำระเต็มจำนวน', () {
-      final c = LoanContract.fromJson({
-        'contract_no': 'X',
-        'payment_details': {'current_due_amount': 1440},
-      });
-      final s = LoanPaymentSummary(c);
-      expect(s.fullAmount, 0);
-      expect(s.isDisabled(LoanPaymentOption.full, ''), isTrue);
     });
 
     test('ยอดค้างชำระ is the arrears plus both fees', () {
@@ -109,12 +103,12 @@ void main() {
       expect(summary.amountFor(LoanPaymentOption.custom, ''), 0);
     });
 
-    // ⚠ The fees ride on the **arrears** option only; ชำระเต็มจำนวน bills the
-    // server's total as sent and never adds them a second time.
-    test('the fees ride on the arrears option, not on ชำระเต็มจำนวน', () {
+    // Interim sum: the fees are in both options — ยอดค้างชำระ on its own,
+    // and ชำระเต็มจำนวน on top of current_due_amount.
+    test('the fees ride on both fixed options', () {
       final noArrears = LoanPaymentSummary(_contract(
           currentDueAmount: 4585, collectionFee: 50, penaltyFee: 10));
-      expect(noArrears.fullAmount, 4585);
+      expect(noArrears.fullAmount, 4645);
       expect(noArrears.overdueTotal, 60);
     });
 
@@ -245,7 +239,7 @@ void main() {
       expect(summary.isDisabled(LoanPaymentOption.overdue, ''), isTrue,
           reason: 'no arrears and no fee — there is no bill to raise');
       expect(summary.isDisabled(LoanPaymentOption.full, ''), isFalse);
-      final paidUp = LoanPaymentSummary(_contract(totalDueAmount: 0));
+      final paidUp = LoanPaymentSummary(_contract(currentDueAmount: 0));
       expect(paidUp.isDisabled(LoanPaymentOption.full, ''), isTrue);
     });
 

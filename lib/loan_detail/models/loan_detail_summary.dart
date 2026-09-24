@@ -143,9 +143,9 @@ class LoanDetailSummary {
 
   // ── รวมต้องชำระ ─────────────────────────────────────────────────────
 
-  /// `payment_details.total_due_amount` (2026-09-23, tester round; it was
-  /// `current_due_amount`).
-  double get totalDueAmount => contract.paymentDetails.totalDueAmount;
+  /// [PaymentDetails.payableTotal] — interim sum until the backend sends
+  /// `total_due_amount` (2026-09-24).
+  double get totalDueAmount => contract.paymentDetails.payableTotal;
 
   /// Withheld on the last installment: there is nothing left to total, and the
   /// note below the card explains why the figure above it is not a payoff.
@@ -233,7 +233,7 @@ class LoanDetailSummary {
 
   /// `ยอดรวมต้องชำระ` — **the same figure the header card shows as
   /// `รวมต้องชำระ`**, deliberately: one screen must not carry two numbers for
-  /// one thing. Both read `payment_details.total_due_amount`.
+  /// one thing. Both read [PaymentDetails.payableTotal].
   double get totalPayableAmount => totalDueAmount;
 
   /// ⚠ **Withheld when arrears are the only thing on the list.** In that shape
