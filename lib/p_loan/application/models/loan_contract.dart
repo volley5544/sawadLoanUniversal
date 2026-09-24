@@ -43,6 +43,7 @@ class LoanContract {
     this.requestStatus = '',
     this.requestStatusCode = '',
     this.carDetails = const CarDetails(),
+    this.landDetails = const LandDetails(),
     this.topupSpecialFlag = false,
     this.rawJson = const {},
   });
@@ -80,6 +81,10 @@ class LoanContract {
   final String requestStatus;
   final String requestStatusCode;
   final CarDetails carDetails;
+
+  /// `land_details` — the land-title collateral, the land counterpart of
+  /// [carDetails]. Parsed only (added 2026-09-24); nothing renders it yet.
+  final LandDetails landDetails;
 
   /// `topup_special_flag` — the customer has been granted `topup_specials` on
   /// top of this contract's ordinary limit.
@@ -152,6 +157,7 @@ class LoanContract {
         requestStatus: asString(json['request_status']),
         requestStatusCode: asString(json['request_status_code']),
         carDetails: CarDetails.fromJson(asMap(json['car_details'])),
+        landDetails: LandDetails.fromJson(asMap(json['land_details'])),
         topupSpecialFlag: json['topup_special_flag'] == true,
         rawJson: json,
       );
@@ -337,12 +343,11 @@ class PaymentDetails {
   /// **The total the loan detail + loan payment screens quote** — header
   /// `รวมต้องชำระ`, `ยอดรวมต้องชำระ`, and the ชำระเต็มจำนวน amount.
   ///
-  /// ⚠ **Interim (2026-09-24):** the backend does not send [totalDueAmount]
-  /// yet, so this is `overdue_amount + collection_fee + penalty_fee +
-  /// current_due_amount`. When the field lands, return [totalDueAmount]
-  /// here — this is the single seam, nothing else changes.
-  double get payableTotal =>
-      overdueAmount + collectionFee + penaltyFee + currentDueAmount;
+  /// [totalDueAmount] since 2026-09-24, when the backend started sending it.
+  /// Between 2026-09-23 and then it was an interim sum, `overdue_amount +
+  /// collection_fee + penalty_fee + current_due_amount`. Kept as the single
+  /// seam both screens read.
+  double get payableTotal => totalDueAmount;
 
   factory PaymentDetails.fromJson(Map<String, dynamic> json) => PaymentDetails(
         installmentAmount: asInt(json['installment_amount']),
@@ -586,6 +591,42 @@ class Insurance {
 
 /// `car_details` — vehicle collateral. Two keys are mixed-case on the wire
 /// (`car_chassisNo`, `car_engineNo`); that is not a typo on our side.
+/// `land_details` — the land-title collateral (โฉนด). Added 2026-09-24,
+/// **parsed only**: no screen reads it yet.
+class LandDetails {
+  const LandDetails({
+    this.deedNumber = '',
+    this.sheetNumber = '',
+    this.parcelNumber = '',
+    this.dealingFileNumber = '',
+  });
+
+  /// `deed_number` — เลขที่โฉนด.
+  final String deedNumber;
+
+  /// `sheet_number` — ระวาง.
+  final String sheetNumber;
+
+  /// `parcel_number` — เลขที่ดิน.
+  final String parcelNumber;
+
+  /// `dealing_file_number` — หน้าสำรวจ.
+  final String dealingFileNumber;
+
+  bool get isEmpty =>
+      deedNumber.isEmpty &&
+      sheetNumber.isEmpty &&
+      parcelNumber.isEmpty &&
+      dealingFileNumber.isEmpty;
+
+  factory LandDetails.fromJson(Map<String, dynamic> json) => LandDetails(
+        deedNumber: asString(json['deed_number']),
+        sheetNumber: asString(json['sheet_number']),
+        parcelNumber: asString(json['parcel_number']),
+        dealingFileNumber: asString(json['dealing_file_number']),
+      );
+}
+
 class CarDetails {
   const CarDetails({
     this.registrationPrefix = '',

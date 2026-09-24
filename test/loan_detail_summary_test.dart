@@ -60,6 +60,7 @@ void main() {
   _ellipsisTests();
   _alwaysTotalTests();
   _historyCardTests();
+  _landDetailsTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -95,7 +96,7 @@ void main() {
       );
       // …and on any installment where there is nothing due.
       expect(
-        LoanDetailSummary(_contract(currentDueAmount: 0)).showsTotalDueRow,
+        LoanDetailSummary(_contract(totalDueAmount: 0)).showsTotalDueRow,
         isFalse,
       );
     });
@@ -252,9 +253,8 @@ void main() {
               totalDueAmount: 12000));
       expect(summary.currentInstallmentAmount, 3250);
       expect(summary.currentInstallmentAmountLabel, '3,250.00');
-      // รวมต้องชำระ is the interim sum (2026-09-24): no arrears here, so it
-      // is current_due_amount — total_due_amount is ignored until wired.
-      expect(summary.totalDueLabel, '9,750.00');
+      // รวมต้องชำระ is total_due_amount (2026-09-24).
+      expect(summary.totalDueLabel, '12,000.00');
       expect(
         LoanDetailSummary(_contract(contractInstallmentAmount: 0))
             .showsCurrentInstallmentAmountRow,
@@ -493,15 +493,13 @@ void _totalPayableTests() {
       expect(s.totalPayableAmount, 0);
     });
 
-    // ⚠ Interim (2026-09-24): the total is overdue + collection + penalty +
-    // current_due_amount. total_due_amount is parsed but **not** read until
-    // the backend sends it — PaymentDetails.payableTotal is the seam.
-    test('the total is the interim sum, and ignores total_due_amount', () {
+    // The total is total_due_amount as sent (2026-09-24) — not a sum of the
+    // rows. A contract where they disagree renders all three as sent.
+    test('the total is total_due_amount, not a sum of the rows', () {
       final s = LoanDetailSummary(_payable(totalDueAmount: 9999));
       expect(s.overdueSubtotal, 1060.25);
       expect(s.upcomingDueAmount, 1440);
-      expect(s.totalPayableAmount, 2500.25);
-      expect(s.overdueSubtotal + s.upcomingDueAmount, s.totalPayableAmount);
+      expect(s.totalPayableAmount, 9999);
       expect(s.upcomingDueAmount, isNot(7777));
     });
 
@@ -814,7 +812,7 @@ void _alwaysTotalTests() {
 
   group('รวมต้องชำระ always shows on the loan detail screen', () {
     testWidgets('at zero it reads 0.00', (tester) async {
-      await pump(tester, _contract(currentDueAmount: 0));
+      await pump(tester, _contract(totalDueAmount: 0));
       expect(find.text('รวมต้องชำระ'), findsOneWidget);
       expect(find.text('0.00'), findsOneWidget);
     });
@@ -832,8 +830,7 @@ void _alwaysTotalTests() {
             ...json,
             'payment_details': {
               ...(json['payment_details'] as Map<String, dynamic>),
-              'current_due_amount': 'oops',
-              'overdue_amount': null,
+              'total_due_amount': 'oops',
             },
           }));
       expect(find.text('รวมต้องชำระ'), findsOneWidget);
@@ -842,7 +839,7 @@ void _alwaysTotalTests() {
 
     testWidgets('off by default, so the _old payment page still hides it',
         (tester) async {
-      await pump(tester, _contract(currentDueAmount: 0), always: false);
+      await pump(tester, _contract(totalDueAmount: 0), always: false);
       expect(find.text('รวมต้องชำระ'), findsNothing);
     });
   });
@@ -864,5 +861,27 @@ void _historyCardTests() {
     expect(find.text('จำนวนเงิน'), findsOneWidget);
     expect(find.text('ช่องทางการชำระ'), findsNothing);
     expect(find.text('COUNTER'), findsNothing);
+  });
+}
+
+/// `land_details` is parsed onto the contract (2026-09-24), unused so far.
+void _landDetailsTests() {
+  test('land_details parses, and is empty when absent', () {
+    final c = LoanContract.fromJson({
+      'contract_no': 'X',
+      'land_details': {
+        'deed_number': '1B_13163',
+        'sheet_number': '4935I8486-3',
+        'parcel_number': '78',
+        'dealing_file_number': 630,
+      },
+    });
+    expect(c.landDetails.deedNumber, '1B_13163');
+    expect(c.landDetails.sheetNumber, '4935I8486-3');
+    expect(c.landDetails.parcelNumber, '78');
+    expect(c.landDetails.dealingFileNumber, '630');
+    expect(c.landDetails.isEmpty, isFalse);
+    expect(LoanContract.fromJson({'contract_no': 'X'}).landDetails.isEmpty,
+        isTrue);
   });
 }

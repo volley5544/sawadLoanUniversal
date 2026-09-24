@@ -50,20 +50,20 @@ void main() {
       collectionFee: 50,
     ));
 
-    // ⚠ **A billing change (2026-09-24, interim).** ชำระเต็มจำนวน bills
-    // overdue + collection + penalty + current_due_amount — the same figure
-    // the loan detail screen shows as รวมต้องชำระ one tap away.
-    // total_due_amount is parsed but not read until the backend sends it.
-    test('ชำระเต็มจำนวน is the interim sum, ignoring total_due_amount', () {
+    // ⚠ **A billing change (2026-09-24).** ชำระเต็มจำนวน bills
+    // total_due_amount as sent — the figure the loan detail screen shows as
+    // รวมต้องชำระ one tap away. It was an interim sum of the rows before the
+    // backend sent the field.
+    test('ชำระเต็มจำนวน is total_due_amount', () {
       final s = LoanPaymentSummary(_contract(
         currentDueAmount: 1440,
         overdueAmount: 1000,
         collectionFee: 50,
         penaltyFee: 10.25,
-        totalDueAmount: 9999,
+        totalDueAmount: 2600,
       ));
-      expect(s.fullAmount, 2500.25);
-      expect(s.amountFor(LoanPaymentOption.full, ''), 2500.25);
+      expect(s.fullAmount, 2600);
+      expect(s.amountFor(LoanPaymentOption.full, ''), 2600);
       // ค่างวดปัจจุบัน reads current_due_amount, like loan detail's
       // ส่วนที่จะครบกำหนดชำระ row.
       expect(s.currentDueAmount, 1440);
@@ -103,11 +103,14 @@ void main() {
       expect(summary.amountFor(LoanPaymentOption.custom, ''), 0);
     });
 
-    // Interim sum: the fees are in both options — ยอดค้างชำระ on its own,
-    // and ชำระเต็มจำนวน on top of current_due_amount.
-    test('the fees ride on both fixed options', () {
+    // ชำระเต็มจำนวน bills the server's total as sent; the client adds
+    // nothing to it. The fees ride on ยอดค้างชำระ explicitly.
+    test('ชำระเต็มจำนวน adds nothing to the server total', () {
       final noArrears = LoanPaymentSummary(_contract(
-          currentDueAmount: 4585, collectionFee: 50, penaltyFee: 10));
+          currentDueAmount: 4585,
+          totalDueAmount: 4645,
+          collectionFee: 50,
+          penaltyFee: 10));
       expect(noArrears.fullAmount, 4645);
       expect(noArrears.overdueTotal, 60);
     });
@@ -239,7 +242,7 @@ void main() {
       expect(summary.isDisabled(LoanPaymentOption.overdue, ''), isTrue,
           reason: 'no arrears and no fee — there is no bill to raise');
       expect(summary.isDisabled(LoanPaymentOption.full, ''), isFalse);
-      final paidUp = LoanPaymentSummary(_contract(currentDueAmount: 0));
+      final paidUp = LoanPaymentSummary(_contract(totalDueAmount: 0));
       expect(paidUp.isDisabled(LoanPaymentOption.full, ''), isTrue);
     });
 
