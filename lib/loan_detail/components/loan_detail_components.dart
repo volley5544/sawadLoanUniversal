@@ -408,6 +408,11 @@ class PaymentHistoryCard extends StatelessWidget {
   final String amount;
   final String channel;
 
+  /// ⚠ **ช่องทางการชำระ is hidden** (2026-09-24, tester round, on request) —
+  /// the card shows จำนวนเงิน only. `channel` is still passed and parsed;
+  /// flip this to `true` to restore the row.
+  static const bool showsChannelRow = false;
+
   @override
   Widget build(BuildContext context) {
     final rowStyle = GoogleFonts.notoSansThai(
@@ -455,8 +460,10 @@ class PaymentHistoryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _row('จำนวนเงิน', amount, rowStyle),
-                const SizedBox(height: 12),
-                _row('ช่องทางการชำระ', channel, rowStyle),
+                if (showsChannelRow) ...[
+                  const SizedBox(height: 12),
+                  _row('ช่องทางการชำระ', channel, rowStyle),
+                ],
               ],
             ),
           ),

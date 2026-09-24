@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 512 tests (models, payloads, headers, NDID terms +
+flutter test               # 513 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2928,7 +2928,7 @@ httpRequest bridge handler)"*. Same trap the P-Loan Extra deep link carries.
 | 1 | ข้อมูลสินเชื่อ | `/loan/list` | ค่างวด, จำนวนงวด, สาขาที่ทำสัญญา, วันที่ทำสัญญา, กลุ่มสินค้า, ยี่ห้อ/รุ่น/รายละเอียดสินค้า, เลขทะเบียน, วันเริ่มงวดแรก, วันงวดสุดท้าย, **สัญญาเงินกู้** |
 |  |  |  | ⚠ รุ่นสินค้า and รายละเอียดสินค้า fall back to `-`; the latter takes a **`cc`** suffix (engine displacement) **only when it has a value**, since `- cc` would claim a measurement that isn't there |
 | 2 | ข้อมูลการชำระ | `/loan/list` | ชำระค่างวดแล้ว, จำนวนวันที่ค้าง, จำนวนงวดที่ค้าง, วันชำระครั้งล่าสุด, **ยอดรวมต้องชำระ** |
-| 3 | ประวัติการชำระ | `POST /payment/history_new` | one card per payment |
+| 3 | ประวัติการชำระ | `POST /payment/history_new` | one card per payment — จำนวนเงิน only; ช่องทางการชำระ hidden 2026-09-24 (`PaymentHistoryCard.showsChannelRow`) |
 
 **The bottom bar is ชำระเงิน alone** (changed 2026-09-17).
 

@@ -59,6 +59,7 @@ void main() {
   _payNowTests();
   _ellipsisTests();
   _alwaysTotalTests();
+  _historyCardTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -844,5 +845,24 @@ void _alwaysTotalTests() {
       await pump(tester, _contract(currentDueAmount: 0), always: false);
       expect(find.text('รวมต้องชำระ'), findsNothing);
     });
+  });
+}
+
+/// ประวัติการชำระ cards show จำนวนเงิน only (2026-09-24).
+void _historyCardTests() {
+  testWidgets('the history card hides ช่องทางการชำระ', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: PaymentHistoryCard(
+          headingDate: '14 ก.ค. 68',
+          paidAtLabel: 'เวลา 10:00 น.',
+          amount: '1,000.00 บาท',
+          channel: 'COUNTER',
+        ),
+      ),
+    ));
+    expect(find.text('จำนวนเงิน'), findsOneWidget);
+    expect(find.text('ช่องทางการชำระ'), findsNothing);
+    expect(find.text('COUNTER'), findsNothing);
   });
 }
