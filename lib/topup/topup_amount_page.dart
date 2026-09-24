@@ -651,7 +651,7 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
                 TopupFigureRow(
                   label: 'หัก ยอดเงินต้นคงที่ยังไม่ถึงกำหนดชำระ',
                   caption: '(เลขที่สัญญา ${detail.contractNo})',
-                  amount: _flow.closingBalance,
+                  amount: _flow.principalDeduction,
                   deduction: true,
                   suffix: 'บาท',
                 ),

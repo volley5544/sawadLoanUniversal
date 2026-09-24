@@ -274,6 +274,20 @@ class TopupFlow {
     return contract?.contractDetails.closingBalance ?? 0;
   }
 
+  /// **The principal deducted from the payout** — `principal_not_due` from
+  /// `POST /topup/recal` (2026-09-24, on request), falling back to
+  /// [closingBalance] when the response carries none.
+  ///
+  /// ⚠ The fallback is deliberate even though a missing value elsewhere shows
+  /// `-`: this figure is **filed** (it sets `transfer_amount`), and a 0 would
+  /// overstate the payout by the whole principal. Falling back keeps the
+  /// behaviour that shipped before the field existed.
+  double get principalDeduction {
+    final notDue = amountDetail?.principalNotDue ?? 0;
+    if (notDue > 0) return notDue;
+    return closingBalance;
+  }
+
   /// Accrued interest, counted only when it has not already been settled.
   ///
   /// `double`, not `int` — see [LoanAmountDetail.interestYield].
@@ -340,7 +354,7 @@ class TopupFlow {
   ///
   /// This is the top-up formula and it is *not* `PLoanFlow.payoutAmount` — a
   /// top-up settles the old principal, a P-Loan Extra does not.
-  double get payoutAmount => calculatedAmount - closingBalance - feeAmount;
+  double get payoutAmount => calculatedAmount - principalDeduction - feeAmount;
 
   /// Deduction **item 5** — the old contract's unpaid interest and collection
   /// fee together, which the customer must settle before the request can go
@@ -390,7 +404,7 @@ class TopupFlow {
       TopupDeductionLine(
         number: '1',
         label: 'หักยอดเงินต้นคงเหลือสัญญาเก่า',
-        amount: closingBalance,
+        amount: principalDeduction,
         contractNo: contractNo,
       ),
       TopupDeductionLine(

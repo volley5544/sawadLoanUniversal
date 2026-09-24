@@ -411,7 +411,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
           PLoanAmountRow(
             label: 'หักยอดเงินต้นสัญญาเก่า',
             caption: 'เลขที่สัญญา ${contract.contractNo}',
-            value: '${formatMoney(flow.closingBalance)} บาท',
+            value: '${formatMoney(flow.principalDeduction)} บาท',
           ),
           PLoanAmountRow(
             label: 'หักอากรสแตมป์',
