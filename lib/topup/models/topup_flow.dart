@@ -279,16 +279,22 @@ class TopupFlow {
   /// เงินต้นที่ยังไม่ถึงกำหนดชำระ uses the same field via [principalNotDueOf],
   /// so the card and the amount screen quote one principal.
   ///
-  /// ⚠⚠ **No fallback: absent or 0 reads `0.00`** (2026-09-24, on request —
-  /// it briefly fell back to [closingBalance]). This figure is **filed**: a
-  /// contract without the field shows a payout larger by the whole principal
-  /// *and* sends that as `transfer_amount`. That is the visible-gap policy
-  /// applied to money — the data team fixes the response.
-  double get principalDeduction => contract?.topupDetail.principalNotDue ?? 0;
+  /// ⚠ **Absent or 0 falls back to `topup_detail.balance_receivable`**
+  /// (2026-09-24, on request — "for now"). History the same day: fell back to
+  /// [closingBalance], then to nothing (`0.00`), then this. This figure is
+  /// **filed** (`transfer_amount`), which is why it has a fallback at all.
+  double get principalDeduction {
+    final c = contract;
+    return c == null ? 0 : principalNotDueOf(c);
+  }
 
-  /// The card's reading of the same field — it has only the `/loan/list` row.
-  static double principalNotDueOf(LoanContract contract) =>
-      contract.topupDetail.principalNotDue;
+  /// The card's reading of the same rule — it has only the `/loan/list` row.
+  static double principalNotDueOf(LoanContract contract) {
+    final detail = contract.topupDetail;
+    return detail.principalNotDue > 0
+        ? detail.principalNotDue
+        : detail.balanceReceivable;
+  }
 
   /// Accrued interest, counted only when it has not already been settled.
   ///

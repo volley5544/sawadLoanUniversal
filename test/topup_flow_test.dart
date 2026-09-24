@@ -219,21 +219,33 @@ void main() {
       expect(TopupFlow.principalNotDueOf(flow.contract!), 27437.14);
     });
 
-    // ⚠ No fallback since 2026-09-24 (on request): absent reads 0.00.
-    test('the card reads 0 when the field is absent', () {
-      expect(TopupFlow.principalNotDueOf(withNotDue(0)), 0);
+    // Absent or 0 falls back to balance_receivable (2026-09-24, on request).
+    test('the card falls back to balance_receivable when the field is absent',
+        () {
+      final c = withNotDue(0);
+      expect(TopupFlow.principalNotDueOf(c), c.topupDetail.balanceReceivable);
+      expect(c.topupDetail.balanceReceivable, greaterThan(0),
+          reason: 'fixture precondition');
     });
 
-    // ⚠ Visible-gap policy on filed money (2026-09-24, on request): absent
-    // is 0, NOT closing_balance — the payout shows larger by the principal and
-    // the data team fixes the response.
-    test('without principal_not_due the deduction is 0, not closing_balance',
-        () {
+    // It feeds transfer_amount, so the satang must survive parsing.
+    test('balance_receivable keeps its satang', () {
+      final c = LoanContract.fromJson({
+        'contract_no': 'X',
+        'topup_detail': {'balance_receivable': 27437.14},
+      });
+      expect(c.topupDetail.balanceReceivable, 27437.14);
+      expect(TopupFlow.principalNotDueOf(c), 27437.14);
+    });
+
+    // Absent principal_not_due → balance_receivable, not closing_balance.
+    test('without principal_not_due the deduction is balance_receivable', () {
       final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
         ..contract = withNotDue(0)
         ..amountDetail = recalShaped();
-      expect(flow.closingBalance, 16124);
-      expect(flow.principalDeduction, 0);
+      expect(flow.principalDeduction,
+          flow.contract!.topupDetail.balanceReceivable);
+      expect(flow.principalDeduction, isNot(flow.closingBalance));
     });
   });
 

@@ -447,7 +447,11 @@ class TopupDetail {
   final int feeAmount;
 
   /// Total payable to close the old contract.
-  final int balanceReceivable;
+  /// `balance_receivable` — the account-closing balance. `double` since
+  /// 2026-09-24: it carries satang (`27437.14`), and as the fallback for
+  /// [principalNotDue] it now feeds `transfer_amount`, where truncating to an
+  /// int would misfile the payout.
+  final double balanceReceivable;
 
   /// `principal_not_due` — principal not yet fallen due: what a top-up
   /// deducts from the payout (2026-09-24). Read by the top-up card's
@@ -520,7 +524,7 @@ class TopupDetail {
         accountStatus: asString(json['account_status']),
         topupExtra: asInt(json['topup_extra']),
         feeAmount: asInt(json['fee_amount']),
-        balanceReceivable: asInt(json['balance_receivable']),
+        balanceReceivable: asDouble(json['balance_receivable']),
         principalNotDue: asDouble(json['principal_not_due']),
         collectionFee: asDouble(json['collection_fee']),
         penaltyFee: asDouble(json['penalty_fee']),

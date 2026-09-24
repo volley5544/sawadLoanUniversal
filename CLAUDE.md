@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 520 tests (models, payloads, headers, NDID terms +
+flutter test               # 521 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1850,12 +1850,12 @@ screen's **หัก ยอดเงินต้นคงที่ยังไ�
 **หักยอดเงินต้นสัญญาเก่า**, deduction item 1, and so `payoutAmount` /
 `transfer_amount`. The **card**'s **เงินต้นที่ยังไม่ถึงกำหนดชำระ** reads the
 same field via `TopupFlow.principalNotDueOf`, so card and amount screen quote
-one principal. ⚠⚠ **Absent or 0 reads `0.00` — no fallback** (2026-09-24, on
-request; it fell back to `closing_balance` for a few hours). Consequence worth
-knowing: a contract missing the field shows a payout larger by the whole
-principal **and files it as `transfer_amount`** — the visible-gap policy
-applied to money; the data team fixes the response. `TopupFlow.closingBalance`
-still exists for its other readers.
+one principal. ⚠ **Absent or 0 falls back to `topup_detail.balance_receivable`**
+(2026-09-24, on request, "for now" — the same day it also fell back to
+`closing_balance`, then to nothing). `balance_receivable` was widened to
+`double` for this: as an `int` it truncated `27437.14` and would have misfiled
+`transfer_amount`. `TopupFlow.closingBalance` still exists for its other
+readers.
 
 `TopupContractHeader`'s **เลขที่สัญญา** (card + amount screen) is one line,
 ellipsised (2026-09-24). In the live
