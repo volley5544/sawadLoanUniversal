@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 508 tests (models, payloads, headers, NDID terms +
+flutter test               # 512 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3065,8 +3065,13 @@ computes them inline as nested ternaries over three dates and four amounts.
 They are separated out because *"the overdue figure turned red a day early"* is
 not something a screenshot review catches. Worth knowing:
 
+- ⚠ **On the loan detail screen `รวมต้องชำระ` always renders** (2026-09-24,
+  tester round) — at zero, on the last installment, and as `0.00` when the
+  figures are unreadable (`asDouble` parses junk as 0).
+  `LoanDetailHeaderCard.alwaysShowsTotalDueRow`, default `false`, so the
+  frozen `_old` payment page keeps the rule below.
 - **The last installment changes the card's shape.** `งวดสุดท้าย` drops the
-  denominator, `รวมต้องชำระ` disappears, and a red *"ยอดดังกล่าวไม่ไช่ยอดปิดบัญชี…"*
+  denominator, `รวมต้องชำระ` disappears (except on the loan detail screen, above), and a red *"ยอดดังกล่าวไม่ไช่ยอดปิดบัญชี…"*
   caveat appears under it.
   ⚠ **`totalInstallmentNumber` is a `double`** on `PaymentDetails` (the top-up
   endpoints send it that way) and this is a *count*: compared raw, `24` never

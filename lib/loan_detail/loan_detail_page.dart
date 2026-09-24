@@ -357,6 +357,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
           // งวดปัจจุบัน — the instalment number — is a different row and stays.
           showsArrearsAndInstalmentRows: false,
           showsPayNowWhenOverdue: true,
+          alwaysShowsTotalDueRow: true,
           onDownloadContract:
               _contractDocumentUrl == null ? null : _openContractDocument,
           onViewInsurances: () => Navigator.of(context).push(

@@ -33,6 +33,7 @@ class LoanDetailHeaderCard extends StatelessWidget {
     required this.onViewInsurances,
     this.showsArrearsAndInstalmentRows = true,
     this.showsPayNowWhenOverdue = false,
+    this.alwaysShowsTotalDueRow = false,
   });
 
   final LoanContract contract;
@@ -60,6 +61,14 @@ class LoanDetailHeaderCard extends StatelessWidget {
   /// reason as [showsArrearsAndInstalmentRows]: the frozen `_old` payment
   /// page is the only other caller.
   final bool showsPayNowWhenOverdue;
+
+  /// Whether **รวมต้องชำระ** renders unconditionally — on the last
+  /// installment and at zero too, where [LoanDetailSummary.showsTotalDueRow]
+  /// would withhold it. A missing or unreadable figure parses as 0 and reads
+  /// `0.00`. `true` on the loan detail screen since 2026-09-24 (tester
+  /// round); defaults to `false` so the frozen `_old` payment page is
+  /// untouched.
+  final bool alwaysShowsTotalDueRow;
 
   /// Null when the config names no contract portal, in which case the notice's
   /// `download` link is rendered as plain text rather than a dead tap.
@@ -188,7 +197,7 @@ class LoanDetailHeaderCard extends StatelessWidget {
                 ? LoanDetailPalette.alert
                 : LoanDetailPalette.navy,
           ),
-        if (summary.showsTotalDueRow)
+        if (alwaysShowsTotalDueRow || summary.showsTotalDueRow)
           LoanDetailSummaryRow(
             label: 'รวมต้องชำระ',
             value: summary.totalDueLabel,

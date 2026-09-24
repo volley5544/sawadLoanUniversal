@@ -58,6 +58,7 @@ void main() {
   _headerCardRenderTests();
   _payNowTests();
   _ellipsisTests();
+  _alwaysTotalTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -787,5 +788,61 @@ void _ellipsisTests() {
     final text = tester.widget<Text>(find.text(longNo));
     expect(text.maxLines, 1);
     expect(text.overflow, TextOverflow.ellipsis);
+  });
+}
+
+/// รวมต้องชำระ always renders on the loan detail screen (2026-09-24) — at
+/// zero, on the last installment, and as 0.00 when the data is unreadable.
+void _alwaysTotalTests() {
+  Future<void> pump(WidgetTester tester, LoanContract contract,
+          {bool always = true}) =>
+      tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: LoanDetailHeaderCard(
+              contract: contract,
+              showsNotIssuedNotice: false,
+              onDownloadContract: null,
+              onViewInsurances: _noop,
+              showsArrearsAndInstalmentRows: false,
+              alwaysShowsTotalDueRow: always,
+            ),
+          ),
+        ),
+      ));
+
+  group('รวมต้องชำระ always shows on the loan detail screen', () {
+    testWidgets('at zero it reads 0.00', (tester) async {
+      await pump(tester, _contract(currentDueAmount: 0));
+      expect(find.text('รวมต้องชำระ'), findsOneWidget);
+      expect(find.text('0.00'), findsOneWidget);
+    });
+
+    testWidgets('on the last installment too', (tester) async {
+      await pump(tester, _contract(currentInstallment: 24, totalInstallment: 24));
+      expect(find.text('รวมต้องชำระ'), findsOneWidget);
+    });
+
+    testWidgets('unreadable figures read 0.00', (tester) async {
+      final json = _contract().rawJson;
+      await pump(
+          tester,
+          LoanContract.fromJson({
+            ...json,
+            'payment_details': {
+              ...(json['payment_details'] as Map<String, dynamic>),
+              'current_due_amount': 'oops',
+              'overdue_amount': null,
+            },
+          }));
+      expect(find.text('รวมต้องชำระ'), findsOneWidget);
+      expect(find.text('0.00'), findsOneWidget);
+    });
+
+    testWidgets('off by default, so the _old payment page still hides it',
+        (tester) async {
+      await pump(tester, _contract(currentDueAmount: 0), always: false);
+      expect(find.text('รวมต้องชำระ'), findsNothing);
+    });
   });
 }
