@@ -799,10 +799,9 @@ class _PaymentHistoryTab extends StatelessWidget {
         for (final entry in loaded.entries)
           PaymentHistoryCard(
             headingDate: formatThaiShortDate(entry.paidOn),
-            paidAtLabel: [
-              formatThaiShortDate(entry.paidOn),
-              if (entry.paidAtTime.isNotEmpty) '${entry.paidAtTime} น.',
-            ].join(' '),
+            // Date only — the time is no longer shown (2026-09-24, tester
+            // round). `paidAtTime` is still parsed if it is wanted back.
+            paidAtLabel: formatThaiShortDate(entry.paidOn),
             amount: '${formatMoney(entry.paidAmount)} บาท',
             channel: entry.paymentChannelName,
           ),
