@@ -274,18 +274,28 @@ class TopupFlow {
     return contract?.contractDetails.closingBalance ?? 0;
   }
 
-  /// **The principal deducted from the payout** — `principal_not_due` from
-  /// `POST /topup/recal` (2026-09-24, on request), falling back to
-  /// [closingBalance] when the response carries none.
+  /// **The principal deducted from the payout** — `/loan/list`'s
+  /// `topup_detail.principal_not_due` (2026-09-24, on request), falling back
+  /// to [closingBalance] when the contract carries none. The card's
+  /// เงินต้นที่ยังไม่ถึงกำหนดชำระ uses the same field via [principalNotDueOf],
+  /// so the card and the amount screen quote one principal.
   ///
   /// ⚠ The fallback is deliberate even though a missing value elsewhere shows
   /// `-`: this figure is **filed** (it sets `transfer_amount`), and a 0 would
   /// overstate the payout by the whole principal. Falling back keeps the
   /// behaviour that shipped before the field existed.
   double get principalDeduction {
-    final notDue = amountDetail?.principalNotDue ?? 0;
+    final notDue = contract?.topupDetail.principalNotDue ?? 0;
     if (notDue > 0) return notDue;
     return closingBalance;
+  }
+
+  /// The card's version of [principalDeduction]: it has only the `/loan/list`
+  /// row, so its fallback is that row's `closing_balance`.
+  static double principalNotDueOf(LoanContract contract) {
+    final notDue = contract.topupDetail.principalNotDue;
+    if (notDue > 0) return notDue;
+    return contract.contractDetails.closingBalance;
   }
 
   /// Accrued interest, counted only when it has not already been settled.

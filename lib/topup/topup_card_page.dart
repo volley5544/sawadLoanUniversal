@@ -559,7 +559,9 @@ class _TopupContractCard extends StatelessWidget {
     // the amount screen breaks the same total back out as
     // `topup_actual + topup_extra`.
     final offered = detail.defaultTopupAmount;
-    final principal = contract.contractDetails.closingBalance;
+    // `principal_not_due` (2026-09-24), falling back to `closing_balance` —
+    // the same rule the amount screen deducts with, so the two agree.
+    final principal = TopupFlow.principalNotDueOf(contract);
     final duty = detail.feeAmount;
 
     // Computed rather than read from `default_transfer_amount`, which the API

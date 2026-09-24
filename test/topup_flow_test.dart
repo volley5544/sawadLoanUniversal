@@ -193,29 +193,41 @@ void main() {
     });
 
     // 2026-09-24: the deduction (and so the payout and transfer_amount) is
-    // `principal_not_due` from the recal top level.
+    // `/loan/list`'s `topup_detail.principal_not_due`.
+    LoanContract withNotDue(num notDue) => LoanContract.fromJson({
+          ...mockContracts().first.rawJson,
+          'topup_detail': {
+            ...(mockContracts().first.rawJson['topup_detail']
+                as Map<String, dynamic>),
+            'principal_not_due': notDue,
+          },
+        });
+
     test('principal_not_due is the deduction, and the payout follows it', () {
       final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..contract = mockContracts().first
+        ..contract = withNotDue(27437.14)
         ..amountDetail = LoanAmountDetail.fromJson({
           'code': '200',
           'closing_balance': 16124,
-          'principal_not_due': 15000.5,
           'fee_amount': 20,
         })
-        ..requestedAmount = 38900;
-      expect(flow.principalDeduction, 15000.5);
-      expect(flow.payoutAmount, 38900 - 15000.5 - 20);
-      expect(flow.deductionLines.first.amount, 15000.5);
-      // copyWith (the calculator fold-in) must not drop it.
-      flow.amountDetail = flow.amountDetail!.copyWith(feeAmount: 18);
-      expect(flow.principalDeduction, 15000.5);
+        ..requestedAmount = 30000;
+      expect(flow.principalDeduction, 27437.14);
+      expect(flow.payoutAmount, closeTo(30000 - 27437.14 - 20, 0.001));
+      expect(flow.deductionLines.first.amount, 27437.14);
+      // The card reads the same field, so the two screens agree.
+      expect(TopupFlow.principalNotDueOf(flow.contract!), 27437.14);
+    });
+
+    test('the card falls back to closing_balance when the field is absent', () {
+      final c = withNotDue(0);
+      expect(TopupFlow.principalNotDueOf(c), c.contractDetails.closingBalance);
     });
 
     // Filed money: an absent field must not become 0 and overstate the payout.
     test('without principal_not_due it falls back to closing_balance', () {
       final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
-        ..contract = mockContracts().first
+        ..contract = withNotDue(0)
         ..amountDetail = recalShaped();
       expect(flow.principalDeduction, 16124);
     });

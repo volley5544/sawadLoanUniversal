@@ -415,6 +415,7 @@ class TopupDetail {
     this.topupExtra = 0,
     this.feeAmount = 0,
     this.balanceReceivable = 0,
+    this.principalNotDue = 0,
     this.collectionFee = 0,
     this.penaltyFee = 0,
     this.interestYield = 0,
@@ -447,6 +448,12 @@ class TopupDetail {
 
   /// Total payable to close the old contract.
   final int balanceReceivable;
+
+  /// `principal_not_due` — principal not yet fallen due: what a top-up
+  /// deducts from the payout (2026-09-24). Read by the top-up card's
+  /// เงินต้นที่ยังไม่ถึงกำหนดชำระ and `TopupFlow.principalDeduction`. `double`
+  /// — it carries satang (`27437.14`).
+  final double principalNotDue;
   /// ⚠ Decimal on the wire — see `LoanAmountDetail.collectionFee`.
   final double collectionFee;
   final double penaltyFee;
@@ -514,6 +521,7 @@ class TopupDetail {
         topupExtra: asInt(json['topup_extra']),
         feeAmount: asInt(json['fee_amount']),
         balanceReceivable: asInt(json['balance_receivable']),
+        principalNotDue: asDouble(json['principal_not_due']),
         collectionFee: asDouble(json['collection_fee']),
         penaltyFee: asDouble(json['penalty_fee']),
         interestYield: asDouble(json['yield']),

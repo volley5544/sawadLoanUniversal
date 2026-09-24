@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 518 tests (models, payloads, headers, NDID terms +
+flutter test               # 519 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1843,18 +1843,18 @@ filed or what the customer is promised:
 | `receivableAmount` | `payoutAmount − overdueDeduction` | **`จำนวนเงินที่จะได้รับ`**, the figure on screen |
 | `netTransferAmount` | `payoutAmount − yield − collection_fee` | the lead-branch eligibility test only |
 
-⚠ **The principal deducted is `principal_not_due`** (2026-09-24, on
-request) — top level of `POST /topup/recal`, via
-`TopupFlow.principalDeduction`. It drives the amount screen's
-**หัก ยอดเงินต้นคงที่ยังไม่ถึงกำหนดชำระ**, the summary screen's
-**หักยอดเงินต้นสัญญาเก่า**, deduction item 1, and therefore `payoutAmount` /
-`transfer_amount`. When the response has no `principal_not_due` it **falls
-back to `closing_balance`** (the old behaviour) — deliberately, against the
-`-` policy, because this figure is filed and a 0 would overstate the payout by
-the whole principal. `TopupFlow.closingBalance` still exists for its other
-readers. ⚠ The **card**'s เงินต้นที่ยังไม่ถึงกำหนดชำระ still reads
-`/loan/list`'s `contract_details.closing_balance` — it has no recal response
-to read from.
+⚠ **The principal deducted is `principal_not_due` from `/loan/list`'s
+`topup_detail`** (2026-09-24, on request; briefly read off `/topup/recal`
+the same day, then moved). `TopupFlow.principalDeduction` drives the amount
+screen's **หัก ยอดเงินต้นคงที่ยังไม่ถึงกำหนดชำระ**, the summary screen's
+**หักยอดเงินต้นสัญญาเก่า**, deduction item 1, and so `payoutAmount` /
+`transfer_amount`. The **card**'s **เงินต้นที่ยังไม่ถึงกำหนดชำระ** reads the
+same field via `TopupFlow.principalNotDueOf`, so card and amount screen quote
+one principal. When the field is absent or 0 both **fall back to
+`closing_balance`** — deliberately, against the `-` policy, because this figure
+is filed and a 0 would overstate the payout by the whole principal.
+`TopupFlow.closingBalance` still exists for its other readers. In the live
+sample `principal_not_due == balance_receivable` (27,437.14).
 
 ⚠ The collection fee comes off `netTransferAmount` **unconditionally** but off
 `receivableAmount` only as part of item 5 (i.e. only when there is unpaid
