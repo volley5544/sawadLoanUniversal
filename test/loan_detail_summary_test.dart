@@ -916,9 +916,22 @@ void _collateralBesideTitleTests() {
   }
 
   group('collateral_information beside the title', () {
-    testWidgets('shown when present', (tester) async {
+    testWidgets('shown when present, flush right, one line', (tester) async {
       await pump(tester, 'กพ5161');
       expect(find.text('กพ5161'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      // Flush with the rows' values below it, not parked mid-row.
+      final plateRight = tester.getTopRight(find.text('กพ5161')).dx;
+      final valueRight = tester.getTopRight(find.text('MLOAN-TEST-01')).dx;
+      expect(plateRight, closeTo(valueRight, 1));
+      final text = tester.widget<Text>(find.text('กพ5161'));
+      expect(text.maxLines, 1);
+      expect(text.overflow, TextOverflow.ellipsis);
+    });
+
+    testWidgets('a long plate ellipsises instead of overflowing',
+        (tester) async {
+      await pump(tester, 'ทะเบียนยาวมากมากมากมากมากมากมากมากมากมาก 12345');
       expect(tester.takeException(), isNull);
     });
 

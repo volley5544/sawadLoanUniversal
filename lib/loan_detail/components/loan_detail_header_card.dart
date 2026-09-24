@@ -143,11 +143,17 @@ class LoanDetailHeaderCard extends StatelessWidget {
 
   List<Widget> _rows(BuildContext context, LoanDetailSummary summary) => [
         const SizedBox(height: 3),
+        // ⚠ Both children are **loose** `Flexible`s pushed apart with
+        // `spaceBetween` (2026-09-24). An `Expanded` title beside a `Flexible`
+        // plate splits the spare width between them, which parked the plate
+        // mid-row; loose children size to their text, so the plate sits flush
+        // right and either one only ellipsises when the two cannot both fit.
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Expanded(
+            Flexible(
               child: Text(
                 contract.contractDetails.loanTypeName,
                 maxLines: 1,

@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 525 tests (models, payloads, headers, NDID terms +
+flutter test               # 526 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3099,7 +3099,8 @@ They are separated out because *"the overdue figure turned red a day early"* is
 not something a screenshot review catches. Worth knowing:
 
 - **The plate sits right of the loan-type title** on the loan detail screen
-  (2026-09-24): `contract_details.collateral_information`, navy, one line,
+  (2026-09-24): `contract_details.collateral_information`, navy, flush right
+  (loose `Flexible`s + `spaceBetween` — an `Expanded` title parked it mid-row), one line,
   **only when non-empty** — absent renders nothing (not `-`).
   `LoanDetailHeaderCard.showsCollateralBesideTitle`, default `false` for the
   `_old` page.
