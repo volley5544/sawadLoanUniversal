@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 521 tests (models, payloads, headers, NDID terms +
+flutter test               # 524 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3098,6 +3098,11 @@ computes them inline as nested ternaries over three dates and four amounts.
 They are separated out because *"the overdue figure turned red a day early"* is
 not something a screenshot review catches. Worth knowing:
 
+- **The plate sits right of the loan-type title** on the loan detail screen
+  (2026-09-24): `contract_details.collateral_information`, navy, one line,
+  **only when non-empty** — absent renders nothing (not `-`).
+  `LoanDetailHeaderCard.showsCollateralBesideTitle`, default `false` for the
+  `_old` page.
 - ⚠ **On the loan detail screen `รวมต้องชำระ` always renders** (2026-09-24,
   tester round) — at zero, on the last installment, and as `0.00` when the
   figures are unreadable (`asDouble` parses junk as 0).

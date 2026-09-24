@@ -34,6 +34,7 @@ class LoanDetailHeaderCard extends StatelessWidget {
     this.showsArrearsAndInstalmentRows = true,
     this.showsPayNowWhenOverdue = false,
     this.alwaysShowsTotalDueRow = false,
+    this.showsCollateralBesideTitle = false,
   });
 
   final LoanContract contract;
@@ -69,6 +70,12 @@ class LoanDetailHeaderCard extends StatelessWidget {
   /// round); defaults to `false` so the frozen `_old` payment page is
   /// untouched.
   final bool alwaysShowsTotalDueRow;
+
+  /// Whether `contract_details.collateral_information` (the plate, e.g.
+  /// `กพ5161`) sits on the right of the loan-type title — only when it has a
+  /// value, else nothing. `true` on the loan detail screen since 2026-09-24;
+  /// defaults to `false` so the frozen `_old` payment page is untouched.
+  final bool showsCollateralBesideTitle;
 
   /// Null when the config names no contract portal, in which case the notice's
   /// `download` link is rendered as plain text rather than a dead tap.
@@ -122,20 +129,54 @@ class LoanDetailHeaderCard extends StatelessWidget {
     );
   }
 
+  /// The plate beside the title, or `''` when it is off or absent — nothing
+  /// renders then, not a `-` (2026-09-24, as asked: "if not null and not
+  /// empty").
+  String get _collateral {
+    if (!showsCollateralBesideTitle) return '';
+    final raw = contract.contractDetails.collateralInformation.trim();
+    return raw == 'null' ? '' : raw;
+  }
+
   bool _payNow(LoanDetailSummary summary) =>
       showsPayNowWhenOverdue && summary.showsPayNow;
 
   List<Widget> _rows(BuildContext context, LoanDetailSummary summary) => [
         const SizedBox(height: 3),
-        Text(
-          contract.contractDetails.loanTypeName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.notoSansThai(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: LoanDetailPalette.label,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(
+                contract.contractDetails.loanTypeName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.notoSansThai(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: LoanDetailPalette.label,
+                ),
+              ),
+            ),
+            if (_collateral.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _collateral,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.notoSansThai(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: LoanDetailPalette.navy,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 4),
         LoanDetailSummaryRow(

@@ -61,6 +61,7 @@ void main() {
   _alwaysTotalTests();
   _historyCardTests();
   _landDetailsTests();
+  _collateralBesideTitleTests();
   _headerCardRowSwitchTests();
   _totalPayableTests();
   group('the last installment changes the whole card', () {
@@ -883,5 +884,55 @@ void _landDetailsTests() {
     expect(c.landDetails.isEmpty, isFalse);
     expect(LoanContract.fromJson({'contract_no': 'X'}).landDetails.isEmpty,
         isTrue);
+  });
+}
+
+/// The plate sits right of the title on the loan detail screen (2026-09-24),
+/// only when collateral_information has a value.
+void _collateralBesideTitleTests() {
+  Future<void> pump(WidgetTester tester, String? collateral,
+      {bool on = true}) {
+    final json = _contract().rawJson;
+    return tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          child: LoanDetailHeaderCard(
+            contract: LoanContract.fromJson({
+              ...json,
+              'contract_details': {
+                ...(json['contract_details'] as Map<String, dynamic>),
+                'collateral_information': collateral,
+              },
+            }),
+            showsNotIssuedNotice: false,
+            onDownloadContract: null,
+            onViewInsurances: _noop,
+            showsCollateralBesideTitle: on,
+          ),
+        ),
+      ),
+    ));
+  }
+
+  group('collateral_information beside the title', () {
+    testWidgets('shown when present', (tester) async {
+      await pump(tester, 'กพ5161');
+      expect(find.text('กพ5161'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('nothing when empty or null — not a dash', (tester) async {
+      for (final v in [null, '', '  ']) {
+        await pump(tester, v);
+        expect(find.text('-'), findsNothing);
+      }
+    });
+
+    testWidgets('off by default, so the _old payment page is untouched',
+        (tester) async {
+      await pump(tester, 'กพ5161', on: false);
+      expect(find.text('กพ5161'), findsNothing);
+    });
   });
 }
