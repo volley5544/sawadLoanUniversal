@@ -1201,6 +1201,16 @@ void main() {
       expect(AppEnvironment.uat.isProd, isFalse);
     });
 
+    // The QA backend is slow; prod keeps the ordinary limit (2026-09-24).
+    test('the top-up save times out at 300 s on uat, 60 s on prod', () {
+      expect(AppEnvironment.uat.topupSubmitTimeout, const Duration(seconds: 300));
+      expect(AppEnvironment.prod.topupSubmitTimeout, const Duration(seconds: 60));
+      // Only meaningful off the host bridge, which has its own limit.
+      final src = File('lib/services/topup_api.dart').readAsStringSync();
+      final submit = src.substring(src.indexOf('timeout: AppEnvironment.current.topupSubmitTimeout'));
+      expect(submit.substring(0, 800), contains('bypassHostBridge: true'));
+    });
+
     // Switched off 2026-09-24: testers run the real settlement on uat too.
     test('the bypass is switched off on uat as well', () {
       expect(TopupAmountPage.showsSettlementBypass, isFalse);

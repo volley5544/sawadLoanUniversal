@@ -276,6 +276,7 @@ enum AppEnvironment {
     // and the rules require one.
     storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
     checkApplicationStatusBase: 'https://prd-proxy.swpfin.com:5178/status',
+    topupSubmitTimeout: Duration(seconds: 60),
     mobileApiBase: 'https://mobile-api.swpfin.com',
     srisawadHeader: 'x1',
     pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
@@ -287,6 +288,9 @@ enum AppEnvironment {
     firebaseApiKey: 'AIzaSyDty7ZRY-LS1K31L8w2inZsRyE7wOccFEI',
     storageBucket: 'sawad-loan-universal-uat.firebasestorage.app',
     checkApplicationStatusBase: 'https://dev.swpfin.com:5179/status',
+    // The QA backend is under-resourced and a save routinely outruns 60 s
+    // (2026-09-24, on request).
+    topupSubmitTimeout: Duration(seconds: 300),
     // Matches `api_url.api_url_base` in the uat config document. Changed
     // 2026-09-11 from `https://dev.swpfin.com:7076`, which **no longer
     // serves** — that host had been the fallback for most of this project's
@@ -310,6 +314,7 @@ enum AppEnvironment {
     required this.firebaseApiKey,
     required this.storageBucket,
     required this.checkApplicationStatusBase,
+    required this.topupSubmitTimeout,
     required this.mobileApiBase,
     required this.srisawadHeader,
     required this.pdfLoanSrisawadHeader,
@@ -351,6 +356,14 @@ enum AppEnvironment {
   /// with (Outstanding #17 and #35). Without this value prod's status buttons
   /// would report `ไม่พบ URL สำหรับติดตามสถานะ` and nothing else.
   final String checkApplicationStatusBase;
+
+  /// How long `POST /topup` (the top-up save) may take — **60 s on prod,
+  /// 300 s on uat** (2026-09-24: the QA backend is under-resourced).
+  ///
+  /// ⚠ Only meaningful because that call bypasses the host bridge: inside the
+  /// app the bridge runs its own HTTP call with its own limit, which would
+  /// otherwise cut the request off first. See `TopupApi.submit`.
+  final Duration topupSubmitTimeout;
 
   /// Base URL of the srisawad **mobile API** (customer profile + addresses —
   /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing

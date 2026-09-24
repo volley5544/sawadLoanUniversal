@@ -124,6 +124,16 @@ class TopupApi {
         headers: await SrisawadApi.authHeaders(token,
             contentType: 'application/json'),
         body: jsonEncode(payload),
+        // Per environment — 300 s on uat, 60 s on prod (2026-09-24).
+        timeout: AppEnvironment.current.topupSubmitTimeout,
+        // ⚠ **Direct, not through the host bridge** (2026-09-24). The bridge
+        // runs its own HTTP call with its own limit (30 s on older app
+        // builds, 60 s after the 2026-09-13 host fix), so a longer timeout
+        // here would be cut off inside the app regardless. The mobile API
+        // answers CORS preflight for this path on both gateways (verified
+        // 2026-09-24), which is also why `/ploan` already goes direct. It
+        // also means the failure report now carries response headers.
+        bypassHostBridge: true,
       );
     } on ApiTransportException catch (e) {
       Diagnostics.log('topup submit failed: transport: ${e.message}');

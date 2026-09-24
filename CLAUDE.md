@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 515 tests (models, payloads, headers, NDID terms +
+flutter test               # 516 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2852,6 +2852,15 @@ LandAndHouseWeb app too**, so it is backend-side data rather than anything this
 client sends. Filing works on other contracts. The `product_code` change stands
 on its own — it matches the source — but do not read it as the fix for a 501.
 
+⚠ **Timeout is per environment, and the save goes direct** (2026-09-24):
+`AppEnvironment.topupSubmitTimeout` — **300 s on uat** (the QA backend is
+under-resourced), **60 s on prod** — with `bypassHostBridge: true`, because
+inside the app the bridge's own HTTP call would otherwise cut it off first.
+Both gateways answer CORS preflight for `/topup` (verified 2026-09-24), the
+same reason `/ploan` goes direct. The host's bridge limit was also raised to
+300 s on its QA flavor (`f3278c1` on `pentest_resolved`, needs an app
+release) for anything still proxied.
+
 ⚠ **A refusal arrives as HTTP 200.** This endpoint answers `head`/`body`, so
 `error_flag != 'N'` is the failure test — a status check alone reads a refusal
 as success. See the failure report below.
@@ -3666,8 +3675,13 @@ failures throw `ApiTransportException`.
 **Timeouts are per-helper defaults, and no client overrides them except NDID:**
 `sendApiRequest` **60 s**, `sendMultipartApiRequest` **60 s**,
 `sendMultipartGroupsApiRequest` **120 s** (five file parts on `/ploan`),
-`NdidApi._timeout` **30 s** passed explicitly. So raising the first one moves
-every mobile-API call at once.
+`NdidApi._timeout` **30 s** passed explicitly, and the top-up save
+(`POST /topup`) passes `AppEnvironment.topupSubmitTimeout` — 300 s uat / 60 s
+prod. So raising the first one moves every other mobile-API call at once.
+
+The host bridge's own limit is **300 s on the QA flavor, 60 s on prod** since
+2026-09-24 (`f3278c1`, unreleased); 60 s everywhere from 2026-09-13, 30 s
+before that.
 
 ⚠ **Inside the host there is a *second* timeout, in the other repo, and it used
 to be the shorter one.** The host's `httpRequest` handler
