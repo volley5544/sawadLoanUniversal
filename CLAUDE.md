@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 524 tests (models, payloads, headers, NDID terms +
+flutter test               # 525 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1857,8 +1857,8 @@ one principal. ⚠ **Absent or 0 falls back to `topup_detail.balance_receivable`
 `transfer_amount`. `TopupFlow.closingBalance` still exists for its other
 readers.
 
-`TopupContractHeader`'s **เลขที่สัญญา** (card + amount screen) is one line,
-ellipsised (2026-09-24). In the live
+`TopupContractHeader`'s **เลขที่สัญญา** (card + amount screen) and the card's
+**ข้อมูลสถานะ** pill (`TopupStatusPill`) are one line, ellipsised (2026-09-24). In the live
 sample `principal_not_due == balance_receivable` (27,437.14).
 
 ⚠ The collection fee comes off `netTransferAmount` **unconditionally** but off

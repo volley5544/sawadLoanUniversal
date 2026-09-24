@@ -335,9 +335,14 @@ class TopupStatusPill extends StatelessWidget {
             Icon(icon, size: 13, color: TopupTheme.warnPillText),
             const SizedBox(width: 4),
           ],
+          // One line, ellipsised when it does not fit (2026-09-24, tester
+          // round) — a long `request_status` used to wrap inside the pill.
           Flexible(
             child: Text(
               text,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansThai(
                 fontSize: 11.5,
                 color: TopupTheme.warnPillText,

@@ -5,6 +5,31 @@ import 'package:sawad_loan_universal/topup/components/topup_redesign.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 
 void main() {
+  // ข้อมูลสถานะ stays on one line, ellipsised (2026-09-24).
+  testWidgets('a long status is ellipsised inside the pill', (tester) async {
+    const long = 'อยู่ระหว่างการพิจารณาอนุมัติของเจ้าหน้าที่สาขาเจ้าของบัญชี';
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 420,
+            child: TopupContractHeader(
+              loanTypeCode: 'M',
+              loanTypeName: 'สินเชื่อ',
+              contractNo: 'C1',
+              collateralInformation: 'กข 1234',
+              status: TopupStatusPill(text: long, icon: Icons.schedule),
+            ),
+          ),
+        ),
+      ),
+    ));
+    expect(tester.takeException(), isNull);
+    final text = tester.widget<Text>(find.text(long));
+    expect(text.maxLines, 1);
+    expect(text.overflow, TextOverflow.ellipsis);
+  });
+
   // เลขที่สัญญา stays on one line, ellipsised (2026-09-24). The header is
   // shared by the card and the amount screen.
   testWidgets('a long contract number is ellipsised, not wrapped',
