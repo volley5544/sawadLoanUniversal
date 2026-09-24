@@ -275,28 +275,20 @@ class TopupFlow {
   }
 
   /// **The principal deducted from the payout** — `/loan/list`'s
-  /// `topup_detail.principal_not_due` (2026-09-24, on request), falling back
-  /// to [closingBalance] when the contract carries none. The card's
+  /// `topup_detail.principal_not_due` (2026-09-24, on request). The card's
   /// เงินต้นที่ยังไม่ถึงกำหนดชำระ uses the same field via [principalNotDueOf],
   /// so the card and the amount screen quote one principal.
   ///
-  /// ⚠ The fallback is deliberate even though a missing value elsewhere shows
-  /// `-`: this figure is **filed** (it sets `transfer_amount`), and a 0 would
-  /// overstate the payout by the whole principal. Falling back keeps the
-  /// behaviour that shipped before the field existed.
-  double get principalDeduction {
-    final notDue = contract?.topupDetail.principalNotDue ?? 0;
-    if (notDue > 0) return notDue;
-    return closingBalance;
-  }
+  /// ⚠⚠ **No fallback: absent or 0 reads `0.00`** (2026-09-24, on request —
+  /// it briefly fell back to [closingBalance]). This figure is **filed**: a
+  /// contract without the field shows a payout larger by the whole principal
+  /// *and* sends that as `transfer_amount`. That is the visible-gap policy
+  /// applied to money — the data team fixes the response.
+  double get principalDeduction => contract?.topupDetail.principalNotDue ?? 0;
 
-  /// The card's version of [principalDeduction]: it has only the `/loan/list`
-  /// row, so its fallback is that row's `closing_balance`.
-  static double principalNotDueOf(LoanContract contract) {
-    final notDue = contract.topupDetail.principalNotDue;
-    if (notDue > 0) return notDue;
-    return contract.contractDetails.closingBalance;
-  }
+  /// The card's reading of the same field — it has only the `/loan/list` row.
+  static double principalNotDueOf(LoanContract contract) =>
+      contract.topupDetail.principalNotDue;
 
   /// Accrued interest, counted only when it has not already been settled.
   ///

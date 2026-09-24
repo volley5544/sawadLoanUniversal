@@ -413,7 +413,12 @@ class TopupContractHeader extends StatelessWidget {
                 style: TopupTheme.value(size: 16, weight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
+              // One line, ellipsised when it does not fit (2026-09-24,
+              // tester round) — a long contract number used to wrap.
               _row('เลขที่สัญญา', Text(contractNo,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                   style: TopupTheme.value(size: 12.5,
                       weight: FontWeight.w500))),
               _row('ข้อมูลหลักประกัน', Text(collateralInformation,

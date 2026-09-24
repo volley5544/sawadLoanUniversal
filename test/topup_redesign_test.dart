@@ -1,9 +1,36 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/topup/components/topup_redesign.dart';
 import 'package:sawad_loan_universal/topup/models/topup_flow.dart';
 
 void main() {
+  // เลขที่สัญญา stays on one line, ellipsised (2026-09-24). The header is
+  // shared by the card and the amount screen.
+  testWidgets('a long contract number is ellipsised, not wrapped',
+      (tester) async {
+    const longNo = '000ฮฮM690801000004NFX-EXTRA-LONG-CONTRACT-NUMBER';
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 420,
+            child: TopupContractHeader(
+              loanTypeCode: 'M',
+              loanTypeName: 'สินเชื่อ',
+              contractNo: longNo,
+              collateralInformation: 'กข 1234',
+            ),
+          ),
+        ),
+      ),
+    ));
+    expect(tester.takeException(), isNull);
+    final text = tester.widget<Text>(find.text(longNo));
+    expect(text.maxLines, 1);
+    expect(text.overflow, TextOverflow.ellipsis);
+  });
+
   group('formatTopupMoney — always two decimals', () {
     test('groups thousands', () {
       expect(formatTopupMoney(91000), '91,000.00');

@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 519 tests (models, payloads, headers, NDID terms +
+flutter test               # 520 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -1850,10 +1850,15 @@ screen's **หัก ยอดเงินต้นคงที่ยังไ�
 **หักยอดเงินต้นสัญญาเก่า**, deduction item 1, and so `payoutAmount` /
 `transfer_amount`. The **card**'s **เงินต้นที่ยังไม่ถึงกำหนดชำระ** reads the
 same field via `TopupFlow.principalNotDueOf`, so card and amount screen quote
-one principal. When the field is absent or 0 both **fall back to
-`closing_balance`** — deliberately, against the `-` policy, because this figure
-is filed and a 0 would overstate the payout by the whole principal.
-`TopupFlow.closingBalance` still exists for its other readers. In the live
+one principal. ⚠⚠ **Absent or 0 reads `0.00` — no fallback** (2026-09-24, on
+request; it fell back to `closing_balance` for a few hours). Consequence worth
+knowing: a contract missing the field shows a payout larger by the whole
+principal **and files it as `transfer_amount`** — the visible-gap policy
+applied to money; the data team fixes the response. `TopupFlow.closingBalance`
+still exists for its other readers.
+
+`TopupContractHeader`'s **เลขที่สัญญา** (card + amount screen) is one line,
+ellipsised (2026-09-24). In the live
 sample `principal_not_due == balance_receivable` (27,437.14).
 
 ⚠ The collection fee comes off `netTransferAmount` **unconditionally** but off
