@@ -194,7 +194,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 514 tests (models, payloads, headers, NDID terms +
+flutter test               # 515 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -2093,6 +2093,10 @@ define defaulting to false would not reach the uat builds that need it without
 the deploy passing it, and a define the deploy script passes is exactly what
 made the hook's and CI's uat builds differ on 2026-09-13. So it cannot reach
 prod at all, and both uat build paths still produce the same bundle.
+
+⚠ **Switched off 2026-09-24** (tester round — testers run the real
+settlement now): `TopupAmountPage.showsSettlementBypass = false`, pinned by a
+test. The code stays; flipping that const restores it on uat.
 
 ⚠ **Remove it when the payment system can clear the flag again.** It skips a
 real settlement: anything filed through it is a top-up raised on a contract

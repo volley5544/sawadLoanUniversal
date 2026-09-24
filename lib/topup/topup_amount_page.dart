@@ -38,6 +38,11 @@ class TopupAmountPage extends StatefulWidget {
 
   final TopupFlow flow;
 
+  /// Whether uat offers **ถัดไป (ข้ามการชำระ — สำหรับทดสอบ)** past the
+  /// unpaid-interest gate. `false` since 2026-09-24 so testers exercise the
+  /// real settlement; prod never shows it regardless.
+  static const bool showsSettlementBypass = false;
+
   @override
   State<TopupAmountPage> createState() => _TopupAmountPageState();
 }
@@ -366,7 +371,13 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
   /// ⚠ **Remove this when the payment system can clear the flag again.** It
   /// skips a real settlement: anything filed through it is a top-up raised on
   /// a contract that still owes interest.
-  static bool get _bypassSettlementGate => !AppEnvironment.current.isProd;
+  ///
+  /// ⚠ **Switched off 2026-09-24** (tester round): testers now run the real
+  /// settlement. [TopupAmountPage.showsSettlementBypass] is the switch — flip
+  /// it to `true` to bring the button back on uat; prod can never show it.
+  static bool get _bypassSettlementGate =>
+      TopupAmountPage.showsSettlementBypass &&
+      !AppEnvironment.current.isProd;
 
   /// Advances as though the outcome were [TopupOutcome.topup], whatever the
   /// real outcome is. Only reachable from the bypass button above.

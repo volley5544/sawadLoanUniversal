@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sawad_loan_universal/config/app_environment.dart';
+import 'package:sawad_loan_universal/topup/topup_amount_page.dart';
 import 'package:sawad_loan_universal/models/app_config.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detail.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
@@ -1198,6 +1199,11 @@ void main() {
       // is exactly the kind of thing that outlives its reason.
       expect(AppEnvironment.prod.isProd, isTrue);
       expect(AppEnvironment.uat.isProd, isFalse);
+    });
+
+    // Switched off 2026-09-24: testers run the real settlement on uat too.
+    test('the bypass is switched off on uat as well', () {
+      expect(TopupAmountPage.showsSettlementBypass, isFalse);
     });
   });
 
