@@ -417,12 +417,14 @@ tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
 NDID are **parked** — they are still in the build and still work, but they are
 not what this round tests or ships.
 
-> **Status 2026-09-22: the tester team has it.** The build under test is uat
-> **`WEB_VERSION` 178** — read it off the `(UAT ver…)` tag in any AppBar, or
-> off the `SawadLoanUniversalWebVersion:<n>` line in the WebView console, and
-> quote it in a report. Fixes for what comes back start the next session.
-> ⚠ `.deploy-version-uat` says 131; that file records what the local hook
-> *built*, and CI has shipped since. The live number is the one that counts.
+> **Status 2026-09-24: the tester team has it.** The build under test is uat
+> **`WEB_VERSION` 201** (verified off the live bundle, published two minutes
+> after the last commit `c2e1217`) — read it off the `(UAT ver…)` tag in any
+> AppBar, or off the `SawadLoanUniversalWebVersion:<n>` line in the WebView
+> console, and quote it in a report. Fixes for what comes back start the next
+> session. ⚠ `.deploy-version-uat` still says 131; that file records what the
+> local hook *built*, and CI has shipped since. The live number is the one
+> that counts.
 
 | Screen | URL |
 | --- | --- |
@@ -438,30 +440,79 @@ No WebView needed for any of them: the mobile API sends
 
 ### What changed that a tester should look at first
 
-⚠⚠ **ชำระเต็มจำนวน now quotes a smaller figure** on any contract carrying a
-collection fee. It is `current_due_amount` alone; it used to add the collection
-fee on top, which double-counted it. **This is real money** — check it against
-a live contract in arrears, with `/loanPayment/old` open beside it for the old
-figure.
+⚠⚠ **ชำระเต็มจำนวน now bills `payment_details.total_due_amount`** — the same
+figure the loan detail screen shows as **รวมต้องชำระ** and **ยอดรวมต้องชำระ**,
+one tap away. **This is real money**: check it against a live contract in
+arrears, with `/loanPayment/old` open beside it for the old formula.
 
-⚠ **ยอดค้างชำระ now includes the penalty fee** as well as the collection fee.
-See the known gap below.
+⚠⚠ **The top-up payout now deducts `topup_detail.principal_not_due`** (falling
+back to `balance_receivable`), on the card, the amount screen, the summary
+screen **and `transfer_amount` on the submit**. Check a contract's
+เงินคงเหลือโอนเข้าบัญชี against the API's `default_transfer_amount`; on the one
+sample seen they agree.
 
-⚠ **Missing data renders `-`**, never a neighbouring field's value. If a date
-or a text field shows `-`, that is the app reporting that the API sent nothing
-— **please report it rather than treating it as a UI bug**; it is how these get
-fixed at source.
+⚠ **The top-up bypass button is gone.** `ถัดไป (ข้ามการชำระ — สำหรับทดสอบ)`
+no longer shows on uat, so a contract owing interest must really be paid by QR
+before the flow continues. If paying does not clear it, that is the payment
+system on uat, not this build.
+
+⚠ **Missing data renders `-`**, never a neighbouring field's value (two
+deliberate exceptions: the plate beside the loan detail title shows nothing,
+and the top-up principal falls back to `balance_receivable`). If a field shows
+`-`, **please report it rather than treating it as a UI bug**.
 
 ### Known gaps — expected, not bugs
 
 | What you will see | Why |
 | --- | --- |
-| **ค่าเบี้ยปรับค้างชำระ never appears** | `payment_details.penalty_fee` is a **guessed wire name** — no sample has ever carried it. If a contract with a real penalty shows no such row, that confirms the guess is wrong. ⚠ It also means ยอดค้างชำระ under-bills by the penalty, silently. |
-| **สัญญาเงินกู้ / กรมธรรม์ ดาวน์โหลด say "เวอร์ชันแอปนี้ยังไม่รองรับ"** | They need the host's `openExternalUrl` handler, which ships in an **app release**. Works only inside a host build carrying it. |
-| **No ชำระเงิน / สัญญาเงินกู้ button on prod** | prod has no `public_config` document yet, so `is_show_payButton` and `comcode_config` both default to off. uat is seeded. |
-| **คู่สัญญา button is gone from the bottom bar** | Disabled on request; the document moved to the **สัญญาเงินกู้** row at the foot of the ข้อมูลสินเชื่อ tab, same condition and same action. |
-| **The three blocks of ยอดรวมต้องชำระ may not add up** | Each row names a real field the server sent; none is derived to make the arithmetic close. A mismatch is a data question — please report the contract number. |
+| **The three blocks of ยอดรวมต้องชำระ may not add up** | The total is `total_due_amount` as the server sent it; the rows above are their own fields. A mismatch is a data question — please report the contract number. |
+| **สัญญาเงินกู้ / กรมธรรม์ ดาวน์โหลด / the ตั๋ว notice's download say "เวอร์ชันแอปนี้ยังไม่รองรับ"** | They need the host's `openExternalUrl` handler, which ships in an **app release**. |
+| **No ชำระเงิน / สัญญาเงินกู้ button on prod; prod shows the built-in no-contract text** | prod has no `public_config` document yet, so `is_show_payButton`, `comcode_config` and `topup_empty_*` all fall back. uat is seeded. |
+| **A top-up save can take up to 5 minutes on uat** | The QA backend is slow, so its timeout is 300 s (prod 60 s). A save that still times out **may have been filed** — check สถานะคำขอ before retrying. |
+| **คู่สัญญา button is gone from the bottom bar** | Disabled on request; the document is the **สัญญาเงินกู้** row at the foot of the ข้อมูลสินเชื่อ tab. |
 | **บันทึกรูปภาพ on the QR screens** | Needs the host's `saveImageToGallery`, also an app release. In a browser it falls back to a download. |
+
+## Recent changes — 2026-09-23 → 2026-09-24
+
+Tester-round fixes, all on the three in-scope screens. uat went 178 → **201**.
+526 tests, 39 analyzer infos (the baseline, unmoved).
+
+### Loan detail
+
+| Change | Detail |
+| --- | --- |
+| **ชำระภายในวันที่ → ชำระทันที** | red, whenever `overdue_amount > 0` |
+| **รวมต้องชำระ / ยอดรวมต้องชำระ = `total_due_amount`** | mapped ahead of the backend, bridged by an interim sum for a day, then switched when the field landed. `PaymentDetails.payableTotal` is the one seam |
+| **ส่วนที่จะครบกำหนดชำระ row = `current_due_amount`** | was `contract_details.installment_amount` |
+| **รวมต้องชำระ always shows** | at zero, on the last instalment, and `0.00` for unreadable data |
+| **The plate beside the title** | `collateral_information`, flush right, only when non-empty |
+| **One line, ellipsised** | every header value and the title |
+| **ประวัติการชำระ cards** | ช่องทางการชำระ hidden; date without time |
+| **`penalty_fee` confirmed** | the guessed wire name was right |
+| **`land_details` parsed** | onto `LoanContract.landDetails`; not rendered yet |
+
+### Loan payment
+
+- **ชำระเต็มจำนวน bills `total_due_amount`**; its ค่างวดปัจจุบัน row shows
+  `current_due_amount` — matching the loan detail screen.
+- **วันครบกำหนดชำระ reads ชำระทันที** when `overdue_date` is empty, null or
+  unreadable.
+
+### Top-up
+
+| Change | Detail |
+| --- | --- |
+| **No-contract message** | `“ยังไม่เข้าเงื่อนไข”` + the branch / Line @srisawad / 1652 line, **from Firestore** (`topup_empty_title` / `topup_empty_message`; seeded on uat by `tools/firestore-import/seed-topup-empty-text.mjs`) |
+| **Refusal card** | small line is `Code : <can_topup_reason_code>` |
+| **Principal deducted** | `topup_detail.principal_not_due` → `balance_receivable` fallback, on card + amount + summary + `transfer_amount`. `balance_receivable` widened to `double` (it truncated satang) |
+| **Bypass button off** | `TopupAmountPage.showsSettlementBypass = false` |
+| **Save timeout** | `POST /topup` **300 s on uat, 60 s on prod**, sent **direct** (not through the host bridge, whose own limit would cut it) |
+| **One line, ellipsised** | เลขที่สัญญา (card + amount screen) and the ข้อมูลสถานะ pill |
+
+### Host app (`pentest_resolved`, needs a release)
+
+- `f3278c1` — the `httpRequest` bridge timeout is **300 s on the QA flavor**,
+  60 s on prod.
 
 ## Recent changes — 2026-09-22
 

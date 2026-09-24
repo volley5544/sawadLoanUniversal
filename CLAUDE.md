@@ -56,21 +56,34 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   and #10.
 
 - ⚠ **The tester team has the build; the next session starts from their
-  reports** (handed over 2026-09-22). What they are testing is uat
-  **`WEB_VERSION` 178** — verified live by grepping the bundle, not by reading
-  `.deploy-version-uat`, which still says 131 and is a CI-run mismatch, not a
-  problem (see *Auto-deploy to uat*). Before changing anything, re-check what
-  is live: the number moves on any turn that touches source.
+  reports** (handed over 2026-09-24). What they are testing is uat
+  **`WEB_VERSION` 201** — verified live off the bundle, published two minutes
+  after the last commit `c2e1217`, not read from `.deploy-version-uat` (still
+  131, a CI-run mismatch — see *Auto-deploy to uat*). Before changing
+  anything, re-check what is live: the number moves on any turn that touches
+  source.
 
-  ⚠ **The 2026-09-22 session left no functional change.** Two debug dialogs
-  were built on the loan detail screen and both removed again before the
-  handover, so `loan_detail_page.dart` is byte-for-byte what it was at
-  `1269887`. If a tester report makes you want to see a raw response or the
-  bearer token on a device, read
-  [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs) first — it has
-  what was built, the two details worth keeping (the body captured *as sent*,
-  and the `hash_thai_id` masking that has to come back with it), and why it
-  is not on page load.
+  **The 2026-09-23/24 sessions were tester-round fixes** on the three
+  in-scope screens — the full list is README's *Recent changes — 2026-09-23 →
+  2026-09-24*. The ones that change **money**, and are the first thing to
+  check if a figure is reported wrong:
+
+  | Where | Now reads |
+  | --- | --- |
+  | loan detail รวมต้องชำระ / ยอดรวมต้องชำระ, payment ชำระเต็มจำนวน | `payment_details.total_due_amount` via `PaymentDetails.payableTotal` |
+  | loan detail ส่วนที่จะครบกำหนดชำระ, payment ค่างวดปัจจุบัน | `payment_details.current_due_amount` |
+  | top-up principal deduction (card, amount, summary, `transfer_amount`) | `topup_detail.principal_not_due` → `balance_receivable` fallback, via `TopupFlow.principalDeduction` / `principalNotDueOf` |
+  | top-up save timeout | 300 s uat / 60 s prod, **direct** (bypasses the host bridge) |
+
+  ⚠ **Several fields were changed back and forth within the day on request**
+  (`total_due_amount`'s interim sum, `principal_not_due`'s source and
+  fallback). The table is the settled state; the code comments carry the
+  history. Don't "restore" an intermediate version from a commit message.
+
+  Earlier: the 2026-09-22 session left no functional change — two loan-detail
+  debug dialogs were built and removed; see
+  [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs) before
+  rebuilding one.
 
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
@@ -4736,7 +4749,32 @@ reason recorded.
     seen on a device — in particular the `loan_type_icon` SVG (an inline data
     URL this build renders with `SvgPicture.string`) and the
     `POST /payment/history_new` response shape. Same caveat #30 carries for the
-    top-up submit.
+    top-up submit. ⚠ **Update 2026-09-24:** testers have now opened it on
+    devices (screenshots at ver189–201), so the screen itself renders; the
+    history response shape and the SVG icon are still worth a look.
+
+**Tester round 2026-09-23/24 (added 2026-09-24):**
+
+41. **Seed the prod `public_config` with `topup_empty_title` /
+    `topup_empty_message`** once #35 creates the document —
+    `node tools/firestore-import/seed-topup-empty-text.mjs
+    --project=sawad-loan-universal-prod`. Until then prod shows the built-in
+    copy of the same text.
+42. **Ship the host's QA-flavor bridge timeout** (`f3278c1` on
+    `pentest_resolved`, 300 s). The top-up save no longer depends on it (it
+    goes direct), but other slow calls proxied through the bridge still do.
+    Same release constraint as #10.
+43. **Top-up card ordering is an open request.** A tester screenshot's red
+    note asks for eligible contracts first, highest limit first, ineligible
+    ones last. Not built; the unanswered question is whether "highest" means
+    `default_topup_amount` or the payout.
+44. **`can_topup_reason_code` shows on a loan-type refusal too.** A contract
+    refused for being `L`/`H` while `can_topup == 'Y'` will still print
+    `Code : <reason>` if the API sends one, which may describe something else.
+    Offered to gate it on `can_topup != 'Y'`; not decided.
+45. **`land_details` is parsed, not rendered** (`LoanContract.landDetails`).
+    Its Thai labels in the code comments are unconfirmed — especially
+    `dealing_file_number` = หน้าสำรวจ.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
