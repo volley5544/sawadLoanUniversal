@@ -220,7 +220,7 @@ class LoanDetailSummary {
   /// The whole `ส่วนค้างชำระตั้งแต่วันที่ …` block.
   bool get showsOverdueSection => overdueSubtotal != 0;
 
-  /// `ค่างวดค้างชำระ` under `ส่วนที่จะครบกำหนดชำระ` —
+  /// `ค่างวด` under `ส่วนที่จะครบกำหนดชำระ` —
   /// **`payment_details.current_due_amount`** (2026-09-23, tester round).
   ///
   /// History: the remainder (`total − arrears`) 2026-09-17 → 09-19, then

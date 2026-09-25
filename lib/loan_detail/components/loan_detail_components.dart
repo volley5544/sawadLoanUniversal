@@ -535,11 +535,9 @@ class LoanDetailTotalPayableSection extends StatelessWidget {
             const SizedBox(height: 10),
             _blockHeading(
                 'ส่วนที่จะครบกำหนดชำระในวันที่ ${thaiDateOrDash(summary.upcomingSectionDate)}'),
-            // ⚠ The design labels this row `ค่างวดค้างชำระ` too, under a
-            // heading that says the opposite. Reproduced as drawn rather than
-            // corrected to `ค่างวด` — see the note in CLAUDE.md; this constant
-            // is the one place to change it.
-            _row('ค่างวดค้างชำระ', summary.upcomingDueAmount),
+            // `ค่างวด`, not `ค่างวดค้างชำระ` (2026-09-25, updated design):
+            // this block is the instalment *not yet* due.
+            _row('ค่างวด', summary.upcomingDueAmount),
           ],
           if (summary.showsTotalPayableRow) ...[
             const SizedBox(height: 10),

@@ -3063,12 +3063,9 @@ this reads as a bug until you see why: that block already ends in its own
 shapes both *do* show it, because the upcoming block carries no subtotal. All
 five shapes come straight from the design and a test pins each.
 
-⚠ **The upcoming block's row is labelled `ค่างวดค้างชำระ` in the design**, under
-a heading that says the opposite (it is *not* in arrears). Reproduced as drawn.
-The **value** was confirmed on 2026-09-19 — it is the per-instalment amount —
-but the wording was not revisited, so it still reads as a copy-paste from the
-block above. One string literal in `LoanDetailTotalPayableSection` if the BA
-wants it changed.
+**The upcoming block's row is labelled `ค่างวด`** (2026-09-25, updated
+design). It read `ค่างวดค้างชำระ` until then, copied from the arrears block
+under a heading that says the opposite.
 
 ⚠ **The arrears block is dated by `overdue_date`, falling back to
 `current_due_date`** — the same rule the loan payment screen's arrears block
