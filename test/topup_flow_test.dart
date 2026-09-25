@@ -9,6 +9,7 @@ import 'package:sawad_loan_universal/p_loan/application/models/loan_amount_detai
 import 'package:sawad_loan_universal/p_loan/application/models/loan_contract.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/loan_documents.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_flow.dart';
+import 'package:sawad_loan_universal/topup/models/topup_settlement.dart';
 import 'package:sawad_loan_universal/p_loan/application/models/p_loan_mock.dart';
 import 'package:sawad_loan_universal/p_loan/application/p_loan_topup_card_resume_page.dart';
 import 'package:sawad_loan_universal/topup/models/topup_card_variant.dart';
@@ -1302,6 +1303,36 @@ void main() {
     test('leaves a URL with no credentials untouched', () {
       const plain = 'https://pt.swpfin.com/portal/contract?contno=C-1&comcode=S22';
       expect(maskUrlSecrets(plain), plain);
+    });
+  });
+
+  group('interest-payment QR amount', () {
+    const detail = LoanAmountDetail(
+      code: '200',
+      interestYield: 100.50,
+      collectionFee: 50,
+      penaltyFee: 10.25,
+    );
+
+    test('bills recal settlement_total_amount as sent, not the three fields',
+        () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = detail
+        ..recalculation = const TopupRecalculation(settlementTotalAmount: 2500.25);
+      expect(flow.interestPaymentAmount, 2500.25);
+    });
+
+    test('a zero settlement total is billed as zero, not replaced', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = detail
+        ..recalculation = const TopupRecalculation();
+      expect(flow.interestPaymentAmount, 0);
+    });
+
+    test('no recal (the _old amount screen) keeps yield + fees', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..amountDetail = detail;
+      expect(flow.interestPaymentAmount, closeTo(160.75, 1e-9));
     });
   });
 }

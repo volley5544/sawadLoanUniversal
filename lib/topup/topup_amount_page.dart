@@ -464,6 +464,8 @@ class _TopupAmountPageState extends State<TopupAmountPage> {
       // the payment, so `interest_paid_flag` is still 'Y' and it goes on
       // asking for money that has been paid. Popping does not re-run
       // `initState`, so nothing else would refetch it.
+      // The QR bills the settlement total this screen is showing.
+      _flow.recalculation = _recal;
       await context.push(AppRoutes.topupQrPayment, extra: _flow);
       if (!mounted) return;
       await _load();

@@ -27,6 +27,7 @@ import '../../p_loan/application/models/loan_contract.dart';
 import '../../p_loan/application/models/loan_documents.dart';
 import 'topup_photo.dart';
 import 'topup_purpose.dart';
+import 'topup_settlement.dart';
 
 /// How the customer got into the flow, which decides what the back button on
 /// the first screen does.
@@ -103,6 +104,23 @@ class TopupFlow {
 
   /// `POST /topup/calculator` for [requestedAmount].
   InstallmentPlan? plan;
+
+  /// The `POST /topup/recal` settlement the amount screen showed when the
+  /// customer pressed ชำระเงิน — set just before the push to the QR screen,
+  /// which bills its `settlement_total_amount` (2026-09-25). Null from the
+  /// `_old` amount screen, which never calls recal.
+  TopupRecalculation? recalculation;
+
+  /// What the interest-payment QR bills: [recalculation]'s
+  /// `settlement_total_amount` as sent, else — only on the `_old` amount
+  /// screen, which has no recal — `yield + collection_fee + penalty_fee`.
+  double get interestPaymentAmount {
+    final recal = recalculation;
+    if (recal != null) return recal.settlementTotalAmount;
+    final detail = amountDetail;
+    if (detail == null) return 0;
+    return detail.interestYield + detail.collectionFee + detail.penaltyFee;
+  }
 
   // ── Step 4 — installments ────────────────────────────────────────────
   InstallmentOption? installment;

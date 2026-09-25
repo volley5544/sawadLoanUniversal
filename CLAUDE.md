@@ -2783,9 +2783,15 @@ path can only report that the download **started** — the browser never says
 whether a file was written — so its message is `กำลังดาวน์โหลดรูปภาพ` and not a
 claim of success.
 
-The amount is read off `/topup/detail` rather than the contract's own
-`topup_detail` (which is what the source uses): the detail call is re-read when
-the customer returns from paying, so it is the one that goes stale last.
+⚠ **The amount is `/topup/recal`'s `settlement_total_amount`, as sent**
+(2026-09-25, on request) — `TopupFlow.interestPaymentAmount`, fed by
+`TopupFlow.recalculation`, which the amount screen sets just before pushing
+here. It is the same figure that screen shows as ยอดที่ต้องชำระเพื่อเติมวงเงิน,
+so the two cannot quote different bills. It used to be
+`yield + collection_fee + penalty_fee`, which dropped any other settlement row
+(overdue principal, discount). ⚠ `POST /payment/interest` still sends those
+three fields separately — its body has no total field. The three-field sum
+survives only for `/topup/amount-old`, which has no recal.
 
 
 ⚠ **`topup_qr_payment_page`'s barcode payload is byte-for-byte the source's

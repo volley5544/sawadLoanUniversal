@@ -53,17 +53,18 @@ class _TopupQrPaymentPageState extends State<TopupQrPaymentPage> {
 
   TopupFlow get flow => widget.flow;
 
-  /// Total due: the accrued interest plus the collection and penalty fees,
-  /// which is the figure `/payment/interest` was asked to bill.
+  /// Total due: **`settlement_total_amount` from `POST /topup/recal`**, as
+  /// sent (2026-09-25, on request) — the same figure the amount screen shows
+  /// as ยอดที่ต้องชำระเพื่อเติมวงเงิน, so the two screens cannot quote
+  /// different bills. It used to be `yield + collection_fee + penalty_fee`,
+  /// which leaves out any other settlement row (overdue principal, discount).
   ///
-  /// Read off `/topup/detail` rather than the contract's own `topup_detail`
-  /// (which is what the source uses): the detail call is re-read when the
-  /// customer returns from paying, so it is the one that goes stale last.
-  double get _amountDue {
-    final detail = flow.amountDetail;
-    if (detail == null) return 0;
-    return detail.interestYield + detail.collectionFee + detail.penaltyFee;
-  }
+  /// ⚠ `POST /payment/interest` still sends those three fields separately —
+  /// its body has no field for a total.
+  ///
+  /// The three-field sum survives only for the `_old` amount screen, which
+  /// calls `/topup/detail` and never has a recalculation.
+  double get _amountDue => flow.interestPaymentAmount;
 
   /// The Thai bill-payment barcode payload.
   ///
