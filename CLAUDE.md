@@ -2595,6 +2595,10 @@ broke the moment the flow switched (all fixed 2026-09-14, each with a test):
 | `topup_submission` `credit_limit` | **0** filed on every top-up |
 
 Each now falls through to `/loan/list`'s copy, which the flow already holds.
+⚠ **Step 4's `car_details` rows (ทะเบียนจังหวัด, รุ่นสินค้า, `car_brand`) no
+longer consult recal at all** (2026-09-28, on request): a device showed
+ทะเบียนจังหวัด `72` — Suphan Buri's province code — where `/loan/list` said
+`สุพรรณบุรี`, so recal's `car_details` evidently isn't always blank.
 
 ⚠ **Fall through per *field*, never per object.** The step-4 section was the
 sixth to break and the easiest to get wrong: it read

@@ -133,8 +133,14 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
   /// customer cannot change it from here — a correction goes through the
   /// branch, the same as their personal data on step 6.
   ///
-  /// Prefers the priced detail call, falling back to `/loan/list`'s row
-  /// **field by field**.
+  /// ⚠ **`car_details` is read off `/loan/list` only** (2026-09-28, on
+  /// request). `/topup/recal`'s copy is ignored: a device showed
+  /// ทะเบียนจังหวัด **`72`** — Suphan Buri's province *code* — on a contract
+  /// whose `/loan/list` row says `car_province: "สุพรรณบุรี"`, and since recal
+  /// was preferred, whatever it sent there won.
+  ///
+  /// The `contract_details` rows (expiry, `vehicle_brand`) still prefer the
+  /// priced detail call and fall back to `/loan/list` **field by field**.
   ///
   /// ⚠ The fallback must be per field, not per object. `/topup/recal` — which
   /// replaced `/topup/detail` in this flow on 2026-09-14 — returns
@@ -147,7 +153,6 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
   Widget _vehicleDetails() {
     final detail = _flow.amountDetail;
     final contract = _flow.contract;
-    final detailCar = detail?.carDetails;
     final contractCar = contract?.carDetails;
     final detailContract = detail?.contractDetails;
     final contractContract = contract?.contractDetails;
@@ -157,7 +162,7 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
         .firstWhere((c) => c.isNotEmpty, orElse: () => '');
 
     final rows = <(String, String)>[
-      ('ทะเบียนจังหวัด', pick([detailCar?.province, contractCar?.province])),
+      ('ทะเบียนจังหวัด', pick([contractCar?.province])),
       (
         'วันหมดอายุทะเบียน',
         formatThaiDate(pick([
@@ -172,11 +177,10 @@ class _TopupPhotosPageState extends State<TopupPhotosPage> {
         pick([
           detailContract?.vehicleBrand,
           contractContract?.vehicleBrand,
-          detailCar?.brand,
           contractCar?.brand,
         ]),
       ),
-      ('รุ่นสินค้า', pick([detailCar?.series, contractCar?.series])),
+      ('รุ่นสินค้า', pick([contractCar?.series])),
     ];
 
     return Column(
