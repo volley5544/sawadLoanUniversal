@@ -413,9 +413,10 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
             caption: 'เลขที่สัญญา ${contract.contractNo}',
             value: '${formatMoney(flow.principalDeduction)} บาท',
           ),
+          // No เลขที่สัญญา caption here (2026-09-28, on request) — the row
+          // above already names the contract.
           PLoanAmountRow(
-            label: 'หักอากรสแตมป์',
-            caption: 'เลขที่สัญญา ${contract.contractNo}',
+            label: 'หักอากรแสตมป์',
             value: '${formatMoney(flow.feeAmount)} บาท',
           ),
           PLoanAmountRow(
