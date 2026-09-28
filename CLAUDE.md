@@ -72,7 +72,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   | --- | --- |
   | loan detail รวมต้องชำระ / ยอดรวมต้องชำระ, payment ชำระเต็มจำนวน | `payment_details.total_due_amount` via `PaymentDetails.payableTotal` |
   | loan detail ส่วนที่จะครบกำหนดชำระ, payment ค่างวดปัจจุบัน | `payment_details.current_due_amount` |
-  | top-up principal deduction (card, amount, summary, `transfer_amount`) | `topup_detail.principal_not_due` → `balance_receivable` fallback, via `TopupFlow.principalDeduction` / `principalNotDueOf` |
+  | top-up principal deduction (amount, summary, `transfer_amount`) | recal `principal_not_due` → `/loan/list` `topup_detail.principal_not_due` → `balance_receivable`, via `TopupFlow.principalDeduction` (card: `/loan/list` only, `principalNotDueOf`) |
   | top-up save timeout | 300 s uat / 60 s prod, **direct** (bypasses the host bridge) |
 
   ⚠ **Several fields were changed back and forth within the day on request**
@@ -1869,6 +1869,12 @@ one principal. ⚠ **Absent or 0 falls back to `topup_detail.balance_receivable`
 `double` for this: as an `int` it truncated `27437.14` and would have misfiled
 `transfer_amount`. `TopupFlow.closingBalance` still exists for its other
 readers.
+
+⚠ **Since 2026-09-28 `/topup/recal`'s top-level `principal_not_due` comes
+first** for `principalDeduction` (amount screen, summary, `transfer_amount`);
+only an absent / `null` / `""` value falls to the `/loan/list` rule above. A
+recal `0` is kept. The **card** has no recal and still reads `/loan/list`
+alone, so card and amount screen can now differ if the two APIs disagree.
 
 `TopupContractHeader`'s **เลขที่สัญญา** (card + amount screen) and the card's
 **ข้อมูลสถานะ** pill (`TopupStatusPill`) are one line, ellipsised (2026-09-24). In the live

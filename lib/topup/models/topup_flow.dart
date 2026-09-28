@@ -301,7 +301,16 @@ class TopupFlow {
   /// (2026-09-24, on request — "for now"). History the same day: fell back to
   /// [closingBalance], then to nothing (`0.00`), then this. This figure is
   /// **filed** (`transfer_amount`), which is why it has a fallback at all.
+  ///
+  /// ⚠ **`/topup/recal`'s top-level `principal_not_due` comes first**
+  /// (2026-09-28, on request). Only when recal sends no value (absent, `null`
+  /// or `""`) does it fall to [principalNotDueOf] — `/loan/list`'s
+  /// `principal_not_due`, then `balance_receivable`. A recal `0` is kept.
+  /// The card has no recal and still reads [principalNotDueOf] alone, so the
+  /// two can differ when recal and `/loan/list` disagree.
   double get principalDeduction {
+    final fromRecal = amountDetail?.principalNotDue;
+    if (fromRecal != null) return fromRecal;
     final c = contract;
     return c == null ? 0 : principalNotDueOf(c);
   }

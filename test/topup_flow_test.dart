@@ -220,6 +220,31 @@ void main() {
       expect(TopupFlow.principalNotDueOf(flow.contract!), 27437.14);
     });
 
+    // 2026-09-28: recal's top-level principal_not_due wins; absent / null /
+    // "" falls to /loan/list.
+    TopupFlow withRecal(Map<String, dynamic> recal) =>
+        TopupFlow(hashThaiId: 'H', authToken: 'T')
+          ..contract = withNotDue(27437.14)
+          ..amountDetail =
+              LoanAmountDetail.fromJson({'code': '200', 'fee_amount': 20, ...recal})
+          ..requestedAmount = 30000;
+
+    test('recal principal_not_due takes priority over /loan/list', () {
+      final flow = withRecal({'principal_not_due': 21913.33});
+      expect(flow.principalDeduction, 21913.33);
+      expect(flow.payoutAmount, closeTo(30000 - 21913.33 - 20, 0.001));
+    });
+
+    test('recal with no principal_not_due falls back to /loan/list', () {
+      expect(withRecal({}).principalDeduction, 27437.14);
+      expect(withRecal({'principal_not_due': null}).principalDeduction, 27437.14);
+      expect(withRecal({'principal_not_due': ''}).principalDeduction, 27437.14);
+    });
+
+    test('a recal principal_not_due of 0 is a value, not a gap', () {
+      expect(withRecal({'principal_not_due': 0}).principalDeduction, 0);
+    });
+
     // Absent or 0 falls back to balance_receivable (2026-09-24, on request).
     test('the card falls back to balance_receivable when the field is absent',
         () {

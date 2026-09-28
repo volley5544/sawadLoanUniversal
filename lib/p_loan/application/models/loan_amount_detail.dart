@@ -45,6 +45,7 @@ class LoanAmountDetail {
     this.interestYield = 0,
     this.topupSpecials = 0,
     this.closingBalance = 0,
+    this.principalNotDue,
   });
 
   /// `'200'` on success; anything else means [message] should be shown and the
@@ -114,6 +115,19 @@ class LoanAmountDetail {
   /// falls through them in order. Defaults to 0, so the P-Loan flow (which
   /// still calls `/topup/detail` and reads the nested block) is unaffected.
   final double closingBalance;
+
+  /// Top-level `principal_not_due` from **`POST /topup/recal`** (2026-09-28).
+  ///
+  /// ⚠ **Nullable on purpose**: null means the response carried no value
+  /// (absent, `null` or `""`), which is what tells `TopupFlow.principalDeduction`
+  /// to fall back to `/loan/list`. A sent `0` is a value and is kept.
+  final double? principalNotDue;
+
+  static double? _optionalDouble(Object? raw) {
+    if (raw == null) return null;
+    if (raw is String && raw.trim().isEmpty) return null;
+    return asDouble(raw);
+  }
 
   bool get isOk => code == '200';
 
@@ -201,6 +215,7 @@ class LoanAmountDetail {
         interestYield: asDouble(json['yield']),
         topupSpecials: asInt(json['topup_specials']),
         closingBalance: asDouble(json['closing_balance']),
+        principalNotDue: _optionalDouble(json['principal_not_due']),
       );
 
   // There is deliberately no `fromContract` seed for a new P-Loan. One existed
@@ -262,5 +277,6 @@ class LoanAmountDetail {
         interestYield: interestYield,
         topupSpecials: topupSpecials ?? this.topupSpecials,
         closingBalance: closingBalance,
+        principalNotDue: principalNotDue,
       );
 }
