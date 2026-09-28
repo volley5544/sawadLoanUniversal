@@ -4715,7 +4715,13 @@ reason recorded.
     `services/native_bridge.dart`; allowlist the URL prefix host-side, since it
     is built from a Firestore value anyone can edit. Same release constraint as
     #10.
-35. **Create the *prod* `public_config` document.** ⚠ It does **not exist** —
+35. **🟡 Prod `public_config` exists as of 2026-09-28** — copied from uat, with
+    `api_url.check_application_status` set to the **prod** host (uat's bare key
+    holds the uat one). Rules deployed to prod the same day; outsider probes
+    403. ⚠ **Still unreadable by the app** until #17 registers a prod web app,
+    and prod's `application/config` has **not** been copied (it holds the
+    `agent_web_api_token*` values). The rest of this item is the history.
+    Previously: **Create the *prod* `public_config` document.** ⚠ It does **not exist** —
     confirmed 2026-09-14, `NOT_FOUND`. So prod has none of `comcode_config`,
     `api_url.contract_url`, `is_show_payButton`, the top-up product icons or
     `check_application_status`, and every screen that reads them falls back.
@@ -4768,7 +4774,8 @@ reason recorded.
 
 **Tester round 2026-09-23/24 (added 2026-09-24):**
 
-41. **Seed the prod `public_config` with `topup_empty_title` /
+41. ~~Seed prod with `topup_empty_title` / `topup_empty_message`~~ **Done 2026-09-28** with the #35 copy. Was:
+    **Seed the prod `public_config` with `topup_empty_title` /
     `topup_empty_message`** once #35 creates the document —
     `node tools/firestore-import/seed-topup-empty-text.mjs
     --project=sawad-loan-universal-prod`. Until then prod shows the built-in
