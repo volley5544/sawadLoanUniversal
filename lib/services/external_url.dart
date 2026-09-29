@@ -150,9 +150,16 @@ Future<void> _showUrlFailureDialog(
 /// Opens the **application-status** web page — the destination of the top-up
 /// flow's ดูสถานะคำขอ / ดูสถานะการขอเพิ่มวงเงิน buttons.
 ///
-/// `<check_application_status>/<hashThaiId>#token=<jwt>`, the shape the
-/// srisawad app's ติดตามสถานะ menu item and LandAndHouseWeb's success screen
-/// both use.
+/// `<check_application_status>/<hashThaiId>?v=<millis>#token=<jwt>` — the
+/// shape the srisawad app's ติดตามสถานะ menu item and LandAndHouseWeb's success
+/// screen use, plus `v`.
+///
+/// **`v` is the open time in epoch milliseconds** (added 2026-09-29, on
+/// request), so every open is a distinct URL and no cache in between can hand
+/// back a stale status page. ⚠ It is a **query** parameter, before the `#`, on
+/// purpose: a fragment never reaches the server or any cache, so `&v=` inside
+/// `#token=…` would bust nothing. The status page reads `token` from the
+/// fragment with `URLSearchParams`, which a query leaves untouched.
 ///
 /// ⚠ **The token is a URL fragment, not a query parameter, and that is a
 /// security property rather than a style choice.** Fragments are never sent to
@@ -200,12 +207,14 @@ String applicationStatusUrl({
   required String base,
   required String hashThaiId,
   required String token,
+  DateTime? now,
 }) {
+  final v = (now ?? DateTime.now()).millisecondsSinceEpoch;
   final trimmed = base.trim().replaceAll(RegExp(r'/+$'), '');
   final id = Uri.encodeComponent(hashThaiId.trim());
   // An empty token still yields a valid page URL — the status site can ask the
   // customer to sign in again. A bare `#token=` would be a claim of a
   // credential we do not have, so it is omitted entirely.
   final fragment = token.trim().isEmpty ? '' : '#token=${token.trim()}';
-  return '$trimmed/$id$fragment';
+  return '$trimmed/$id?v=$v$fragment';
 }

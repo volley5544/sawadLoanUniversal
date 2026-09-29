@@ -2155,7 +2155,7 @@ rows on screen.
 
 **ดูสถานะคำขอ** on the contract card and **ดูสถานะการขอเพิ่มวงเงิน** on the
 success screen both open
-`<check_application_status>/<hashThaiId>#token=<jwt>` in the host's in-app
+`<check_application_status>/<hashThaiId>?v=<epoch ms>#token=<jwt>` in the host's in-app
 browser (changed 2026-09-14). That is the destination LandAndHouseWeb's button
 of the same name uses, and the srisawad app's own ติดตามสถานะ menu item: one
 status page tracking every application a customer has, rather than three

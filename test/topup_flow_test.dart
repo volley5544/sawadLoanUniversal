@@ -1190,21 +1190,21 @@ void main() {
       // the server, so the JWT stays out of web-server access logs and out of
       // the Referer of anything that page loads. `?token=` would leak a live
       // credential into logs this app does not control.
-      final url = applicationStatusUrl(
+      final url = applicationStatusUrl(now: _statusNow,
         base: 'https://dev.swpfin.com:5179/status',
         hashThaiId: 'HASH123',
         token: 'JWT.ABC',
       );
-      expect(url, 'https://dev.swpfin.com:5179/status/HASH123#token=JWT.ABC');
+      expect(url, 'https://dev.swpfin.com:5179/status/HASH123?v=1759132800000#token=JWT.ABC');
       expect(url, isNot(contains('?token=')));
       expect(url.split('#').first, isNot(contains('JWT')));
     });
 
     test('strips trailing slashes so the path cannot double up', () {
       expect(
-        applicationStatusUrl(
+        applicationStatusUrl(now: _statusNow,
             base: 'https://x/status//', hashThaiId: 'H', token: 'T'),
-        'https://x/status/H#token=T',
+        'https://x/status/H?v=1759132800000#token=T',
       );
     });
 
@@ -1212,16 +1212,33 @@ void main() {
       // A bare `#token=` would claim a credential we do not have; the status
       // site can ask the customer to sign in instead.
       expect(
-        applicationStatusUrl(base: 'https://x/status', hashThaiId: 'H', token: ''),
-        'https://x/status/H',
+        applicationStatusUrl(now: _statusNow, base: 'https://x/status', hashThaiId: 'H', token: ''),
+        'https://x/status/H?v=1759132800000',
+      );
+    });
+
+    test('v is the open time, in the query and never in the fragment', () {
+      final url = applicationStatusUrl(
+          base: 'https://x/status', hashThaiId: 'H', token: 'T');
+      final uri = Uri.parse(url);
+      expect(int.tryParse(uri.queryParameters['v'] ?? ''), isNotNull);
+      expect(uri.fragment, 'token=T');
+      // Two opens a moment apart are two distinct URLs.
+      expect(
+        applicationStatusUrl(
+            base: 'https://x/status', hashThaiId: 'H', token: 'T',
+            now: DateTime.fromMillisecondsSinceEpoch(1)),
+        isNot(applicationStatusUrl(
+            base: 'https://x/status', hashThaiId: 'H', token: 'T',
+            now: DateTime.fromMillisecondsSinceEpoch(2))),
       );
     });
 
     test('percent-encodes the hash rather than pasting it into the path', () {
       expect(
-        applicationStatusUrl(
+        applicationStatusUrl(now: _statusNow,
             base: 'https://x/status', hashThaiId: 'a/b', token: 'T'),
-        'https://x/status/a%2Fb#token=T',
+        'https://x/status/a%2Fb?v=1759132800000#token=T',
       );
     });
   });
@@ -1361,3 +1378,5 @@ void main() {
     });
   });
 }
+
+final _statusNow = DateTime.fromMillisecondsSinceEpoch(1759132800000);
