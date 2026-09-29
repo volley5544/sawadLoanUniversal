@@ -275,7 +275,10 @@ enum AppEnvironment {
     storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
     checkApplicationStatusBase: 'https://prd-proxy.swpfin.com:5178/status',
     topupSubmitTimeout: Duration(seconds: 60),
-    mobileApiBase: 'https://mobile-api.swpfin.com',
+    // "prodnew" backend (2026-09-29, on request); was mobile-api.swpfin.com.
+    // Only the degrade-to value — `api_url.api_url_prod` in the prod
+    // public_config wins when the config loads.
+    mobileApiBase: 'https://mapi-n.swpfin.com',
     srisawadHeader: 'x1',
     pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
   ),

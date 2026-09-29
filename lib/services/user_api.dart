@@ -21,7 +21,7 @@ import 'srisawad_api.dart';
 /// and uses the `?token=` launch param passed here only as the fallback.
 ///
 /// Base URL + `x-srisawad` header come from [AppEnvironment.current]
-/// (prod: `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
+/// (prod: `https://mapi-n.swpfin.com` + `x-srisawad: x1`;
 /// uat: `https://dev.swpfin.com:7076` + `x-srisawad: x1` — the new uat gateway
 /// requires it too, as of 2026-08-04). Transport goes
 /// through [sendApiRequest] (host `httpRequest` bridge inside the WebView,

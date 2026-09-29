@@ -3702,7 +3702,7 @@ require** the `Authorization: Bearer` token from the `?token=` launch param, and
 all until 2026-08-14, which is the pentest-#2 gap described under **API
 groups**. Base URL +
 `x-srisawad` header are per-environment on `AppEnvironment`
-(prod `https://mobile-api.swpfin.com` + `x-srisawad: x1`;
+(prod `https://mapi-n.swpfin.com` + `x-srisawad: x1` — the "prodnew" backend since 2026-09-29, was `mobile-api.swpfin.com`;
 uat `https://dev.swpfin.com:7076` + `x-srisawad: x1` — the new uat gateway
 requires the header on **every** `api_url_base` call, changed 2026-08-04; it was
 empty before). ⚠ Those base URLs are the **compile-time fallbacks**; the config
