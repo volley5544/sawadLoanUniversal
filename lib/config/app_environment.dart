@@ -266,14 +266,12 @@ enum AppEnvironment {
     name: 'prod',
     firebaseProjectAlias: 'prod',
     firebaseProjectId: 'sawad-loan-universal-prod',
-    // No web app registered on prod yet — register one and paste its key here
-    // to enable the anonymous read of the runtime config. Empty means the app
-    // skips sign-in and uses the compile-time endpoint below.
-    firebaseApiKey: '',
-    // Default Cloud Storage bucket, for the top-up photo mirror. Prod's is
-    // named here but the mirror stays inert there until a web app is
-    // registered above — without an API key there is no anonymous identity,
-    // and the rules require one.
+    // Prod web app `1:1067860249039:web:7dc7146ccb649cdecf2aba`, registered
+    // 2026-09-29. Enables the anonymous read of the runtime config (verified:
+    // public_config 200, config 403). Not a secret — it grants nothing the
+    // rules don't.
+    firebaseApiKey: 'AIzaSyBRlm8A7FV9DoexC_bbzufM7VJGuPVgEKg',
+    // Default Cloud Storage bucket, for the top-up photo mirror.
     storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
     checkApplicationStatusBase: 'https://prd-proxy.swpfin.com:5178/status',
     topupSubmitTimeout: Duration(seconds: 60),

@@ -4554,7 +4554,14 @@ reason recorded.
 16. **`firebase.json` cache headers miss `/` and deep links.** Hosting matches
     the requested path, not the rewritten one, so `/index.html` gets `no-cache`
     but `/`, `/pLoan/contract` and `/pLoan/resume` get `max-age=3600`.
-17. **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey`
+17. ~~prod has no registered web app~~ **✅ Resolved 2026-09-29** — web app
+    `1:1067860249039:web:7dc7146ccb649cdecf2aba`, key in
+    `AppEnvironment.prod.firebaseApiKey`; anonymous sign-in is on and reads
+    `public_config` (200) but not `config` (403). ⚠ So prod now **follows its
+    config**: ชำระเงิน shows (`is_show_payButton: true`), the Storage photo
+    mirror writes to the prod bucket, and NDID resolves to
+    `https://ndid.srisawadpower.com` — which the shipped host does not
+    allowlist yet (#22). Was: **prod has no registered web app**, so `AppEnvironment.prod.firebaseApiKey`
     is empty — anonymous sign-in is skipped there and the compile-time endpoint
     is used. Register one and paste the key to enable the config read on prod.
 18. ~~Android WebView cannot render the inline PDF.~~ **Fixed 2026-07-30** via
@@ -4718,8 +4725,7 @@ reason recorded.
 35. **🟡 Prod `public_config` exists as of 2026-09-28** — copied from uat, with
     `api_url.check_application_status` set to the **prod** host (uat's bare key
     holds the uat one). Rules deployed to prod the same day; outsider probes
-    403. ⚠ **Still unreadable by the app** until #17 registers a prod web app,
-    and prod's `application/config` has **not** been copied (it holds the
+    403. Readable by the app since #17 was resolved (2026-09-29). Prod's `application/config` has **not** been copied (it holds the
     `agent_web_api_token*` values). The rest of this item is the history.
     Previously: **Create the *prod* `public_config` document.** ⚠ It does **not exist** —
     confirmed 2026-09-14, `NOT_FOUND`. So prod has none of `comcode_config`,
