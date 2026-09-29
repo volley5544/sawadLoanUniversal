@@ -280,7 +280,9 @@ enum AppEnvironment {
     // public_config wins when the config loads.
     mobileApiBase: 'https://mapi-n.swpfin.com',
     srisawadHeader: 'x1',
-    pdfLoanSrisawadHeader: 'x1_c3Jpc2F3YWQ',
+    // `x1` "for now" (2026-09-29, on request) — was `x1_c3Jpc2F3YWQ`. If prod's
+    // /pdf/loan starts refusing, this is the first thing to flip back.
+    pdfLoanSrisawadHeader: 'x1',
   ),
   uat(
     name: 'uat',
@@ -382,12 +384,11 @@ enum AppEnvironment {
   ///
   /// | Env | Value |
   /// | --- | --- |
-  /// | prod | `x1_c3Jpc2F3YWQ` |
+  /// | prod | `x1` — "for now" since 2026-09-29; `x1_c3Jpc2F3YWQ` before |
   /// | uat | `x1` — same as every other call (changed 2026-08-07) |
   ///
-  /// It is per-environment rather than the one constant it used to be because
-  /// the two gateways disagree: uat wants the ordinary value and prod still
-  /// wants the special one. Sending the wrong one is not a silent difference —
+  /// Kept per-environment even while both are `x1`, because the two gateways
+  /// have disagreed before and prod's may again. Sending the wrong one is not a silent difference —
   /// the gateway refuses the request, so the contract PDFs never generate and
   /// step 6 cannot reach its submit gate.
   final String pdfLoanSrisawadHeader;

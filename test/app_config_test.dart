@@ -193,7 +193,7 @@ void main() {
       // and the two gateways disagree about it. Sending the wrong one is not a
       // subtle difference: the gateway refuses, so the contract PDFs never
       // generate and step 6 can't reach its submit gate.
-      expect(AppEnvironment.prod.pdfLoanSrisawadHeader, 'x1_c3Jpc2F3YWQ');
+      expect(AppEnvironment.prod.pdfLoanSrisawadHeader, 'x1');
       expect(AppEnvironment.uat.pdfLoanSrisawadHeader, 'x1');
     });
   });

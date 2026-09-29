@@ -179,8 +179,8 @@ class PLoanApi {
   /// Step 6 — generates the three contract PDFs (base64).
   ///
   /// **`x-srisawad` is per-environment here**, unlike everywhere else on this
-  /// base: prod wants `x1_c3Jpc2F3YWQ`, uat wants the ordinary `x1` (changed
-  /// 2026-08-07). See [AppEnvironment.pdfLoanSrisawadHeader].
+  /// base — both are `x1` today (prod "for now", 2026-09-29; it was
+  /// `x1_c3Jpc2F3YWQ`). See [AppEnvironment.pdfLoanSrisawadHeader].
   static Future<LoanDocuments> generateDocuments({
     required ContractPdfRequest request,
     required String hashThaiId,

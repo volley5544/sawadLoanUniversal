@@ -1018,10 +1018,10 @@ Structure:
 - **Wire quirks that are real, not typos** — `topup_argeement_file` (agreement),
   `lastest_date` (latest), `car_chassisNo`/`car_engineNo` mixed case, and
   camelCase keys inside `installments[]` while everything around them is
-  snake_case. `/pdf/loan`'s `x-srisawad` is **per-environment** — `x1` on uat like
-  every other call, `x1_c3Jpc2F3YWQ` on prod
-  (`AppEnvironment.pdfLoanSrisawadHeader`, split 2026-08-07; it was the special
-  value everywhere before that).
+  snake_case. `/pdf/loan`'s `x-srisawad` is **per-environment** — `x1` on **both** since
+  2026-09-29 (prod "for now", on request — it was `x1_c3Jpc2F3YWQ`;
+  `AppEnvironment.pdfLoanSrisawadHeader`, split 2026-08-07). If prod's
+  `/pdf/loan` starts refusing, flip prod back first.
 - **Step 5 (Extra 3) leads with `ข้อมูลส่วนตัว` → `ชื่อ-สกุล`** (added
   2026-07-31), above the `ข้อมูลโทรศัพท์` section. Its own header rather than a
   second row under the phone one, since a name is not phone data. The value is
