@@ -280,8 +280,10 @@ enum AppEnvironment {
     // public_config wins when the config loads.
     mobileApiBase: 'https://mapi-n.swpfin.com',
     srisawadHeader: 'x1',
-    // `x1` "for now" (2026-09-29, on request) — was `x1_c3Jpc2F3YWQ`. If prod's
-    // /pdf/loan starts refusing, this is the first thing to flip back.
+    // `x1` since 2026-09-29 — matches the srisawad app's `prodnew` flavor
+    // (`.env.prodnew`), which talks to the same new backend (mapi-n) and sends
+    // `x1` on every call. `x1_c3Jpc2F3YWQ` is the legacy-backend value (its
+    // `.env.prod`, and LandAndHouseWeb's prod /pdf/loan).
     pdfLoanSrisawadHeader: 'x1',
   ),
   uat(
