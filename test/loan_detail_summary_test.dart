@@ -948,4 +948,18 @@ void _collateralBesideTitleTests() {
       expect(find.text('กพ5161'), findsNothing);
     });
   });
+
+  group('ประวัติการชำระ note (2026-09-30)', () {
+    testWidgets('renders both lines', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: PaymentHistoryNote()),
+      ));
+      expect(find.text('*แสดงรายการรับชำระย้อนหลัง 3 เดือนล่าสุด'),
+          findsOneWidget);
+      expect(
+          find.text(
+              'สอบถามข้อมูลเพิ่มเติม กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652'),
+          findsOneWidget);
+    });
+  });
 }

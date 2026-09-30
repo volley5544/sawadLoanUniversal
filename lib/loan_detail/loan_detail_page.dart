@@ -784,15 +784,24 @@ class _PaymentHistoryTab extends StatelessWidget {
     }
     final loaded = history;
     if (loaded == null || loaded.isEmpty) {
-      return SizedBox(
-        height: 200,
-        child: Center(
-          child: Text(
-            'ไม่มีประวัติการชำระ',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansThai(fontSize: 18),
+      return Column(
+        children: [
+          SizedBox(
+            height: 200,
+            child: Center(
+              child: Text(
+                'ไม่มีประวัติการชำระ',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansThai(fontSize: 18),
+              ),
+            ),
           ),
-        ),
+          // Shown with no payments too (2026-09-30, on request).
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: PaymentHistoryNote(),
+          ),
+        ],
       );
     }
     return Column(
@@ -806,6 +815,10 @@ class _PaymentHistoryTab extends StatelessWidget {
             amount: '${formatMoney(entry.paidAmount)} บาท',
             channel: entry.paymentChannelName,
           ),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: PaymentHistoryNote(),
+        ),
         const SizedBox(height: 24),
         // This tab's own `data_date`, from the history response — not the
         // contract's, which is what the two tabs above quote. They are

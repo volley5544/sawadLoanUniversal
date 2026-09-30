@@ -589,3 +589,39 @@ class LoanDetailTotalPayableSection extends StatelessWidget {
     );
   }
 }
+
+/// The two-line note under the **ประวัติการชำระ** list (added 2026-09-30):
+/// the list covers only the last three months, and where to ask for more.
+///
+/// Shown whenever the history has **loaded** — with payments and with none —
+/// but not while loading or on a failed load, where the retry is the point.
+///
+/// ⚠ Line 2 reads `สาขาเจ้าของบัญชี`; the request and the design both wrote
+/// `เข้าของ`, taken as a typo because every other screen here says
+/// `สาขาเจ้าของบัญชี หรือโทร 1652`.
+class PaymentHistoryNote extends StatelessWidget {
+  const PaymentHistoryNote({super.key});
+
+  static const String line1 = '*แสดงรายการรับชำระย้อนหลัง 3 เดือนล่าสุด';
+  static const String line2 =
+      'สอบถามข้อมูลเพิ่มเติม กรุณาติดต่อสาขาเจ้าของบัญชี หรือโทร 1652';
+
+  @override
+  Widget build(BuildContext context) {
+    final style = GoogleFonts.notoSansThai(
+      fontSize: 13,
+      height: 1.5,
+      color: LoanDetailPalette.muted,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(line1, style: style),
+          Text(line2, style: style),
+        ],
+      ),
+    );
+  }
+}
