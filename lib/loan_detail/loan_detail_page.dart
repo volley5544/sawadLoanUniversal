@@ -759,6 +759,11 @@ class _PaymentHistoryTab extends StatelessWidget {
   final String? error;
   final VoidCallback onRetry;
 
+  /// `ไม่มีประวัติการชำระ` on an empty history — **hidden "for now"**
+  /// (2026-09-30, on request: show the same with and without history). Flip
+  /// to `true` to restore it above the note.
+  static const bool showsEmptyMessage = false;
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -784,19 +789,21 @@ class _PaymentHistoryTab extends StatelessWidget {
     }
     final loaded = history;
     if (loaded == null || loaded.isEmpty) {
+      // With no payments the tab is the note alone, the same as the foot of a
+      // populated list (2026-09-30, on request).
       return Column(
         children: [
-          SizedBox(
-            height: 200,
-            child: Center(
-              child: Text(
-                'ไม่มีประวัติการชำระ',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansThai(fontSize: 18),
+          if (showsEmptyMessage)
+            SizedBox(
+              height: 200,
+              child: Center(
+                child: Text(
+                  'ไม่มีประวัติการชำระ',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansThai(fontSize: 18),
+                ),
               ),
             ),
-          ),
-          // Shown with no payments too (2026-09-30, on request).
           const Align(
             alignment: Alignment.centerLeft,
             child: PaymentHistoryNote(),
