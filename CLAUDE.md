@@ -3722,12 +3722,14 @@ back to package:http (works only for CORS-enabled endpoints — the mobile API
 sends `access-control-allow-origin: *`, the NDID gateway does not). Network
 failures throw `ApiTransportException`.
 
-**Timeouts are per-helper defaults, and no client overrides them except NDID:**
-`sendApiRequest` **60 s**, `sendMultipartApiRequest` **60 s**,
-`sendMultipartGroupsApiRequest` **120 s** (five file parts on `/ploan`),
+**Timeouts are per-environment defaults** (`AppEnvironment.apiTimeout` /
+`uploadTimeout`, 2026-10-01 — uat raised to 300 s because the QA backend is
+under-resourced): `sendApiRequest` and `sendMultipartApiRequest` **prod 60 s /
+uat 300 s**, `sendMultipartGroupsApiRequest` **prod 120 s / uat 300 s** (five
+file parts on `/ploan`),
 `NdidApi._timeout` **30 s** passed explicitly, and the top-up save
 (`POST /topup`) passes `AppEnvironment.topupSubmitTimeout` — 300 s uat / 60 s
-prod. So raising the first one moves every other mobile-API call at once.
+prod. So changing `apiTimeout` moves every other mobile-API call at once. ⚠ Inside the app a bridged call is still also capped by the host's limit (QA flavor 300 s, prod 60 s), whichever is shorter.
 
 The host bridge's own limit is **300 s on the QA flavor, 60 s on prod** since
 2026-09-24 (`f3278c1`, unreleased); 60 s everywhere from 2026-09-13, 30 s

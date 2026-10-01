@@ -275,6 +275,8 @@ enum AppEnvironment {
     storageBucket: 'sawad-loan-universal-prod.firebasestorage.app',
     checkApplicationStatusBase: 'https://prd-proxy.swpfin.com:5178/status',
     topupSubmitTimeout: Duration(seconds: 60),
+    apiTimeout: Duration(seconds: 60),
+    uploadTimeout: Duration(seconds: 120),
     // "prodnew" backend (2026-09-29, on request); was mobile-api.swpfin.com.
     // Only the degrade-to value — `api_url.api_url_prod` in the prod
     // public_config wins when the config loads.
@@ -296,6 +298,9 @@ enum AppEnvironment {
     // The QA backend is under-resourced and a save routinely outruns 60 s
     // (2026-09-24, on request).
     topupSubmitTimeout: Duration(seconds: 300),
+    // Every mobile-API call on uat, same reason (2026-10-01, on request).
+    apiTimeout: Duration(seconds: 300),
+    uploadTimeout: Duration(seconds: 300),
     // Matches `api_url.api_url_base` in the uat config document. Changed
     // 2026-09-11 from `https://dev.swpfin.com:7076`, which **no longer
     // serves** — that host had been the fallback for most of this project's
@@ -320,6 +325,8 @@ enum AppEnvironment {
     required this.storageBucket,
     required this.checkApplicationStatusBase,
     required this.topupSubmitTimeout,
+    required this.apiTimeout,
+    required this.uploadTimeout,
     required this.mobileApiBase,
     required this.srisawadHeader,
     required this.pdfLoanSrisawadHeader,
@@ -369,6 +376,19 @@ enum AppEnvironment {
   /// app the bridge runs its own HTTP call with its own limit, which would
   /// otherwise cut the request off first. See `TopupApi.submit`.
   final Duration topupSubmitTimeout;
+
+  /// Default timeout for `sendApiRequest` and `sendMultipartApiRequest` —
+  /// i.e. every mobile-API call that does not pass its own. **prod 60 s,
+  /// uat 300 s** (2026-10-01, on request: the QA backend is under-resourced).
+  ///
+  /// ⚠ Inside the app a bridged call also hits the **host's** limit — 300 s on
+  /// the QA flavor, 60 s on prod (`loan_universal_web_widget.dart`) — and the
+  /// shorter one wins. NDID passes its own 30 s and is not affected.
+  final Duration apiTimeout;
+
+  /// Default timeout for `sendMultipartGroupsApiRequest` (the `/ploan`
+  /// five-file upload): **prod 120 s** (unchanged), **uat 300 s**.
+  final Duration uploadTimeout;
 
   /// Base URL of the srisawad **mobile API** (customer profile + addresses —
   /// see `api_data/api1.md` and `lib/services/user_api.dart`). No trailing

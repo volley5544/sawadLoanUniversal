@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
+import '../config/app_environment.dart';
 import 'native_bridge.dart';
 
 /// Raw result of an API call made through [sendApiRequest].
@@ -69,12 +70,12 @@ Future<ApiHttpResult> sendApiRequest(
   Uri url, {
   Map<String, String>? headers,
   String? body,
-  // 60 s so the P-Loan `/ploan` submit (and any other slow mobile-API write) has
-  // headroom — it was 30 s, which is tight for a contract-filing POST. Raised
-  // 2026-08-04.
-  Duration timeout = const Duration(seconds: 60),
+  // Null → `AppEnvironment.apiTimeout`: prod 60 s, uat 300 s (2026-10-01).
+  // History: 30 s, raised to 60 s on 2026-08-04 for the `/ploan` submit.
+  Duration? timeout,
   bool bypassHostBridge = false,
 }) async {
+  timeout ??= AppEnvironment.current.apiTimeout;
   if (NativeCameraBridge.isSupported && !bypassHostBridge) {
     final Map<String, dynamic>? res;
     try {
@@ -133,8 +134,10 @@ Future<ApiHttpResult> sendMultipartApiRequest(
   required List<int> fileBytes,
   Map<String, String>? headers,
   Map<String, String> fields = const {},
-  Duration timeout = const Duration(seconds: 60),
+  // Null → `AppEnvironment.apiTimeout`: prod 60 s, uat 300 s.
+  Duration? timeout,
 }) async {
+  timeout ??= AppEnvironment.current.apiTimeout;
   final request = http.MultipartRequest('POST', url)
     ..fields.addAll(fields)
     ..files.add(http.MultipartFile.fromBytes(
@@ -208,9 +211,11 @@ Future<ApiHttpResult> sendMultipartGroupsApiRequest(
   Map<String, String>? headers,
   Map<String, String> fields = const {},
   List<MultipartFilePart> files = const [],
-  Duration timeout = const Duration(seconds: 120),
+  // Null → `AppEnvironment.uploadTimeout`: prod 120 s, uat 300 s.
+  Duration? timeout,
   bool bypassHostBridge = false,
 }) async {
+  timeout ??= AppEnvironment.current.uploadTimeout;
   if (NativeCameraBridge.isSupported && !bypassHostBridge) {
     Map<String, dynamic>? res;
     try {

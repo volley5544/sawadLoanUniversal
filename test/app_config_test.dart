@@ -197,4 +197,17 @@ void main() {
       expect(AppEnvironment.uat.pdfLoanSrisawadHeader, 'x1');
     });
   });
+
+  group('API timeouts per environment (2026-10-01)', () {
+    test('uat waits 300 s on the slow QA backend; prod is unchanged', () {
+      expect(AppEnvironment.uat.apiTimeout, const Duration(seconds: 300));
+      expect(AppEnvironment.uat.uploadTimeout, const Duration(seconds: 300));
+      expect(AppEnvironment.uat.topupSubmitTimeout,
+          const Duration(seconds: 300));
+      expect(AppEnvironment.prod.apiTimeout, const Duration(seconds: 60));
+      expect(AppEnvironment.prod.uploadTimeout, const Duration(seconds: 120));
+      expect(AppEnvironment.prod.topupSubmitTimeout,
+          const Duration(seconds: 60));
+    });
+  });
 }
