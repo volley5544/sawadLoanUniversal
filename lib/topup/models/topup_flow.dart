@@ -315,6 +315,19 @@ class TopupFlow {
     return c == null ? 0 : principalNotDueOf(c);
   }
 
+  /// `contract_details.credit_limit` — **`/topup/recal`'s first** (2026-10-07,
+  /// on request), the step-6 **ยอดจัดสินเชื่อเดิม** row.
+  ///
+  /// ⚠ recal sends `contract_details` **blank** (`credit_limit: 0.00`) in
+  /// every sample so far, so a 0 falls through to the **same field** on
+  /// `/loan/list`'s row — not to a neighbouring one. A credit limit of 0 on an
+  /// active contract is not a real figure.
+  double get creditLimit {
+    final fromRecal = amountDetail?.contractDetails.creditLimit ?? 0;
+    if (fromRecal > 0) return fromRecal;
+    return contract?.contractDetails.creditLimit ?? 0;
+  }
+
   /// The card's reading of the same rule — it has only the `/loan/list` row.
   static double principalNotDueOf(LoanContract contract) {
     final detail = contract.topupDetail;

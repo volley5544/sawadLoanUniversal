@@ -245,6 +245,37 @@ void main() {
       expect(withRecal({'principal_not_due': 0}).principalDeduction, 0);
     });
 
+    // 2026-10-07: step 6 ยอดจัดสินเชื่อเดิม = contract_details.credit_limit,
+    // recal first, /loan/list when recal's block is blank.
+    LoanContract withCreditLimit(num limit) => LoanContract.fromJson({
+          ...mockContracts().first.rawJson,
+          'contract_details': {
+            ...(mockContracts().first.rawJson['contract_details']
+                as Map<String, dynamic>),
+            'credit_limit': limit,
+          },
+        });
+
+    test('credit_limit comes from recal when it sends one', () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = withCreditLimit(26000)
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'contract_details': {'credit_limit': 30000.50},
+        });
+      expect(flow.creditLimit, 30000.50);
+    });
+
+    test("recal's blank 0.00 falls to /loan/list's credit_limit", () {
+      final flow = TopupFlow(hashThaiId: 'H', authToken: 'T')
+        ..contract = withCreditLimit(26000)
+        ..amountDetail = LoanAmountDetail.fromJson({
+          'code': '200',
+          'contract_details': {'credit_limit': 0.00},
+        });
+      expect(flow.creditLimit, 26000);
+    });
+
     // Absent or 0 falls back to balance_receivable (2026-09-24, on request).
     test('the card falls back to balance_receivable when the field is absent',
         () {

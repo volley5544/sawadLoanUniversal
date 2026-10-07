@@ -398,7 +398,9 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
           const PLoanSectionHeader('สรุปยอดสินเชื่อใหม่'),
           PLoanAmountRow(
             label: 'ยอดจัดสินเชื่อเดิม',
-            value: '${formatMoney(detail.defaultTopupAmount)} บาท',
+            // `contract_details.credit_limit`, recal first (2026-10-07); was
+            // `default_topup_amount`. See TopupFlow.creditLimit.
+            value: '${formatMoney(flow.creditLimit)} บาท',
           ),
           PLoanAmountRow(
             label: 'รวมยอดวงเงินที่อนุมัติ',

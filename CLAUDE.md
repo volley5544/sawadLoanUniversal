@@ -1936,7 +1936,7 @@ Sections present:
 | §3.1 | installments | ยอดจัดสินเชื่อใหม่ + tenor list |
 | §3.2 | photos | ทะเบียนจังหวัด / วันหมดอายุทะเบียน / ยี่ห้อสินค้า / รุ่นสินค้า, then the required photos |
 | §4.1/4.2 | customer data | account, name, phone, four addresses, ไม่ถูกต้อง / ยืนยัน, confirm sheet |
-| §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents. ⚠ **PDPA is no longer here** — the host's `/consent` page asks it before this build opens (2026-09-17); the block is commented out, defaults are `true` |
+| §5.1–5.3 | conclusion | สรุปยอดสินเชื่อใหม่ (5 rows + payout; ยอดจัดสินเชื่อเดิม = `contract_details.credit_limit`, recal first then `/loan/list` when recal's is 0 — `TopupFlow.creditLimit`, 2026-10-07; was `default_topup_amount`), รายละเอียดคำขอสินเชื่อใหม่, identity photos, three document consents. ⚠ **PDPA is no longer here** — the host's `/consent` page asks it before this build opens (2026-09-17); the block is commented out, defaults are `true` |
 |  |  | ⚠ its confirm dialog is **ยืนยันข้อมูลเอกสาร**, carrying the lender's warranty **verbatim** (`_kBorrowerWarranty`, supplied 2026-09-15). Contract language, not UI copy — do not reword or reflow it, and note it scrolls rather than clipping: a truncated warranty is one the customer did not agree to |
 | §5.4 | success | payout + deadline caveat, ดูสถานะการขอเพิ่มวงเงิน, กลับสู่หน้าแรก |
 
