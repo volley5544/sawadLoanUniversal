@@ -344,23 +344,34 @@ void main() {
   });
 
 
-  group('prod failure report (2026-10-14)', () {
-    final url = Uri.parse('https://mapi-n.swpfin.com/topup');
-
-    test('carries the status and the full response body, not the request', () {
-      const body = '<html>…\nInternal Server Error: NullPointerException at X';
-      final report = TopupApi.responseReport(url,
-          res: const ApiHttpResult(statusCode: 500, body: body));
-      expect(report, contains('POST https://mapi-n.swpfin.com/topup'));
-      expect(report, contains('HTTP 500'));
-      expect(report, contains(body));
-      expect(report, isNot(contains('request body')));
+  group('POST /topup refusal message (2026-10-14)', () {
+    test('a non-200 code shows the API message verbatim', () {
+      expect(
+          TopupApi.apiErrorMessage({
+            'results': {
+              'code': '503',
+              'message': '50301:ท่านสามารถขอสินเชื่อได้ในเวลา 07:00 ถึง 20:30 เท่านั้น'
+            }
+          }),
+          '50301:ท่านสามารถขอสินเชื่อได้ในเวลา 07:00 ถึง 20:30 เท่านั้น');
+      expect(TopupApi.apiErrorMessage({'code': 500, 'message': 'boom'}),
+          'boom');
     });
 
-    test('a transport failure names it', () {
-      final report =
-          TopupApi.responseReport(url, transportError: 'timeout: POST x');
-      expect(report, contains('transport error: timeout: POST x'));
+    test('200, absent code, or a non-JSON body is not an API refusal', () {
+      expect(TopupApi.apiErrorMessage({'code': '200', 'message': 'ok'}), isNull);
+      expect(
+          TopupApi.apiErrorMessage({
+            'head': {'error_flag': 'N'},
+            'body': {'trans_no': 'T1'}
+          }),
+          isNull);
+      expect(TopupApi.apiErrorMessage(null), isNull);
+    });
+
+    test('a blank message still names the code', () {
+      expect(TopupApi.apiErrorMessage({'code': '500', 'message': ''}),
+          'ส่งคำขอไม่สำเร็จ (500)');
     });
   });
 }

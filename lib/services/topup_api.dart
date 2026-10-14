@@ -140,27 +140,34 @@ class TopupApi {
       throw SrisawadApiException(
         'ส่งคำขอไม่สำเร็จ: ${e.message}',
         details: failureReport(url, payload, transportError: e.message),
-        responseDetails: responseReport(url, transportError: e.message),
       );
     }
 
     final details = failureReport(url, payload, res: res);
-    final responseDetails = responseReport(url, res: res);
     final json = SrisawadApi.decode(res.body);
 
+    // ⚠ **The API's own `code`/`message` decides, like step 2's recal**
+    // (2026-10-14, on request). A non-200 `code` — top level or under
+    // `results` — fails the submit with the API's `message` verbatim (e.g.
+    // its business-hours `50301:…` text), whatever the HTTP status.
+    final apiError = apiErrorMessage(json);
+    if (apiError != null) {
+      Diagnostics.log('topup submit refused: $apiError');
+      throw SrisawadApiException(apiError,
+          statusCode: res.statusCode, details: details);
+    }
     if (res.statusCode < 200 || res.statusCode >= 300) {
       Diagnostics.log('topup submit failed: HTTP ${res.statusCode}');
-      final message = (json is Map && json['message'] != null)
-          ? '${json['message']}'
-          : 'HTTP ${res.statusCode}';
-      throw SrisawadApiException(message,
+      final head = json is Map ? json['head'] : null;
+      final desc = head is Map ? '${head['error_desc'] ?? ''}'.trim() : '';
+      throw SrisawadApiException(
+          desc.isNotEmpty ? desc : 'HTTP ${res.statusCode}',
           statusCode: res.statusCode,
-          details: details,
-          responseDetails: responseDetails);
+          details: details);
     }
     if (json is! Map<String, dynamic>) {
       throw SrisawadApiException('Unexpected /topup response: ${res.body}',
-          details: details, responseDetails: responseDetails);
+          details: details);
     }
     // ⚠ This endpoint answers `head`/`body` where the rest of the mobile API
     // answers `results` — a 200 here can still be a refusal.
@@ -173,11 +180,25 @@ class TopupApi {
         desc.isNotEmpty ? desc : 'ส่งคำขอไม่สำเร็จ กรุณาลองใหม่',
         statusCode: res.statusCode,
         details: details,
-        responseDetails: responseDetails,
       );
     }
     final body = json['body'];
     return body is Map ? '${body['trans_no'] ?? ''}' : '';
+  }
+
+  /// The API's refusal message when the body carries a non-200 `code`, at the
+  /// top level or under `results` — the envelope step 2's `/topup/recal`
+  /// uses. Null when there is no `code`, or it is `200`: then the `head` /
+  /// `body` envelope decides, as before. A blank `message` falls back to
+  /// `code` so the customer never sees an empty error.
+  static String? apiErrorMessage(Object? json) {
+    if (json is! Map) return null;
+    final results = json['results'];
+    final env = results is Map ? results : json;
+    final code = '${env['code'] ?? ''}'.trim();
+    if (code.isEmpty || code == '200') return null;
+    final message = '${env['message'] ?? ''}'.trim();
+    return message.isNotEmpty ? message : 'ส่งคำขอไม่สำเร็จ ($code)';
   }
 
   /// What a failed `POST /topup` shows a tester: the request that went out and
@@ -216,28 +237,6 @@ class TopupApi {
       ..writeln(_redactedPayload(payload));
     if (res != null) {
       out
-        ..writeln('')
-        ..writeln('--- response body ---')
-        ..writeln(res.body.isEmpty ? '(empty)' : res.body);
-    }
-    return out.toString();
-  }
-
-  /// The response half of [failureReport] — what a **prod** build shows on a
-  /// failed submit (2026-10-14, on request: a live HTTP 500 needed its body).
-  /// No request body: that is the customer's personal data. The response body
-  /// is verbatim and untruncated, same as [failureReport].
-  static String responseReport(
-    Uri url, {
-    ApiHttpResult? res,
-    String? transportError,
-  }) {
-    final out = StringBuffer()..writeln('POST $url');
-    if (transportError != null) {
-      out.writeln('transport error: $transportError');
-    } else if (res != null) {
-      out
-        ..writeln('HTTP ${res.statusCode}')
         ..writeln('')
         ..writeln('--- response body ---')
         ..writeln(res.body.isEmpty ? '(empty)' : res.body);

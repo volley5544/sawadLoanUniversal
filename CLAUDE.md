@@ -2908,6 +2908,13 @@ same reason `/ploan` goes direct. The host's bridge limit was also raised to
 300 s on its QA flavor (`f3278c1` on `pentest_resolved`, needs an app
 release) for anything still proxied.
 
+⚠ **The API's own `code`/`message` is checked first** (2026-10-14, on
+request), the envelope step 2's `/topup/recal` uses: a non-200 `code` at the
+top level or under `results` fails the submit with that `message` verbatim
+(`TopupApi.apiErrorMessage`), whatever the HTTP status — so an out-of-hours
+`50301:…` reads the same on step 6 as on step 2. A prod-only response-body
+dialog existed for a few hours the same day (`7ea638b`) and was reverted.
+
 ⚠ **A refusal arrives as HTTP 200.** This endpoint answers `head`/`body`, so
 `error_flag != 'N'` is the failure test — a status check alone reads a refusal
 as success. See the failure report below.
@@ -2920,11 +2927,9 @@ whose last line is the cause. `TopupApi.submit` sends through the transport
 directly rather than `SrisawadApi.send` for this, because `send` decodes and
 discards the raw status and body.
 
-⚠ **Prod shows the response half only** (2026-10-14, on request, after a live
-HTTP 500): `TopupApi.responseReport` — URL, status and the untruncated
-response body, with คัดลอก — via `SrisawadApiException.responseDetails`. The
-**request body** (the customer's personal data) stays non-prod only. Accepted
-trade: a customer can now read a gateway error page.
+⚠ **Non-prod only**, like the `/ploan` report and `EnvVersionTag`: the request
+body is the customer's personal data and the response may be a gateway stack
+trace. The customer-facing message is unchanged either way.
 
 ⚠ **Base64 values are elided by *length*, not by key name** — each replaced by
 its size, every scalar printed verbatim. Nine photos and three PDFs would be

@@ -260,8 +260,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
         blanks.isEmpty
             ? e.message
             : '${e.message}\n(ข้อมูลที่ยังว่าง: ${blanks.join(', ')})',
-        // Prod gets the response half only — see _showSubmitError.
-        details: AppEnvironment.current.isProd ? e.responseDetails : e.details,
+        details: e.details,
       );
     }
   }
@@ -274,14 +273,13 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
   /// usually an HTML page whose last line is the cause. Same dialog and same
   /// reasoning as the `/ploan` failure report.
   ///
-  /// ⚠ **Prod shows the response only** (2026-10-14, on request — a live
-  /// HTTP 500 needed its body to be diagnosable): status + response body, via
-  /// `SrisawadApiException.responseDetails`. The **request body** — the
-  /// customer's personal data — stays non-prod only; the caller picks which
-  /// [details] to pass. The response may still be a gateway stack trace that
-  /// the customer can read; that trade was accepted.
+  /// ⚠ **Non-prod only.** The request body is the customer's personal data and
+  /// the response may be a gateway stack trace — exactly what a developer
+  /// needs and what a customer must not read. The customer-facing [message] is
+  /// unchanged either way.
   void _showSubmitError(String message, {String? details}) {
-    final showDetails = details != null && details.isNotEmpty;
+    final showDetails =
+        details != null && details.isNotEmpty && !AppEnvironment.current.isProd;
     // The message goes on the clipboard too: a body pasted with no status line
     // above it loses which submit it came from.
     final copyText = showDetails ? '$message\n\n$details' : message;
@@ -306,9 +304,7 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
                 const Divider(height: 1),
                 const SizedBox(height: 12),
                 Text(
-                  AppEnvironment.current.isProd
-                      ? 'คำตอบจากเซิร์ฟเวอร์'
-                      : 'คำขอที่ส่งและคำตอบจากเซิร์ฟเวอร์ (สำหรับผู้พัฒนา)',
+                  'คำขอที่ส่งและคำตอบจากเซิร์ฟเวอร์ (สำหรับผู้พัฒนา)',
                   style: GoogleFonts.notoSansThai(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
