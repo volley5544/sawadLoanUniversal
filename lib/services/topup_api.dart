@@ -140,10 +140,12 @@ class TopupApi {
       throw SrisawadApiException(
         'ส่งคำขอไม่สำเร็จ: ${e.message}',
         details: failureReport(url, payload, transportError: e.message),
+        responseDetails: responseReport(url, transportError: e.message),
       );
     }
 
     final details = failureReport(url, payload, res: res);
+    final responseDetails = responseReport(url, res: res);
     final json = SrisawadApi.decode(res.body);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -152,11 +154,13 @@ class TopupApi {
           ? '${json['message']}'
           : 'HTTP ${res.statusCode}';
       throw SrisawadApiException(message,
-          statusCode: res.statusCode, details: details);
+          statusCode: res.statusCode,
+          details: details,
+          responseDetails: responseDetails);
     }
     if (json is! Map<String, dynamic>) {
       throw SrisawadApiException('Unexpected /topup response: ${res.body}',
-          details: details);
+          details: details, responseDetails: responseDetails);
     }
     // ⚠ This endpoint answers `head`/`body` where the rest of the mobile API
     // answers `results` — a 200 here can still be a refusal.
@@ -169,6 +173,7 @@ class TopupApi {
         desc.isNotEmpty ? desc : 'ส่งคำขอไม่สำเร็จ กรุณาลองใหม่',
         statusCode: res.statusCode,
         details: details,
+        responseDetails: responseDetails,
       );
     }
     final body = json['body'];
@@ -211,6 +216,28 @@ class TopupApi {
       ..writeln(_redactedPayload(payload));
     if (res != null) {
       out
+        ..writeln('')
+        ..writeln('--- response body ---')
+        ..writeln(res.body.isEmpty ? '(empty)' : res.body);
+    }
+    return out.toString();
+  }
+
+  /// The response half of [failureReport] — what a **prod** build shows on a
+  /// failed submit (2026-10-14, on request: a live HTTP 500 needed its body).
+  /// No request body: that is the customer's personal data. The response body
+  /// is verbatim and untruncated, same as [failureReport].
+  static String responseReport(
+    Uri url, {
+    ApiHttpResult? res,
+    String? transportError,
+  }) {
+    final out = StringBuffer()..writeln('POST $url');
+    if (transportError != null) {
+      out.writeln('transport error: $transportError');
+    } else if (res != null) {
+      out
+        ..writeln('HTTP ${res.statusCode}')
         ..writeln('')
         ..writeln('--- response body ---')
         ..writeln(res.body.isEmpty ? '(empty)' : res.body);

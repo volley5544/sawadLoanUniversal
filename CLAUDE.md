@@ -2920,9 +2920,11 @@ whose last line is the cause. `TopupApi.submit` sends through the transport
 directly rather than `SrisawadApi.send` for this, because `send` decodes and
 discards the raw status and body.
 
-⚠ **Non-prod only**, like the `/ploan` report and `EnvVersionTag`: the request
-body is the customer's personal data and the response may be a gateway stack
-trace. The customer-facing message is unchanged either way.
+⚠ **Prod shows the response half only** (2026-10-14, on request, after a live
+HTTP 500): `TopupApi.responseReport` — URL, status and the untruncated
+response body, with คัดลอก — via `SrisawadApiException.responseDetails`. The
+**request body** (the customer's personal data) stays non-prod only. Accepted
+trade: a customer can now read a gateway error page.
 
 ⚠ **Base64 values are elided by *length*, not by key name** — each replaced by
 its size, every scalar printed verbatim. Nine photos and three PDFs would be

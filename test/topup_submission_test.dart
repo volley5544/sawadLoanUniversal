@@ -343,4 +343,24 @@ void main() {
     });
   });
 
+
+  group('prod failure report (2026-10-14)', () {
+    final url = Uri.parse('https://mapi-n.swpfin.com/topup');
+
+    test('carries the status and the full response body, not the request', () {
+      const body = '<html>…\nInternal Server Error: NullPointerException at X';
+      final report = TopupApi.responseReport(url,
+          res: const ApiHttpResult(statusCode: 500, body: body));
+      expect(report, contains('POST https://mapi-n.swpfin.com/topup'));
+      expect(report, contains('HTTP 500'));
+      expect(report, contains(body));
+      expect(report, isNot(contains('request body')));
+    });
+
+    test('a transport failure names it', () {
+      final report =
+          TopupApi.responseReport(url, transportError: 'timeout: POST x');
+      expect(report, contains('transport error: timeout: POST x'));
+    });
+  });
 }

@@ -157,7 +157,8 @@ class SrisawadApi {
 
 /// Failure from any srisawad mobile-API group.
 class SrisawadApiException implements Exception {
-  SrisawadApiException(this.message, {this.statusCode, this.details});
+  SrisawadApiException(this.message,
+      {this.statusCode, this.details, this.responseDetails});
 
   final String message;
   final int? statusCode;
@@ -174,6 +175,11 @@ class SrisawadApiException implements Exception {
   /// ⚠ It can contain personal data and must be treated like
   /// `Diagnostics.report` — mask credentials before putting them in here.
   final String? details;
+
+  /// The **response half only** — request line, status and response body,
+  /// no request body. What a prod build may show (2026-10-14, on request),
+  /// since [details] carries the customer's request. Null when not collected.
+  final String? responseDetails;
 
   @override
   String toString() => 'SrisawadApiException: $message';
