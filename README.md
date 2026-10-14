@@ -21,10 +21,11 @@ scaffolding still exists, but the **web build is what ships**.
 > `LoanDetailPage` and `SelectPaymentPage`. UI text/data is Thai; code comments
 > are English.
 >
-> **This phase (2026-09-20) tests and ships three of them: top-up, loan detail
-> and จ่ายเงินค่างวด.** P-Loan, P-Loan Extra and NDID are parked — still in the
-> build and still working, but not what this round covers. See *Testing this
-> phase* below.
+> **In production since 2026-10-14: top-up, loan detail and จ่ายเงินค่างวด.**
+> The srisawad app carrying them was published at 20:30 (Thai time) after a
+> PVT that passed. P-Loan, P-Loan Extra and NDID are parked — still in the
+> build and still working, but not part of this release. See *Production
+> release — 2026-10-14* below.
 >
 > See [CLAUDE.md](CLAUDE.md) → **Outstanding** for what is still blocked and on
 > whom. As of **2026-08-04** both kinds file with `POST /ploan` — a
@@ -411,6 +412,67 @@ tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
                                 last wins — see CLAUDE.md
 ```
 
+## Production release — 2026-10-14
+
+**Top-up, loan detail and ชำระเงิน are live.** The srisawad app was published
+2026-10-14 20:30 (Thai time); PVT on the prod build passed.
+
+| | Commit | `WEB_VERSION` |
+| --- | --- | --- |
+| GitHub `main` = `uat` | `8d4a4c4` | — |
+| prod hosting | `8d4a4c4` | **9** |
+
+⚠ **`sawad_loan_universal_version` in the srisawad prod appConfig must equal
+the live prod number** (9) — never higher, or every phone reloads the WebView
+on each open. It moves on every push to `main`; read it off the live bundle.
+
+**Prod runs against:**
+
+| | |
+| --- | --- |
+| mobile API | `https://mapi-n.swpfin.com` (the "prodnew" backend), from prod's `public_config` |
+| `x-srisawad` | `x1` on every call, like the srisawad app's `prodnew` flavor |
+| Firebase | `sawad-loan-universal-prod`: web app registered, `public_config` seeded, rules deployed |
+| timeouts | 60 s per call, 120 s for uploads (uat: 300 s everywhere) |
+
+If a customer reports a problem, a screenshot plus the contract number is
+enough to reproduce it against uat; a failed top-up save shows the API's own
+message. Open questions carried into production are CLAUDE.md Outstanding
+#46–#52.
+
+## Recent changes — 2026-09-25 → 2026-10-15
+
+From the tester round to production. 540 tests, 39 analyzer infos (baseline).
+
+### Top-up
+
+| Change | Detail |
+| --- | --- |
+| **Interest QR amount = recal `settlement_total_amount`** | same figure as the amount screen's ยอดที่ต้องชำระเพื่อเติมวงเงิน (`TopupFlow.interestPaymentAmount`). `/payment/interest` still sends the three components |
+| **Principal deducted: recal first** | top-level `principal_not_due`; `/loan/list` only when recal sends none |
+| **Step 4 car rows: `/loan/list` only** | a device showed ทะเบียนจังหวัด as `72` (Suphan Buri's province *code*) off recal |
+| **Step 6 ยอดจัดสินเชื่อเดิม = `contract_details.credit_limit`** | recal first, `/loan/list` when recal's is 0 (was `default_topup_amount`) |
+| **Step 6 หักอากรแสตมป์** | spelling fixed (was สแตมป์), no contract-number caption |
+| **Save failure shows the API's message** | a non-200 `code`/`message` in the body — the envelope step 2 already reads — is shown verbatim on step 6 |
+| **Status buttons add `?v=<epoch ms>`** | a query parameter, before `#token=`, so it actually busts a cache |
+
+### Loan detail
+
+- **ประวัติการชำระ** ends with *\*แสดงรายการรับชำระย้อนหลัง 3 เดือนล่าสุด* and the
+  1652 contact line, with or without payments; **ไม่มีประวัติการชำระ is hidden**,
+  so an empty history is the note alone.
+- **ยอดรวมต้องชำระ**'s upcoming row reads **ค่างวด** (was ค่างวดค้างชำระ).
+
+### Environments
+
+- **Prod**: Firebase web app registered, `public_config` copied from uat (with
+  the prod status host), rules deployed; mobile API moved to `mapi-n`;
+  `x-srisawad` `x1` everywhere.
+- **uat**: every mobile-API call waits up to **300 s** (the QA backend is slow).
+- **Prod was hand-deployed twice on 2026-10-14** while GitHub refused pushes
+  from this machine; see CLAUDE.md *Deploy → Hand-deploying prod* for why the
+  version number then dropped from 10 to 9.
+
 ## Testing this phase (2026-09-20)
 
 **In scope: top-up, loan detail, จ่ายเงินค่างวด.** P-Loan, P-Loan Extra and
@@ -467,7 +529,7 @@ and the top-up principal falls back to `balance_receivable`). If a field shows
 | --- | --- |
 | **The three blocks of ยอดรวมต้องชำระ may not add up** | The total is `total_due_amount` as the server sent it; the rows above are their own fields. A mismatch is a data question — please report the contract number. |
 | **สัญญาเงินกู้ / กรมธรรม์ ดาวน์โหลด / the ตั๋ว notice's download say "เวอร์ชันแอปนี้ยังไม่รองรับ"** | They need the host's `openExternalUrl` handler, which ships in an **app release**. |
-| **No ชำระเงิน / สัญญาเงินกู้ button on prod; prod shows the built-in no-contract text** | prod has no `public_config` document yet, so `is_show_payButton`, `comcode_config` and `topup_empty_*` all fall back. uat is seeded. |
+| ~~No ชำระเงิน / สัญญาเงินกู้ button on prod~~ | **Resolved 2026-09-29**: prod has its own `public_config` and a registered web app, so it reads `is_show_payButton`, `comcode_config` and `topup_empty_*` like uat. |
 | **A top-up save can take up to 5 minutes on uat** | The QA backend is slow, so its timeout is 300 s (prod 60 s). A save that still times out **may have been filed** — check สถานะคำขอ before retrying. |
 | **คู่สัญญา button is gone from the bottom bar** | Disabled on request; the document is the **สัญญาเงินกู้** row at the foot of the ข้อมูลสินเชื่อ tab. |
 | **บันทึกรูปภาพ on the QR screens** | Needs the host's `saveImageToGallery`, also an app release. In a browser it falls back to a download. |

@@ -46,44 +46,60 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 
 ## Current state (read this first)
 
-- ⚠ **The 2026-09-20 phase is top-up, loan detail and loan payment.** Those
-  three are what is being tested and shipped now; **P-Loan, P-Loan Extra and
-  NDID are parked** — still built, still working, not in this round. Their
-  Outstanding items stay open but are not the critical path. The prod blockers
-  for the three that *are* in scope are #35 + #17 (prod has no
-  `public_config` and no registered web app, so `is_show_payButton` and
-  `comcode_config` default off), #34 (`openExternalUrl` needs an app release)
-  and #10.
+- ⚠ **Top-up, loan detail and loan payment are IN PRODUCTION** — the srisawad
+  app carrying them was published **2026-10-14 20:30 (Thai time)** after a PVT
+  that passed. The next session starts from **production reports**, not tester
+  ones. **P-Loan, P-Loan Extra and NDID are still parked** — built, working,
+  not in scope.
 
-- ⚠ **The tester team has the build; the next session starts from their
-  reports** (handed over 2026-09-24). What they are testing is uat
-  **`WEB_VERSION` 201** — verified live off the bundle, published two minutes
-  after the last commit `c2e1217`, not read from `.deploy-version-uat` (still
-  131, a CI-run mismatch — see *Auto-deploy to uat*). Before changing
-  anything, re-check what is live: the number moves on any turn that touches
-  source.
+  **What is live (verified 2026-10-15 off the bundles):**
 
-  **The 2026-09-23/24 sessions were tester-round fixes** on the three
-  in-scope screens — the full list is README's *Recent changes — 2026-09-23 →
-  2026-09-24*. The ones that change **money**, and are the first thing to
-  check if a figure is reported wrong:
+  | | Commit | `WEB_VERSION` |
+  | --- | --- | --- |
+  | GitHub `main` = `uat` | `8d4a4c4` | — |
+  | prod hosting | `8d4a4c4` | **9** (CI rebuild, after a hand deploy at 10) |
+  | uat hosting | `8d4a4c4` | CI run number |
+
+  ⚠ **`sawad_loan_universal_version` in the srisawad *prod* appConfig must
+  equal the live prod number (9)** — never higher, or every phone treats the
+  live build as stale and reloads on every open. Re-check after any push to
+  `main`: CI numbers prod builds by its own run counter, which is unrelated to
+  a hand-deployed number (see *Deploy → hand-deploying prod*).
+
+  **Prod configuration, all settled this phase:**
+
+  | What | Value |
+  | --- | --- |
+  | mobile API | **`https://mapi-n.swpfin.com`** — the "prodnew" backend. From `api_url.api_url_prod` in prod's `public_config` (all three `api_url_*` keys point there); built-in default the same since `45c7b64` |
+  | `x-srisawad` | **`x1` on every call, `/pdf/loan` included** — matches the srisawad app's `prodnew` flavor (`.env.prodnew`). `x1_c3Jpc2F3YWQ` is the *legacy* backend's value |
+  | Firebase | prod web app registered (#17); anonymous sign-in reads `public_config` (200), not `config` (403) |
+  | `public_config` | copied from uat 2026-09-28 (#35), `check_application_status` set to the **prod** host |
+  | rules | Firestore + Storage deployed to prod, identical to uat; outsider probes 403 |
+  | timeouts | prod **60 s** (uploads 120 s); uat **300 s** everywhere — `AppEnvironment.apiTimeout` / `uploadTimeout` |
+
+  **Money and figures changed 2026-09-25 → 2026-10-14** — the first thing to
+  check if a production figure is reported wrong:
 
   | Where | Now reads |
   | --- | --- |
   | loan detail รวมต้องชำระ / ยอดรวมต้องชำระ, payment ชำระเต็มจำนวน | `payment_details.total_due_amount` via `PaymentDetails.payableTotal` |
-  | loan detail ส่วนที่จะครบกำหนดชำระ, payment ค่างวดปัจจุบัน | `payment_details.current_due_amount` |
-  | top-up principal deduction (amount, summary, `transfer_amount`) | recal `principal_not_due` → `/loan/list` `topup_detail.principal_not_due` → `balance_receivable`, via `TopupFlow.principalDeduction` (card: `/loan/list` only, `principalNotDueOf`) |
-  | top-up save timeout | 300 s uat / 60 s prod, **direct** (bypasses the host bridge) |
+  | loan detail ส่วนที่จะครบกำหนดชำระ (row label **ค่างวด**), payment ค่างวดปัจจุบัน | `payment_details.current_due_amount` |
+  | top-up principal deduction (amount, summary, `transfer_amount`) | **recal** top-level `principal_not_due` (absent/null/`""` only) → `/loan/list` `topup_detail.principal_not_due` → `balance_receivable` (card: `/loan/list` only) |
+  | top-up interest QR amount | **recal `settlement_total_amount`**, as sent (`TopupFlow.interestPaymentAmount`). ⚠ `POST /payment/interest` still sends `yield` / `collection_fee` / `penalty_fee` — see #46 |
+  | top-up step 6 ยอดจัดสินเชื่อเดิม | `contract_details.credit_limit`, **recal first**, `/loan/list` when recal's is 0 (`TopupFlow.creditLimit`) |
+  | top-up step 4 car rows | `/loan/list` `car_details` **only** (a device showed recal's province as the code `72`) |
+  | top-up save failure | the API's own `code`/`message` (`TopupApi.apiErrorMessage`) — same envelope as step 2's recal |
 
-  ⚠ **Several fields were changed back and forth within the day on request**
-  (`total_due_amount`'s interim sum, `principal_not_due`'s source and
-  fallback). The table is the settled state; the code comments carry the
-  history. Don't "restore" an intermediate version from a commit message.
+  ⚠ **`/topup/recal` now populates `contract_details` and `car_details`**
+  (backend change, seen 2026-10-07). The `/loan/list` fallbacks written while
+  they were blank still stand and are now belt-and-braces; the reads that
+  check recal first (`can_topup`, `interest_paid_flag`, `credit_limit`,
+  `vehicle_brand`, plate expiry) now take recal's values.
 
-  Earlier: the 2026-09-22 session left no functional change — two loan-detail
-  debug dialogs were built and removed; see
-  [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs) before
-  rebuilding one.
+  Earlier phases: the 2026-09-23/24 tester-round fixes are README's *Recent
+  changes — 2026-09-23 → 2026-09-24*; the 2026-09-22 session left no
+  functional change (two loan-detail debug dialogs, built and removed —
+  [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs)).
 
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
@@ -207,7 +223,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 526 tests (models, payloads, headers, NDID terms +
+flutter test               # 540 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -335,6 +351,31 @@ carries a credential and the two paths produce identical bundles again.
 **Still manual:** bumping `sawad_loan_universal_version_uat` in the host's
 appConfig to match. Until that is raised, the host's stale-cache auto-reload
 won't fire for the new build.
+
+### Hand-deploying prod (when CI cannot)
+
+Done twice on 2026-10-14, while GitHub refused pushes from this machine:
+
+```sh
+flutter build web --release --pwa-strategy=none --dart-define=ENV=prod --dart-define=WEB_VERSION=<n>
+npx -y firebase-tools@13 deploy --only hosting -P prod --non-interactive
+```
+
+⚠ **The version numbers collide.** CI stamps prod with *its* run number, so
+pushing the same commit to `main` afterwards redeploys it under a number that
+can be **lower** than the hand-deployed one (10 → 9 on 2026-10-14). The code
+is identical, but the host's stale-build check compares numbers: set
+`sawad_loan_universal_version` to whatever is live **after** CI finishes.
+Verify the live number off the bundle
+(`grep -o 'SawadLoanUniversalWebVersion:[^"]*' main.dart.js`).
+
+⚠ **Pushing from here needs a Keychain token with write access.** A 403
+(`denied to volley5544`) means the stored HTTPS token lost write access.
+The `!` shell in a Claude session **cannot** answer git's username/password
+prompt (`Device not configured`) — the login has to be done once in a real
+terminal (`git push origin uat` in Terminal.app, password = a GitHub PAT),
+after which the Keychain serves it to every later push. Never paste the token
+into the chat.
 
 ### appConfig Firestore importer (`tools/firestore-import/`)
 
@@ -2182,11 +2223,10 @@ endpoint here it has a **compile-time fallback that actually matters**:
 
 Resolution is config first (`api_url.check_application_status`),
 `AppEnvironment.checkApplicationStatusBase` as the degrade-to — the same order
-`SrisawadApi.baseUrl()` uses. ⚠ **On prod the fallback is currently the only
-source**: that project has no `application/public_config` document at all and
-no registered web app, so there is no anonymous identity to read one with
-(Outstanding #17 and #35). A config-only lookup would leave prod's status
-buttons dead. A test pins both values non-empty and `https://`, since the JWT
+`SrisawadApi.baseUrl()` uses. Prod reads the
+config since 2026-09-29 (#17 + #35 resolved — prod's document holds the prod
+host); the fallback was the *only* source before that, which is why it must
+stay a working prod URL. A test pins both values non-empty and `https://`, since the JWT
 rides in that URL.
 
 ⚠ **A failed open shows the URL it tried** (non-prod, with a คัดลอก button).
@@ -2358,8 +2398,8 @@ The URLs are the LandAndHouseWeb project's own, copied verbatim: public
 Firebase Storage links in the **prd** bucket that answer
 `access-control-allow-origin: *` (verified), so `flutter_svg` can fetch them
 from the browser. Seeded into the uat document on 2026-09-11 with a
-field-masked PATCH; ⚠ **prod's document has not been seeded** — do that before
-the flow ships there, or every prod tile shows the fallback icon.
+field-masked PATCH. Prod's document got the same map with the 2026-09-28
+copy (#35) — ⚠ still pointing at icons in **uat's** bucket (#51).
 
 | code | icon |
 | --- | --- |
@@ -3659,7 +3699,7 @@ page. Needs an app release (Outstanding #10).
 kill switch for its payment path, reproduced with the same capital-B spelling
 and seeded into the uat `public_config` (2026-09-14). `/loanPayment` stays
 reachable by URL while the switch is off, which is what keeps it testable.
-⚠ It defaults to **false**, so an unseeded config — prod today — withholds the
+⚠ It defaults to **false** (prod's document sets it `true` since 2026-09-28), so an unseeded config withholds the
 button rather than offering a payment path nobody turned on. A test pins that
 a *string* `'true'` does not grant it.
 
@@ -4810,6 +4850,44 @@ reason recorded.
 45. **`land_details` is parsed, not rendered** (`LoanContract.landDetails`).
     Its Thai labels in the code comments are unconfirmed — especially
     `dealing_file_number` = หน้าสำรวจ.
+
+**Production release 2026-10-14 (added 2026-10-15):**
+
+⚠ **The srisawad app release on 2026-10-14 should have closed #10, #22, #34
+and #42** (host edits, NDID prod allowlist, `openExternalUrl`, the bridge
+timeout). Not marked closed here because the host commit that was built has
+not been recorded — the PVT APK was built from an **uncommitted** working tree
+on `pentest_resolved`. Confirm the commit, then strike them.
+
+46. **`POST /payment/interest` vs the QR amount.** The QR bills recal's
+    `settlement_total_amount`; `/payment/interest` still sends `yield` +
+    `collection_fee` + `penalty_fee` (its body has no total field). They agree
+    whenever the settlement is only those three, and differ when it carries
+    overdue principal or a discount. Ask the API team which one the bank
+    reconciles against.
+47. **`POST /pdf/loan` gets an empty `contract_date` on every top-up.** Step 6
+    passes recal's `contract_date`, which is `""` in every sample (the
+    `/loan/list` row has the real date). PDFs generated fine through PVT, so
+    the API evidently tolerates it; falling back to `/loan/list`'s is one
+    line in `TopupFlow`'s `ContractPdfRequest` if it ever matters.
+48. **Step 2's settlement re-read prices at `default_topup_amount`**, not the
+    customer's chosen amount (`TopupFlow.settlementPricingAmount`) — kept from
+    when recal refused out-of-range amounts. If the settlement rows should
+    follow the chosen amount, that getter is the change.
+49. **No client-side business-hours check.** The 07:00–20:30 rule is the
+    server's: recal refuses with `50301:…` on step 2, and `POST /topup` now
+    surfaces the same envelope on step 6. Not verified that prod's `mapi-n`
+    recal answers that way out of hours.
+50. **Top-up card display rules worth knowing** (reviewed 2026-10-08, not
+    changed): no row hides at zero; ข้อมูลหลักประกัน renders blank (not `-`);
+    the blue payout band shows on the *status* card too; the payout is not
+    clamped, so a principal above `default_topup_amount` shows negative.
+51. **Prod `public_config` still carries `topup_product_icons` pointing at
+    uat's bucket**, and `application/config` was **not** copied to prod (it
+    holds the `agent_web_api_token*` values — copy rotated ones by hand if
+    prod needs it; see #1).
+52. **Rotate** the `…prod` Basic account (#33) and the `agent_web_api_token*`
+    values (#1) — still open, unaffected by the release.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
