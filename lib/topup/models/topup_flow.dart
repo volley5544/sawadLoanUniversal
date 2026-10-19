@@ -137,6 +137,15 @@ class TopupFlow {
   /// The ID number `/vision/thai-id-validate` read off the card photo.
   String verifiedThaiId = '';
 
+  /// The card expiry the customer picked on step 6, when the scan's own
+  /// `lastest_date` was missing, unreadable or already past
+  /// ([idCardNeedsExpiryDate]). Null when the scan's date was good.
+  ///
+  /// ⚠ **Not on the submit body** — `POST /topup` has no card-expiry field, and
+  /// LandAndHouseWeb's picker does not send its date either. It records that
+  /// the check was answered by the customer rather than by the scan.
+  DateTime? pickedIdCardExpiry;
+
   /// PDPA answers, **already given before this build opens** (2026-09-17).
   ///
   /// The srisawad host funnels every top-up entry point through its own
@@ -688,6 +697,42 @@ class TopupFlow {
   }
 
   // ── Derived: identity and submit gating ──────────────────────────────
+
+  /// Today on the **server's** clock (`payment_details.current_date_time`),
+  /// date only, so a wrong device clock cannot pass an expired card. Device
+  /// time only when the server sent none.
+  DateTime get serverToday {
+    final now =
+        DateTime.tryParse(contract?.paymentDetails.currentDateTime ?? '') ??
+            DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// Whether step 6 must ask the customer for the card's expiry date.
+  ///
+  /// LandAndHouseWeb's rule: ask unless `exception_date == 'Y'` (the server
+  /// waives the check) or the scanned `lastest_date` is **after** today. So a
+  /// missing or unreadable date asks — the scan could not tell us — and a card
+  /// expiring *today* asks too, because the source compares `today < expiry`.
+  static bool idCardNeedsExpiryDate({
+    required String latestDate,
+    required bool expiryWaived,
+    required DateTime today,
+  }) {
+    if (expiryWaived) return false;
+    final expiry = DateTime.tryParse(latestDate.trim());
+    if (expiry == null) return true;
+    return !isIdCardExpiryValid(expiry, today: today);
+  }
+
+  /// A picked (or scanned) expiry is valid only when it is strictly after
+  /// [today], comparing dates without time — the source's
+  /// `isCurrentDateBeforeDateInput`.
+  static bool isIdCardExpiryValid(DateTime expiry, {required DateTime today}) {
+    final day = DateTime(expiry.year, expiry.month, expiry.day);
+    final now = DateTime(today.year, today.month, today.day);
+    return now.isBefore(day);
+  }
 
   /// Whether the scanned card belongs to the customer on file.
   ///

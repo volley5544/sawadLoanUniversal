@@ -149,12 +149,36 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
         _snack('เลขบัตรไม่ตรงกับฐานข้อมูลโปรดลองอีกครั้ง');
         return;
       }
-      if (!result.expiryWaived && _isExpired(result.latestDate)) {
-        setState(() => _busy = false);
-        _snack('บัตรประชาชนหมดอายุ กรุณาติดต่อสาขา');
-        return;
+      // Expired, or a date the scan could not read: ask the customer for the
+      // card's expiry rather than refusing it — LandAndHouseWeb's
+      // ChangeDateExpireComponent. ✕ discards the photo, as it does there.
+      DateTime? pickedExpiry;
+      final today = _flow.serverToday;
+      if (TopupFlow.idCardNeedsExpiryDate(
+        latestDate: result.latestDate,
+        expiryWaived: result.expiryWaived,
+        today: today,
+      )) {
+        pickedExpiry = await showDialog<DateTime>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _IdCardExpiryDialog(
+            thaiId: result.thaiId,
+            today: today,
+            scannedDateUnreadable:
+                DateTime.tryParse(result.latestDate.trim()) == null,
+          ),
+        );
+        if (!mounted) return;
+        if (pickedExpiry == null) {
+          setState(() => _busy = false);
+          return;
+        }
+        Diagnostics.log('topup id card expiry picked: '
+            'scan="${result.latestDate}" picked=${pickedExpiry.toIso8601String()}');
       }
       setState(() {
+        _flow.pickedIdCardExpiry = pickedExpiry;
         _flow.setPhoto(TopupPhoto.idCard, bytes);
         _busy = false;
       });
@@ -187,17 +211,6 @@ class _TopupConclusionPageState extends State<TopupConclusionPage> {
       setState(() => _busy = false);
       _snack('ไม่สามารถถ่ายรูปได้: $e');
     }
-  }
-
-  /// Card expiry against the **server's** clock, which rides on the contract
-  /// (`payment_details.current_date_time`), so a wrong device clock cannot pass
-  /// an expired card. Falls back to device time only when the server sent none.
-  bool _isExpired(String expiryDate) {
-    final expiry = DateTime.tryParse(expiryDate);
-    if (expiry == null) return false; // unparseable -> let the server decide
-    final serverNow =
-        DateTime.tryParse(_flow.contract?.paymentDetails.currentDateTime ?? '');
-    return expiry.isBefore(serverNow ?? DateTime.now());
   }
 
   /// Opens a document, then asks for consent to it.
@@ -899,6 +912,159 @@ class _BorrowerWarrantyDialog extends StatelessWidget {
           ),
           child: Text('ยืนยัน',
               style: GoogleFonts.notoSansThai(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+}
+
+/// **กรุณาเลือกวันหมดอายุบัตร** — asked when the scanned card is expired or its
+/// expiry could not be read. A port of LandAndHouseWeb's
+/// `ChangeDateExpireComponent`: the card number read-only, a date button, and
+/// ยืนยันข้อมูลถูกต้อง, which accepts only a date after [today] (otherwise
+/// `วันที่เลือกบัตรหมดอายุแล้ว`). Pops the picked date, or null on ✕.
+class _IdCardExpiryDialog extends StatefulWidget {
+  const _IdCardExpiryDialog({
+    required this.thaiId,
+    required this.today,
+    required this.scannedDateUnreadable,
+  });
+
+  final String thaiId;
+
+  /// Server-clock today, date only — the bar the picked date must clear.
+  final DateTime today;
+
+  /// True when the scan returned no readable expiry, false when it returned
+  /// one that has passed. Only changes the explanatory line.
+  final bool scannedDateUnreadable;
+
+  @override
+  State<_IdCardExpiryDialog> createState() => _IdCardExpiryDialogState();
+}
+
+class _IdCardExpiryDialogState extends State<_IdCardExpiryDialog> {
+  DateTime? _picked;
+  String? _error;
+
+  /// `#-####-#####-##-#`, the mask the source applies to the same field.
+  static String _formatThaiId(String raw) {
+    final d = raw.replaceAll(RegExp(r'\D'), '');
+    if (d.length != 13) return raw;
+    return '${d[0]}-${d.substring(1, 5)}-${d.substring(5, 10)}-'
+        '${d.substring(10, 12)}-${d[12]}';
+  }
+
+  Future<void> _pickDate() async {
+    final firstDate = widget.today.add(const Duration(days: 1));
+    final lastDate = DateTime(widget.today.year + 20, 12, 31);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _picked ?? firstDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _picked = DateTime(picked.year, picked.month, picked.day);
+      _error = null;
+    });
+  }
+
+  void _confirm() {
+    final picked = _picked;
+    if (picked == null) return;
+    if (!TopupFlow.isIdCardExpiryValid(picked, today: widget.today)) {
+      setState(() => _error = 'วันที่เลือกบัตรหมดอายุแล้ว');
+      return;
+    }
+    Navigator.of(context).pop(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final picked = _picked;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text('กรุณาเลือกวันหมดอายุบัตร',
+                style: LoanRegisterStyles.appBarTitleStyle()
+                    .copyWith(fontSize: 18)),
+          ),
+          IconButton(
+            tooltip: 'ปิด',
+            icon: Icon(Icons.close, color: LoanRegisterStyles.primary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.scannedDateUnreadable
+                ? 'ระบบไม่สามารถอ่านวันหมดอายุจากบัตรได้'
+                : 'บัตรประชาชนหมดอายุแล้วตามข้อมูลที่อ่านได้',
+            style: GoogleFonts.notoSansThai(
+                fontSize: 13, color: LoanRegisterStyles.label),
+          ),
+          const SizedBox(height: 16),
+          Text('เลขบัตรประชาชน', style: LoanRegisterStyles.labelStyle()),
+          const SizedBox(height: 4),
+          Text(_formatThaiId(widget.thaiId),
+              style: LoanRegisterStyles.valueStyle()),
+          const SizedBox(height: 16),
+          Text('วันหมดอายุบัตร', style: LoanRegisterStyles.labelStyle()),
+          const SizedBox(height: 6),
+          OutlinedButton.icon(
+            onPressed: _pickDate,
+            icon: Icon(Icons.calendar_today_outlined,
+                size: 18, color: LoanRegisterStyles.primary),
+            label: Text(
+              picked == null
+                  ? 'เลือกวันหมดอายุบัตร'
+                  : formatThaiDate(picked.toIso8601String()),
+              style: GoogleFonts.notoSansThai(
+                color: picked == null
+                    ? LoanRegisterStyles.label
+                    : LoanRegisterStyles.value,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              side: BorderSide(color: LoanRegisterStyles.cardBorder),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!,
+                style: GoogleFonts.notoSansThai(
+                    fontSize: 13, color: LoanRegisterStyles.required)),
+          ],
+        ],
+      ),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: picked == null ? null : _confirm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: LoanRegisterStyles.primary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: Text('ยืนยันข้อมูลถูกต้อง',
+                style: GoogleFonts.notoSansThai(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
         ),
       ],
     );

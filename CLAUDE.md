@@ -2429,6 +2429,18 @@ Each of these is a behaviour change, not a port artefact:
   `3401700351967` alongside the customer's own, which let anyone holding one of
   those cards verify for **any** account. Same decision the P-Loan port made;
   `test/topup_flow_test.dart` pins it shut.
+- **An expired or unreadable ID-card expiry asks for the date** (2026-10-19,
+  matching LandAndHouseWeb's `ChangeDateExpireComponent`). Step 6 used to
+  refuse an expired card outright and silently pass an unreadable one. Now
+  `TopupFlow.idCardNeedsExpiryDate` — `exception_date != 'Y'` and
+  `lastest_date` missing/unparseable or **not after** server-today (a card
+  expiring *today* asks, as the source's `today < expiry` does) — opens
+  `_IdCardExpiryDialog`: the card number, a date picker, and
+  ยืนยันข้อมูลถูกต้อง accepting only a date after today
+  (`วันที่เลือกบัตรหมดอายุแล้ว` otherwise). ✕ discards the photo.
+  ⚠ The picked date goes **nowhere on the wire** — `POST /topup` has no
+  card-expiry field, and the source sends none either. It is kept on
+  `TopupFlow.pickedIdCardExpiry` and a `Diagnostics.log` crumb only.
 - **The PDPA consents are real** — but they are **no longer asked here**
   (changed 2026-09-17). The source hardcoded `marketing_consent` and
   `sensitive_consent` to `'Y'` in the submit body, recording a marketing
