@@ -2438,6 +2438,9 @@ Each of these is a behaviour change, not a port artefact:
   `_IdCardExpiryDialog`: the card number, a date picker, and
   ยืนยันข้อมูลถูกต้อง accepting only a date after today
   (`วันที่เลือกบัตรหมดอายุแล้ว` otherwise). ✕ discards the photo.
+  `exception_date = 'Y'` means the card's expiry reads **ตลอดชีพ** (lifetime
+  card) — the backend detects it and sends `Y` (confirmed with the backend
+  team 2026-10-19) — so the check is skipped.
   ⚠ The picked date goes **nowhere on the wire** — `POST /topup` has no
   card-expiry field, and the source sends none either. It is kept on
   `TopupFlow.pickedIdCardExpiry` and a `Diagnostics.log` crumb only.

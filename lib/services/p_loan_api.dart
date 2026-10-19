@@ -268,7 +268,9 @@ class ThaiIdReadResult {
   /// Card expiry. `lastest_date` on the wire — the misspelling is the real key.
   final String latestDate;
 
-  /// `'Y'` when the server waives the expiry check.
+  /// `'Y'` when the card's expiry reads **ตลอดชีพ** (a lifetime card), so it
+  /// has no date to check — the backend detects that and sends `'Y'`
+  /// (confirmed by the backend team, 2026-10-19). Waives the expiry check.
   final String exceptionDate;
 
   bool get expiryWaived => exceptionDate == 'Y';
