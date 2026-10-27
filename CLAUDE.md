@@ -52,16 +52,24 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   ones. **P-Loan, P-Loan Extra and NDID are still parked** — built, working,
   not in scope.
 
-  **What is live (verified 2026-10-15 off the bundles):**
+  **What is live (verified 2026-10-19 off the prod bundle):**
 
   | | Commit | `WEB_VERSION` |
   | --- | --- | --- |
-  | GitHub `main` = `uat` | `8d4a4c4` | — |
-  | prod hosting | `8d4a4c4` | **9** (CI rebuild, after a hand deploy at 10) |
-  | uat hosting | `8d4a4c4` | CI run number |
+  | GitHub `main` | `5b103fa` | — |
+  | GitHub `uat` | `b1e8ad7` (`main` + one comment-only commit) | — |
+  | prod hosting | `5b103fa` | **10** (CI) |
+  | uat hosting | `b1e8ad7` | CI run number |
+
+  The one prod deploy since the release is the top-up step-6 **ID-card expiry
+  picker** (2026-10-19, see *Deliberate deviations from the source*). ⚠ CI's
+  10 reuses the number of the 2026-10-14 hand deploy — harmless (a phone still
+  on that build reports 10 and skips one reload of `no-cache` files), but a
+  version number is not a build identity.
 
   ⚠ **`sawad_loan_universal_version` in the srisawad *prod* appConfig must
-  equal the live prod number (9)** — never higher, or every phone treats the
+  equal the live prod number (10)** — the user was asked to set it on
+  2026-10-19; confirm it says 10 — never higher, or every phone treats the
   live build as stale and reloads on every open. Re-check after any push to
   `main`: CI numbers prod builds by its own run counter, which is unrelated to
   a hand-deployed number (see *Deploy → hand-deploying prod*).
@@ -223,7 +231,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
 ```sh
 flutter pub get
 flutter analyze --no-pub   # only pre-existing flutter_lints infos remain
-flutter test               # 540 tests (models, payloads, headers, NDID terms +
+flutter test               # 548 tests (models, payloads, headers, NDID terms +
                            # common messages + transaction_ref + the per-gateway
                            # API-key pairing + verify-with-data, the /ploan and
                            # /topup failure reports, mock-mode guard, the top-up
@@ -3285,6 +3293,18 @@ acknowledgement is a session-local `Diagnostics.log` breadcrumb only, readable
 from the `(UAT ver…)` tag. Same shape as the NDID ปฏิเสธ log; it needs an
 endpoint, not a rules change (Outstanding #34).
 
+⚠⚠ **No `O` contract can reach that dialog today** (checked 2026-10-16
+against the live uat + prod `public_config`, which are identical). The dialog
+hangs off the สัญญาเงินกู้ row, which needs the loan type in
+`comcode_config.loan_type_code[comcode]` — and **no comcode lists `O`**
+(S22 `C T V M`, FM `C T V M A`, S14 `C T V M H L`, SDG `C T H L`, S12 `III`).
+So it is dead code until config changes; the BU team was asked to add `O`.
+It must go under **S22 or FM** (`this_comcode_is_contract: true`, not
+date-gated): under S14/SDG an `O` contract only gets the red notice, whose
+`download` link opens the portal **without** the dialog — as in the srisawad
+app. Note also `S12` sits in `loan_type_code` but not in `comcode`, so it
+never shows anything. Config only — no rebuild. See Outstanding #53.
+
 ⚠ **LandAndHouseWeb has a fourth condition this build does not**:
 `ticket_comcode_check_list` + `ticket_branch_check_list` + `contract_default_date2`,
 which suppress the button for a ticket-issuing branch. It is **absent from the
@@ -4903,6 +4923,19 @@ on `pentest_resolved`. Confirm the commit, then strike them.
     prod needs it; see #1).
 52. **Rotate** the `…prod` Basic account (#33) and the `agent_web_api_token*`
     values (#1) — still open, unaffected by the release.
+
+**2026-10-16 → 2026-10-27:**
+
+53. **BU team: add `O` to `comcode_config.loan_type_code`** under S22 and/or
+    FM, on uat first, then prod — until then the loan-detail `O` dialog is
+    unreachable (see **`comcode_config`**). Which company is the BU team's
+    call. The srisawad native app reads its **own** project's config, so it
+    needs the same edit separately if wanted there.
+54. **Confirm `sawad_loan_universal_version` (srisawad prod appConfig) = 10.**
+55. **The picked ID-card expiry is not filed.** Step 6's calendar
+    (`TopupFlow.pickedIdCardExpiry`) only clears the check; `POST /topup` has
+    no field for it. If the backend wants it on record, it needs a field —
+    then add it to `TopupSubmission` and its 37-key test.
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 

@@ -417,13 +417,17 @@ tools/deploy-uat.sh             deploy to uat. BOTH a Stop hook (on any turn
 **Top-up, loan detail and ชำระเงิน are live.** The srisawad app was published
 2026-10-14 20:30 (Thai time); PVT on the prod build passed.
 
+**Live as of 2026-10-27** (one prod deploy since the release — the ID-card
+expiry picker, below):
+
 | | Commit | `WEB_VERSION` |
 | --- | --- | --- |
-| GitHub `main` = `uat` | `8d4a4c4` | — |
-| prod hosting | `8d4a4c4` | **9** |
+| GitHub `main` | `5b103fa` | — |
+| GitHub `uat` | `b1e8ad7` (= `main` + one comment-only commit) | — |
+| prod hosting | `5b103fa` | **10** (CI) |
 
 ⚠ **`sawad_loan_universal_version` in the srisawad prod appConfig must equal
-the live prod number** (9) — never higher, or every phone reloads the WebView
+the live prod number** (10) — never higher, or every phone reloads the WebView
 on each open. It moves on every push to `main`; read it off the live bundle.
 
 **Prod runs against:**
@@ -439,6 +443,40 @@ If a customer reports a problem, a screenshot plus the contract number is
 enough to reproduce it against uat; a failed top-up save shows the API's own
 message. Open questions carried into production are CLAUDE.md Outstanding
 #46–#52.
+
+## Recent changes — 2026-10-16 → 2026-10-27
+
+The first change shipped after the production release. 548 tests, 39 analyzer
+infos (baseline).
+
+### Top-up step 6 — the ID-card expiry picker (prod `WEB_VERSION` 10)
+
+Matches LandAndHouseWeb's `ChangeDateExpireComponent`. After the ID card is
+scanned (`POST /vision/thai-id-validate`):
+
+| Scan result | What happens |
+| --- | --- |
+| `thai_id` ≠ the customer's | refused — เลขบัตรไม่ตรงกับฐานข้อมูลโปรดลองอีกครั้ง (unchanged) |
+| `exception_date = 'Y'` — a **ตลอดชีพ** (lifetime) card, confirmed by the backend team | passes, no date check |
+| `lastest_date` empty / unreadable | **calendar opens** (used to pass silently) |
+| `lastest_date` today or earlier, on the **server** clock | **calendar opens** (used to be refused outright) |
+| `lastest_date` after today | passes |
+
+The dialog **กรุณาเลือกวันหมดอายุบัตร** shows the card number and a date button
+(the calendar starts tomorrow); ยืนยันข้อมูลถูกต้อง accepts only a date after
+today, ✕ discards the photo. ⚠ The picked date is **not sent** — `POST /topup`
+has no card-expiry field, and LandAndHouseWeb sends none either.
+
+### Loan detail — `loan_type_code = O` (investigated, no code change)
+
+The `O` acknowledgement dialog (คู่สัญญา — *กรุณาขอคู่สัญญาที่สาขาเจ้าของบัญชี…*)
+exists and matches the srisawad app, but **no customer can reach it today**:
+the สัญญาเงินกู้ row it hangs off only renders when the contract's loan type is
+in `comcode_config.loan_type_code[comcode]`, and neither uat nor prod lists
+`O` anywhere. The BU team has been asked to add it — under **S22 or FM** only;
+under S14/SDG an `O` contract gets the red download notice instead, never the
+row or the dialog. A Thai summary PDF for the BU team was produced this
+session (not in the repo).
 
 ## Recent changes — 2026-09-25 → 2026-10-15
 
