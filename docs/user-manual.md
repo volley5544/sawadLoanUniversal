@@ -1,8 +1,8 @@
 # คู่มือการใช้งาน วงเงินอเนกประสงค์ / Multi-purpose Credit Line — User Manual
 
-**Version:** UAT · สินเชื่อเพิ่มจากสัญญาเดิม (P-Loan Extra) · web 61–62  
+**Version:** UAT · สินเชื่อเพิ่มจากสัญญาเดิม (P-Loan Extra) · web 61–62 · NDID web 223  
 **Url:** sawad-loan-universal-uat.web.app  
-**Date:** 2026-08-04  
+**Date:** 2026-10-27  
 
 
 ## เกี่ยวกับเอกสารนี้ / About this document
@@ -15,7 +15,6 @@
 
 - **1. เข้าสู่บริการ · Getting in**
   - 1.1 หน้าแรกของแอปศรีสวัสดิ์ · The ศรีสวัสดิ์ home screen
-  - 1.2 หน้าเติมวงเงิน · The top-up screen
 - **2. ขั้นตอนการขอวงเงิน · Applying**
   - 2.1 เลือกจำนวนงวด (ขั้นที่ 2) · Pick a term (step 2)
   - 2.2 ตรวจสอบข้อมูลส่วนตัว (ขั้นที่ 3) · Check your details (step 3)
@@ -26,13 +25,14 @@
   - 2.7 เมื่อแนบรูปแล้ว · Once the photos are attached
   - 2.8 เอกสารประกอบสัญญาและการลงนาม · The documents, and signing them
   - 2.9 อ่านและยอมรับเอกสาร · Read and accept a document
-  - 2.10 เลือกผู้ให้บริการยืนยันตัวตน NDID · Choose your NDID provider
-  - 2.11 รอยืนยันตัวตนในแอปธนาคาร · Waiting for the bank app
-  - 2.12 ยืนยันตัวตนสำเร็จ · Verification succeeded
-  - 2.13 ความยินยอม และเหตุที่ปุ่มยืนยันยังกดไม่ได้ · The consents, and why ยืนยัน is still off
-  - 2.14 ตรวจความพร้อมก่อนยืนยัน · Ready to confirm
-  - 2.15 คำรับรองของผู้กู้ · The borrower's declaration
-  - 2.16 ส่งคำขอเรียบร้อย · Request submitted
+  - 2.10 เงื่อนไขและข้อตกลง NDID · The NDID agreement
+  - 2.11 เลือกผู้ให้บริการยืนยันตัวตน NDID · Choose your NDID provider
+  - 2.12 รอยืนยันตัวตนในแอปธนาคาร · Waiting for the bank app
+  - 2.13 ยืนยันตัวตนสำเร็จ · Verification succeeded
+  - 2.14 ความยินยอม และเหตุที่ปุ่มยืนยันยังกดไม่ได้ · The consents, and why ยืนยัน is still off
+  - 2.15 ตรวจความพร้อมก่อนยืนยัน · Ready to confirm
+  - 2.16 คำรับรองของผู้กู้ · The borrower's declaration
+  - 2.17 ส่งคำขอเรียบร้อย · Request submitted
 - **A. ข้อจำกัดของภาพและสิ่งที่ต้องทราบ · Capture notes and known limits**
 
 
@@ -40,8 +40,8 @@
 
 ## 1. เข้าสู่บริการ / Getting in
 
-**TH** วงเงินอเนกประสงค์เริ่มต้นในแอปศรีสวัสดิ์ มีสองทางเข้า ทั้งสองทางไปยังหน้าจอเดียวกัน  
-**EN** วงเงินอเนกประสงค์ starts inside the ศรีสวัสดิ์ app. There are two ways in, and both reach the same screens.
+**TH** วงเงินอเนกประสงค์เริ่มต้นในแอปศรีสวัสดิ์ จากปุ่ม “วงเงินอเนกประสงค์” บนบัตรสัญญาในหน้าแรก  
+**EN** วงเงินอเนกประสงค์ starts inside the ศรีสวัสดิ์ app, from the วงเงินอเนกประสงค์ button on a contract card on the home screen.
 
 
 ### 1.1 หน้าแรกของแอปศรีสวัสดิ์ / The ศรีสวัสดิ์ home screen
@@ -49,8 +49,8 @@
 ![The ศรีสวัสดิ์ home screen](screenshots/01-home.png)
 
 **(1)** `เติมวงเงิน`  
-**TH** กดเพื่อเปิดหน้าเติมวงเงิน แล้วเลือกวงเงินอเนกประสงค์ที่หน้านั้น  
-**EN** opens the top-up screen, where you then pick วงเงินอเนกประสงค์
+**TH** ปุ่มนี้เปิดบริการเติมวงเงิน ซึ่งเป็นคนละบริการ ไม่ได้พาไปยังวงเงินอเนกประสงค์  
+**EN** opens the top-up service — a different product; it does not lead to วงเงินอเนกประสงค์
 
 **(2)** `วงเงินอเนกประสงค์`  
 **TH** ปุ่มในกล่อง “สิทธิพิเศษเฉพาะคุณ” บนบัตรสัญญา กดเพื่อเข้าสู่ขั้นตอนการสมัครทันที  
@@ -66,45 +66,8 @@
 | โค้ดที่เกี่ยวข้อง | srisawad_mobile_app — คนละ repo | ไม่ได้อยู่ใน sawadLoanUniversal |
 
 
-> **TH** ปุ่มนี้จะปรากฏบนบัตรของสัญญาที่เข้าเงื่อนไขเท่านั้น หากสัญญายังไม่เข้าเงื่อนไข หรือมีคำขออยู่แล้ว ระบบจะแจ้งเหตุผลเมื่อกดเข้าไป  
-> **EN** The button appears only on a contract that qualifies. If the contract is not yet eligible, or already has a request open, the reason is shown when you continue.
-
-
-### 1.2 หน้าเติมวงเงิน / The top-up screen
-
-![The top-up screen](screenshots/02-topup-card.png)
-
-**(1)** `วงเงินอเนกประสงค์`  
-**TH** กดปุ่มในกล่อง “สิทธิพิเศษเฉพาะคุณ” เพื่อเริ่มขอสินเชื่อเพิ่ม  
-**EN** tap it in the สิทธิพิเศษเฉพาะคุณ box to start the application
-
-
-**คำที่พบบนหน้านี้ · การเชื่อมโยงข้อมูล (model / API) · Terms on this screen · Data mapping (model / API)**
-
-| In app | ไทย | English |
-|---|---|---|
-| วงเงินสินเชื่อเดิม | วงเงินของสัญญาที่ท่านถืออยู่ | the limit on the contract you already hold |
-| วงเงินอนุมัติใหม่ | วงเงินรวมที่อนุมัติให้สำหรับสัญญาใหม่ | the total limit approved for the new contract |
-| วงเงินเพิ่มพิเศษ | วงเงินส่วนเพิ่มที่ได้รับเป็นสิทธิพิเศษ นี่คือยอดที่วงเงินอเนกประสงค์จะจัดให้ | extra headroom granted as a special offer — this is the amount วงเงินอเนกประสงค์ finances |
-| เงินคงเหลือโอนเข้าบัญชี | จำนวนเงินที่จะโอนเข้าบัญชีจริง หากท่านเลือกเติมวงเงินแบบรับเงินสด | what reaches your bank account if you take the cash top-up instead |
-| ↓ การเชื่อมโยงข้อมูล / Data mapping | model / struct | API + JSON key |
-| สินเชื่อรถจักรยานยนต์ | contractDetails.loanTypeName | GET /loan/list $.contract_details.loan_type_name |
-| เลขที่สัญญา | GetLoanListAPIDataType.contractNo | $.contract_no |
-| ข้อมูลหลักประกัน | contractDetails.collateralInformation | $.contract_details.collateral_information |
-| ข้อมูลสถานะ | GetLoanListAPIDataType.requestStatus | $.request_status |
-| วงเงินสินเชื่อเดิม | contractDetails.creditLimit | $.contract_details.credit_limit |
-| ราคาประเมินปัจจุบัน | contractDetails.currentLtvAmount | $.contract_details.current_ltv_amount |
-| วงเงินอนุมัติใหม่ | topupDetail.defaultTopupAmount | $.topup_detail.default_topup_amount |
-| วงเงินเพิ่มพิเศษ | topupDetail.topupExtra | $.topup_detail.topup_extra |
-| รวมเป็นวงเงินใหม่ที่คุณขอรับได้เลยวันนี้ | defaultTopupAmount + topupExtra | คำนวณในหน้าจอ |
-| ยอดปิดบัญชี ณ วันที่ | topupDetail.balanceReceivable | $.topup_detail.balance_receivable (วันที่จาก $.data_date) |
-| เงินคงเหลือโอนเข้าบัญชี | topupDetail.defaultTransferAmount | $.topup_detail.default_transfer_amount |
-| ปุ่ม วงเงินอเนกประสงค์ | การ์ดของ LandAndHouseWeb | deep-link → /pLoan/resume |
-| หน้าจอ / Screen | LandAndHouseWeb: lib/customer_topup/topup_card_page/ | topup_card_page_widget.dart |
-
-
-> **TH** หน้านี้คือขั้นที่ 1 ของ 4 ขั้น เพราะเป็นหน้าที่แสดงวงเงินที่อนุมัติให้ท่านแล้ว เมื่อเข้าสู่ขั้นตอนถัดไป แถบขั้นตอนจะเริ่มนับจาก 2 ปุ่มย้อนกลับในหน้าจอถัดไปจะพาท่านกลับมาที่หน้านี้  
-> **EN** This screen is step 1 of 4: it is where the approved amount is shown to you. The step bar on the following screens therefore starts at 2, and Back on the first of them returns you here.
+> **TH** ปุ่มนี้จะปรากฏบนบัตรของสัญญาที่เข้าเงื่อนไขเท่านั้น หากสัญญายังไม่เข้าเงื่อนไข หรือมีคำขออยู่แล้ว ระบบจะแจ้งเหตุผลเมื่อกดเข้าไป ปุ่ม “วงเงินอเนกประสงค์” นี้เป็นทางเข้าเดียว หน้าจอถัดไปนับเป็นขั้นที่ 2 ของ 4 เพราะบัตรสัญญาที่แสดงวงเงินอนุมัติแล้วนับเป็นขั้นที่ 1 ปุ่มย้อนกลับในหน้าจอถัดไปจะพาท่านกลับมาที่แอปศรีสวัสดิ์  
+> **EN** The button appears only on a contract that qualifies. If the contract is not yet eligible, or already has a request open, the reason is shown when you continue. This chip is the only way in. The next screen counts as step 2 of 4, since the contract card that shows the approved amount is step 1, and Back on it returns you to the ศรีสวัสดิ์ app.
 
 
 ---
@@ -353,8 +316,8 @@
 **EN** three of them — the loan request form, the receipt and the contract. Tap each one to read it and accept it
 
 **(2)** `ลงนามเอกสารและยืนยันตัวตน NDID`  
-**TH** กดเพื่อเริ่มลงนามด้วย NDID แทนการเซ็นชื่อ  
-**EN** starts NDID signing, which replaces a written signature
+**TH** กดเพื่อเริ่มลงนามด้วย NDID แทนการเซ็นชื่อ เริ่มจากหน้าข้อตกลง NDID (2.10)  
+**EN** starts NDID signing, which replaces a written signature — it opens on the NDID agreement (2.10)
 
 **(3)** `ความยินยอม`  
 **TH** ช่องยินยอมสองข้อ อยู่ถัดลงไปอีกเล็กน้อย  
@@ -369,7 +332,7 @@
 | ใบรับเงิน | LoanDocuments.receipt | $.receipt |
 | เอกสารสัญญา | LoanDocuments.agreement | $.agreement |
 | ไฟล์ที่ส่งตอนยืนยัน | topup_request_file / topup_receipt_file / topup_argeement_file | POST /ploan (multipart file parts) |
-| ลงนามเอกสารและยืนยันตัวตน NDID | NdidApi | GET /idp/list · POST /rp/verify |
+| ลงนามเอกสารและยืนยันตัวตน NDID | เปิด ndid_terms_page → ndid_bank_select_page → ndid_verify_page | POST /idp/list · POST /rp/verify-with-data |
 | ความยินยอม | marketing_consent / sensitive_consent | POST /ploan |
 
 
@@ -407,21 +370,52 @@
 > **EN** The document is readable in the app only — there is no download button and no open-in-a-new-tab button. For a copy of the contract, contact the branch that owns your account, or call 1652.
 
 
-### 2.10 เลือกผู้ให้บริการยืนยันตัวตน NDID / Choose your NDID provider
+### 2.10 เงื่อนไขและข้อตกลง NDID / The NDID agreement
+
+![The NDID agreement](screenshots/39-ndid-terms.png)
+
+**(1)** `ข้อตกลงในการใช้บริการพิสูจน์และยืนยันตัวตน`  
+**TH** ข้อตกลงการใช้บริการ NDID ข้อ 1–9 เลื่อนอ่านได้ในหน้าเดียว  
+**EN** the NDID service agreement, clauses 1–9, read as one scroll
+
+**(2)** `ปฏิเสธ`  
+**TH** กดเพื่อไม่ยอมรับ ระบบจะกลับไปหน้าสรุป และยังลงนาม NDID ไม่ได้  
+**EN** declines — you return to the summary, and NDID signing stays incomplete
+
+**(3)** `ยอมรับ`  
+**TH** กดเพื่อยอมรับข้อตกลง แล้วไปเลือกผู้ให้บริการยืนยันตัวตน  
+**EN** accepts the agreement and moves on to choosing your provider
+
+
+**การเชื่อมโยงข้อมูล (model / API) · Data mapping (model / API)**
+
+| In app | ไทย | English |
+|---|---|---|
+| ข้อตกลงการใช้บริการ | kNdidTermsClauses (ndid_terms_content.dart) | ข้อความคงที่ ตามข้อตกลงขั้นต่ำของ NDID — ไม่มี API |
+| ปุ่ม ปฏิเสธ | Diagnostics.log('ndid terms declined') | บันทึกเฉพาะในเครื่อง ไม่มี API |
+| ปุ่ม ยอมรับ | เปิดหน้าเลือกผู้ให้บริการ (2.11) | ไม่มี API |
+| หน้าจอ / Screen | lib/loan_register/ | ndid_terms_page.dart |
+
+
+> **TH** หน้านี้จะแสดงทุกครั้งที่เริ่มยืนยันตัวตน NDID เพราะการยินยอมเป็นรายครั้ง ระบบไม่จำคำตอบจากครั้งก่อน  
+> **EN** This screen appears every time NDID signing starts — consent is given per verification, so an earlier answer is not remembered.
+
+
+### 2.11 เลือกผู้ให้บริการยืนยันตัวตน NDID / Choose your NDID provider
 
 ![Choose your NDID provider](screenshots/40-ndid-banks.png)
 
 **(1)** `ผู้ให้บริการที่เคยลงทะเบียน NDID`  
-**TH** เลือกธนาคารหรือผู้ให้บริการที่ท่านลงทะเบียน NDID ไว้แล้ว กดได้เฉพาะรายชื่อในกลุ่มนี้  
-**EN** pick a bank or provider you have already registered with for NDID; only this group is tappable
+**TH** ธนาคารหรือผู้ให้บริการที่ท่านลงทะเบียน NDID ไว้แล้ว เลือกจากกลุ่มนี้เพื่อยืนยันตัวตนได้ทันที  
+**EN** banks or providers you have already registered with for NDID — pick one here to verify straight away
 
 **(2)** `ผู้ให้บริการที่ยังไม่ลงทะเบียน NDID`  
-**TH** รายชื่อนี้เป็นสีจาง กดไม่ได้ ต้องไปลงทะเบียน NDID กับที่นั่นก่อน  
-**EN** these are greyed out and cannot be selected; register for NDID with them first
+**TH** เลือกได้เช่นกัน แต่ต้องลงทะเบียน NDID ในแอปของธนาคารนั้นก่อน จึงจะยืนยันตัวตนได้ (มีข้อความแจ้งใต้กลุ่มนี้)  
+**EN** can be picked too, but you must register for NDID in that bank's app before it can verify you (a note under the group says so)
 
 **(3)** `ถัดไป`  
-**TH** กดเมื่อเลือกแล้ว เพื่อส่งคำขอยืนยันตัวตน  
-**EN** sends the verification request once one is selected
+**TH** กดได้เมื่อเลือกแล้ว (กรอบสีส้ม) เพื่อส่งคำขอยืนยันตัวตน  
+**EN** enabled once one is selected (orange outline); sends the verification request
 
 
 **NDID · การเชื่อมโยงข้อมูล (model / API) · NDID · Data mapping (model / API)**
@@ -430,19 +424,18 @@
 |---|---|---|
 | NDID | บริการยืนยันตัวตนดิจิทัลผ่านธนาคารที่ท่านเป็นลูกค้า ใช้ลงนามเอกสารสัญญาแทนการเซ็นชื่อ | digital identity verification through a bank you already bank with, used here to sign the contract instead of a written signature |
 | ↓ การเชื่อมโยงข้อมูล / Data mapping | model / struct | API + JSON key |
-| รายชื่อผู้ให้บริการ (IdP) | NdidApi.listIdps() | GET {NDID_API_BASE}/idp/list |
-| ชื่อและโลโก้ธนาคารในรายการ | รายการ IdP ที่ตอบกลับมา | จาก /idp/list |
-| ประเภทคำขอ | NdidApi request types | GET /request-types |
-| ปุ่ม ถัดไป | NdidApi verify | POST /rp/verify |
-| ค่า base URL | --dart-define=NDID_API_BASE | ค่าเริ่มต้น https://dev.swpfin.com/dap |
+| รายชื่อผู้ให้บริการ (IdP) | NdidApi.listIdps() — กลุ่มบนส่งเลขบัตรประชาชนไปด้วย | POST {ndid_url_base}/idp/list (IAL 2.3 / AAL 2.2) |
+| ชื่อและโลโก้ธนาคารในรายการ | NdidIdp.logoUrl — โลโก้สูงสุด 4 ช่องในกลุ่มบน ช่องอื่นแสดงอักษรย่อ | $.logo_url / $.has_logo จาก /idp/list |
+| ปุ่ม ถัดไป | บันทึก ndidIdpId / ndidIdpName แล้วเปิดหน้ายืนยันตัวตน | ไม่มี API (คำขอสร้างในหน้าถัดไป) |
+| ค่า base URL | AppConfig api_url.ndid_url_base (Firestore) | uat: https://uat.ndid.srisawadpower.com |
 | หน้าจอ / Screen | lib/loan_register/ | ndid_bank_select_page.dart |
 
 
-> **TH** หากกลุ่มบนว่างเปล่า แปลว่าท่านยังไม่ได้ลงทะเบียน NDID กับที่ใดเลย ต้องไปลงทะเบียนกับธนาคารที่ท่านเป็นลูกค้าก่อน จึงจะทำขั้นตอนนี้ต่อได้ รายชื่อทั้งหมดดึงมาจากระบบ NDID จึงอาจต่างจากภาพนี้  
-> **EN** An empty top group means you have not registered for NDID anywhere yet; register with a bank you hold an account at before continuing. The whole list comes live from NDID, so it may differ from this image.
+> **TH** หากกลุ่มบนว่างเปล่า แปลว่าท่านยังไม่ได้ลงทะเบียน NDID กับที่ใดเลย เลือกธนาคารที่ท่านเป็นลูกค้าจากกลุ่มล่าง แล้วลงทะเบียนในแอปธนาคารระหว่างยืนยันตัวตน ในแอปจริงรายชื่อและโลโก้ดึงมาจากระบบ NDID ภาพนี้บันทึกจากเบราว์เซอร์ จึงแสดงรายชื่อธนาคารตัวอย่าง (ดูภาคผนวก A8)  
+> **EN** An empty top group means you have not registered for NDID anywhere yet: pick a bank you hold an account with from the lower group, and register in its app as part of verifying. In the app the names and logos come live from NDID; this image was captured in a browser, so it shows sample banks (see appendix A8).
 
 
-### 2.11 รอยืนยันตัวตนในแอปธนาคาร / Waiting for the bank app
+### 2.12 รอยืนยันตัวตนในแอปธนาคาร / Waiting for the bank app
 
 ![Waiting for the bank app](screenshots/42-ndid-waiting.png)
 
@@ -451,8 +444,8 @@
 **EN** the time left to finish; verify in the bank's app before it runs out — one attempt per request
 
 **(2)** `ตรวจสอบสถานะ`  
-**TH** กดเพื่อถามผลจากระบบทันที ใช้เมื่อยืนยันในแอปธนาคารเสร็จแล้ว แต่หน้านี้ยังนับถอยหลังอยู่  
-**EN** asks for the result right away — use it if you finished in the bank app but this screen is still counting down
+**TH** ในแอปจริง ตำแหน่งนี้คือปุ่ม “ตรวจสอบสถานะ” กดเพื่อถามผลจากระบบทันที ปุ่มสีส้มในภาพ “จำลองยืนยันตัวตนสำเร็จ” มีเฉพาะในเบราว์เซอร์ ลูกค้าไม่เห็น  
+**EN** in the app this is ตรวจสอบสถานะ, which asks for the result right away. The orange จำลองยืนยันตัวตนสำเร็จ button in this image exists only in a browser — customers never see it
 
 **(3)** `ยกเลิก`  
 **TH** กดเพื่อยกเลิกคำขอยืนยันตัวตนนี้  
@@ -463,18 +456,20 @@
 
 | In app | ไทย | English |
 |---|---|---|
-| สถานะการยืนยัน | NdidApi status poll | หลัง POST /rp/verify |
+| สร้างคำขอยืนยันตัวตน | NdidApi.createVerifyRequest() — หมดเวลา 1 ชั่วโมง | POST /rp/verify-with-data (ถ้าไม่พบ AS ใช้ POST /rp/verify) |
+| Transaction Ref | NdidVerifyRequest.transactionRef | $.transaction_ref (ตัวเลข 5–9 หลัก สร้างโดย gateway) |
+| สถานะการยืนยัน | NdidApi.getVerifyStatus() — ทุก 3 วิ ใน 30 วิแรก แล้วทุก 15 วิ | GET /rp/verify/{reference_id} |
 | อ้างอิงคำขอ NDID | payload key ndid_reference_id | POST /ploan |
 | ปุ่ม ตรวจสอบสถานะ | เรียก poll สถานะซ้ำ | NDID status |
-| ปุ่ม ยกเลิก | ล้างสถานะ NDID ในเครื่อง | ไม่มี API |
+| ปุ่ม ยกเลิก | NdidApi.closeVerifyRequest() แล้วกลับหน้าสรุป | ปิดคำขอแบบ best-effort |
 | หน้าจอ / Screen | lib/loan_register/ | ndid_verify_page.dart |
 
 
-> **TH** ขั้นตอนนี้ทำในแอปของธนาคารที่ท่านเลือก ไม่ใช่ในหน้าจอนี้ เปิดแอปธนาคาร ทำตามขั้นตอนของธนาคาร แล้วกลับมายังหน้านี้ หน้าจอจะตรวจผลให้ทันทีที่กลับมา หรือกด “ตรวจสอบสถานะ” ก็ได้ บรรทัด Transaction Ref คือเลขอ้างอิงของรายการยืนยันตัวตนครั้งนี้  
-> **EN** This step happens in your bank's own app, not on this screen. Open the bank app, follow its steps, then come back — the screen checks as soon as you return, and ตรวจสอบสถานะ checks on demand. The Transaction Ref line is this verification request's own reference.
+> **TH** ขั้นตอนนี้ทำในแอปของธนาคารที่ท่านเลือก ไม่ใช่ในหน้าจอนี้ ข้อความบนหน้าจอเป็นข้อความมาตรฐานของ NDID: ไปยืนยันตัวตนในแอปของผู้ให้บริการภายใน 60 นาที แล้วกลับมาทำรายการต่อที่นี่ หน้าจอจะตรวจผลให้ทันทีที่กลับมา Transaction Ref เป็นตัวเลขไม่เกิน 9 หลัก และเป็นเลขเดียวกับที่แอปธนาคารแสดง (ภาพนี้จากเบราว์เซอร์จึงแสดง 000000001)  
+> **EN** This step happens in your bank's own app, not on this screen. The text is NDID's standard message: verify in the provider's app within 60 minutes, then come back here — the screen checks as soon as you return. The Transaction Ref is a number of up to 9 digits, and your bank app shows the same one (this browser capture shows 000000001).
 
 
-### 2.12 ยืนยันตัวตนสำเร็จ / Verification succeeded
+### 2.13 ยืนยันตัวตนสำเร็จ / Verification succeeded
 
 ![Verification succeeded](screenshots/43-ndid-done.png)
 
@@ -496,11 +491,11 @@
 | ปุ่ม ตกลง | กลับไปหน้าสรุป | ไม่มี API |
 
 
-> **TH** หากธนาคารปฏิเสธ หมดเวลา หรือท่านยกเลิก หน้านี้จะแจ้งข้อผิดพลาด และมีปุ่มให้ลองใหม่  
-> **EN** If the bank rejects it, the request times out, or you cancel, this screen reports the error and offers a retry.
+> **TH** หากธนาคารปฏิเสธ หมดเวลา หรือท่านยกเลิกในแอปธนาคาร หน้ายืนยันตัวตนจะแสดงข้อความสีแดง ตามข้อความมาตรฐานของ NDID เช่น “ท่านไม่สามารถทำรายการได้ในขณะนี้ กรุณาทำรายการใหม่หรือเลือกผู้ให้บริการยืนยันตัวตนรายอื่น” และมีปุ่ม “ลองใหม่”  
+> **EN** If the bank rejects it, the request times out, or you cancel in the bank app, the verify screen shows a red message in NDID's standard wording — e.g. ท่านไม่สามารถทำรายการได้ในขณะนี้ กรุณาทำรายการใหม่หรือเลือกผู้ให้บริการยืนยันตัวตนรายอื่น — with a ลองใหม่ (retry) button.
 
 
-### 2.13 ความยินยอม และเหตุที่ปุ่มยืนยันยังกดไม่ได้ / The consents, and why ยืนยัน is still off
+### 2.14 ความยินยอม และเหตุที่ปุ่มยืนยันยังกดไม่ได้ / The consents, and why ยืนยัน is still off
 
 ![The consents, and why ยืนยัน is still off](screenshots/36-consents.png)
 
@@ -527,7 +522,7 @@
 > **EN** Leaving ยินยอมการตลาด unticked is recorded as a real answer, not skipped — you will not be contacted with product offers.
 
 
-### 2.14 ตรวจความพร้อมก่อนยืนยัน / Ready to confirm
+### 2.15 ตรวจความพร้อมก่อนยืนยัน / Ready to confirm
 
 ![Ready to confirm](screenshots/34-ready-to-submit.png)
 
@@ -558,7 +553,7 @@
 > **EN** Once everything is done the ยืนยัน button turns solid orange and becomes tappable. This image is from an earlier build, so it still shows a ดาวน์โหลดเอกสาร button under the NDID row; the current app does not have it — the documents are read in the app only.
 
 
-### 2.15 คำรับรองของผู้กู้ / The borrower's declaration
+### 2.16 คำรับรองของผู้กู้ / The borrower's declaration
 
 ![The borrower's declaration](screenshots/45-declaration.png)
 
@@ -579,7 +574,7 @@
 | ปุ่ม ยืนยัน | PLoanContractApi submit | POST /ploan (bearer auth, multipart/form-data) |
 
 
-### 2.16 ส่งคำขอเรียบร้อย / Request submitted
+### 2.17 ส่งคำขอเรียบร้อย / Request submitted
 
 ![Request submitted](screenshots/50-submitted.png)
 
@@ -617,26 +612,26 @@
 
 ### A1 · ภาพหน้าจอบันทึกจากเครื่องจริงบนระบบ UAT / Screenshots come from a real device on UAT
 
-**TH** ภาพส่วนใหญ่ในคู่มือนี้บันทึกเมื่อ 4 สิงหาคม 2569 จากโทรศัพท์จริง เดินตามเส้นทางจริง คือ แอปศรีสวัสดิ์ → หน้าเติมวงเงิน → วงเงินอเนกประสงค์ บนบิลด์เว็บรุ่น 61 และ 62 ของระบบทดสอบ UAT ตัวเลขที่เห็นจึงเป็นของคำขอจริงหนึ่งรายการ (จัดวงเงิน 2,000 บาท 24 งวด) เป็นเพียงตัวอย่าง ไม่ใช่เงื่อนไขที่เสนอให้ท่าน  
-**EN** Most images here were captured on 4 August 2026 from a real phone, walking the real path — ศรีสวัสดิ์ app → top-up screen → วงเงินอเนกประสงค์ — on UAT web builds 61 and 62. The figures are therefore one real request (฿2,000 over 24 months). They are an example, not an offer.
+**TH** ภาพส่วนใหญ่ในคู่มือนี้บันทึกเมื่อ 4 สิงหาคม 2569 จากโทรศัพท์จริง เดินตามเส้นทางจริง คือ แอปศรีสวัสดิ์ → หน้าเติมวงเงิน → วงเงินอเนกประสงค์ (เส้นทางในขณะนั้น) บนบิลด์เว็บรุ่น 61 และ 62 ของระบบทดสอบ UAT ตัวเลขที่เห็นจึงเป็นของคำขอจริงหนึ่งรายการ (จัดวงเงิน 2,000 บาท 24 งวด) เป็นเพียงตัวอย่าง ไม่ใช่เงื่อนไขที่เสนอให้ท่าน  
+**EN** Most images here were captured on 4 August 2026 from a real phone, walking the real path of the time — ศรีสวัสดิ์ app → top-up screen → วงเงินอเนกประสงค์ — on UAT web builds 61 and 62. The figures are therefore one real request (฿2,000 over 24 months). They are an example, not an offer.
 
 
 ### A2 · การปิดบังข้อมูลส่วนบุคคล / What is masked, and why
 
-**TH** เพราะภาพมาจากบัญชีจริงบนระบบทดสอบ ทุกอย่างที่ระบุตัวบุคคลจึงถูกพิกเซลปิด คือ ชื่อ-สกุล เลขบัตรประชาชน เลขที่บัญชีธนาคาร เลขที่สัญญา เลขทะเบียนรถ เบอร์โทรศัพท์ และที่อยู่ทั้งสี่รายการ หัวข้อและโครงหน้าจอยังเห็นครบ ตัวเลขยอดเงินในบทที่ 2 ไม่ได้ปิด เพราะเป็นสิ่งที่คู่มืออธิบาย และไม่ระบุตัวผู้ใดเมื่อไม่มีชื่อกำกับ ส่วนภาพ 1.1 และ 1.2 ปิดตัวเลขด้วย เพราะแสดงฐานะสินเชื่อเดิมของลูกค้ารายนั้น หากต้องการฉบับที่ไม่ปิดบังเพื่อใช้ภายใน สร้างใหม่ได้จากไฟล์ต้นฉบับใน docs/raw/  
-**EN** Because the captures come from a real account on the test system, everything that identifies a person is pixelated: name, national ID, bank account number, contract number, plate, phone number and all four addresses. Labels and layout are untouched. Money figures in chapter 2 are left readable — they are what the manual explains, and they identify nobody once the name and contract are gone. Images 1.1 and 1.2 do have their figures masked, because they show that customer's existing credit position. An unmasked rebuild for internal use is possible from the originals in docs/raw/.
+**TH** เพราะภาพมาจากบัญชีจริงบนระบบทดสอบ ทุกอย่างที่ระบุตัวบุคคลจึงถูกพิกเซลปิด คือ ชื่อ-สกุล เลขบัตรประชาชน เลขที่บัญชีธนาคาร เลขที่สัญญา เลขทะเบียนรถ เบอร์โทรศัพท์ และที่อยู่ทั้งสี่รายการ หัวข้อและโครงหน้าจอยังเห็นครบ ตัวเลขยอดเงินในบทที่ 2 ไม่ได้ปิด เพราะเป็นสิ่งที่คู่มืออธิบาย และไม่ระบุตัวผู้ใดเมื่อไม่มีชื่อกำกับ ส่วนภาพ 1.1 ปิดตัวเลขด้วย เพราะแสดงฐานะสินเชื่อเดิมของลูกค้ารายนั้น หากต้องการฉบับที่ไม่ปิดบังเพื่อใช้ภายใน สร้างใหม่ได้จากไฟล์ต้นฉบับใน docs/raw/  
+**EN** Because the captures come from a real account on the test system, everything that identifies a person is pixelated: name, national ID, bank account number, contract number, plate, phone number and all four addresses. Labels and layout are untouched. Money figures in chapter 2 are left readable — they are what the manual explains, and they identify nobody once the name and contract are gone. Image 1.1 does have its figures masked, because they show that customer's existing credit position. An unmasked rebuild for internal use is possible from the originals in docs/raw/.
 
 
-### A3 · หกภาพยังเป็นบิลด์รุ่นก่อน / Six images are still from the earlier build
+### A3 · ห้าภาพยังเป็นบิลด์รุ่นก่อน / Five images are still from the earlier build
 
-**TH** ภาพ 2.1, 2.7, 2.12, 2.14, 2.15 และ 2.16 ยังเป็นภาพชุดเดิม ที่บันทึกจากเบราว์เซอร์ บนข้อมูลจำลอง (สัญญา MOCK-M-6701001 ยอด 35,000 บาท) ตัวเลขจึงไม่ตรงกับภาพอื่น และมีสองจุดที่ต่างจากแอปปัจจุบัน คือ ภาพ 2.1 พาดหัวยอดเงินว่า “ยอดจัดสินเชื่อใหม่” ซึ่งตอนนี้เขียนว่า “ยอดจัดวงเงินอเนกประสงค์” และภาพ 2.14 ยังมีปุ่ม “ดาวน์โหลดเอกสาร” ซึ่งถูกถอดออกไปแล้ว ทั้งสองจุดมีหมายเหตุกำกับไว้ที่ภาพนั้นด้วย ลำดับขั้นตอนและปุ่มอื่นๆ ตรงกับของจริงทั้งหมด  
-**EN** Images 2.1, 2.7, 2.12, 2.14, 2.15 and 2.16 are still the first edition's browser captures on fixture data (contract MOCK-M-6701001, ฿35,000), so their figures do not match the others. Two of them also differ from the current app: 2.1 heads the amount ยอดจัดสินเชื่อใหม่ where it now reads ยอดจัดวงเงินอเนกประสงค์, and 2.14 still shows a ดาวน์โหลดเอกสาร button that has since been removed. Both are flagged on the image itself. Everything else — the order, the other buttons — matches the live app.
+**TH** ภาพ 2.1, 2.7, 2.15, 2.16 และ 2.17 ยังเป็นภาพชุดเดิม ที่บันทึกจากเบราว์เซอร์ บนข้อมูลจำลอง (สัญญา MOCK-M-6701001 ยอด 35,000 บาท) ตัวเลขจึงไม่ตรงกับภาพอื่น และมีสองจุดที่ต่างจากแอปปัจจุบัน คือ ภาพ 2.1 พาดหัวยอดเงินว่า “ยอดจัดสินเชื่อใหม่” ซึ่งตอนนี้เขียนว่า “ยอดจัดวงเงินอเนกประสงค์” และภาพ 2.15 ยังมีปุ่ม “ดาวน์โหลดเอกสาร” ซึ่งถูกถอดออกไปแล้ว ทั้งสองจุดมีหมายเหตุกำกับไว้ที่ภาพนั้นด้วย ลำดับขั้นตอนและปุ่มอื่นๆ ตรงกับของจริงทั้งหมด  
+**EN** Images 2.1, 2.7, 2.15, 2.16 and 2.17 are still the first edition's browser captures on fixture data (contract MOCK-M-6701001, ฿35,000), so their figures do not match the others. Two of them also differ from the current app: 2.1 heads the amount ยอดจัดสินเชื่อใหม่ where it now reads ยอดจัดวงเงินอเนกประสงค์, and 2.15 still shows a ดาวน์โหลดเอกสาร button that has since been removed. Both are flagged on the image itself. Everything else — the order, the other buttons — matches the live app.
 
 
 ### A4 · รายชื่อผู้ให้บริการ NDID ดึงมาสดจากระบบ / The NDID provider list is live
 
-**TH** ตารางผู้ให้บริการในภาพ 2.10 ดึงมาจากระบบ NDID จริง ณ เวลาที่บันทึกภาพ รายชื่อและโลโก้ที่ท่านเห็นอาจต่างออกไป และกลุ่มบน “ผู้ให้บริการที่เคยลงทะเบียน NDID” จะแสดงเฉพาะที่ตรงกับเลขบัตรประชาชนของท่านเท่านั้น จึงว่างเปล่าได้ถ้าท่านยังไม่เคยลงทะเบียน  
-**EN** The provider grid in image 2.10 was fetched live from NDID at capture time; the names and logos you see may differ. The top group shows only providers matched to your own national ID, so it is legitimately empty if you have never registered.
+**TH** ในแอปจริง ตารางผู้ให้บริการในหน้า 2.11 ดึงมาจากระบบ NDID ทุกครั้ง รายชื่อและโลโก้ที่ท่านเห็นจึงอาจต่างจากภาพ และกลุ่มบน “ผู้ให้บริการที่เคยลงทะเบียน NDID” จะแสดงเฉพาะที่ตรงกับเลขบัตรประชาชนของท่านเท่านั้น จึงว่างเปล่าได้ถ้าท่านยังไม่เคยลงทะเบียน โลโก้แสดงได้สูงสุด 4 ช่องในกลุ่มบน ช่องอื่นแสดงเป็นอักษรย่อ  
+**EN** In the app, the provider grid on 2.11 is fetched from NDID every time, so the names and logos you see may differ from the image. The top group shows only providers matched to your own national ID, so it is legitimately empty if you have never registered. At most 4 tiles in the top group show a logo; the rest show initials.
 
 
 ### A5 · เวลาให้บริการ 07:00–20:30 / Service hours are 07:00–20:30
@@ -657,6 +652,12 @@
 **EN** While building the mapping tables I noticed LoanAmountDetail declares defaultTopupAmount, installmentAmount, minAmountWithRate, maxTopupAmount, transferAmount and osBalance as int, and PLoanFlow.requestedAmount / payoutAmount are int too — while /topup/detail returns decimals (satang). Displayed values and the loan_amount / transfer_amount actually submitted are therefore truncated. A code observation, not a re-test in the app. LandAndHouseWeb has already moved these to double, and the mobile app's topup_data.dart is double already.
 
 
+### A8 · ภาพขั้นตอน NDID บันทึกจากเบราว์เซอร์ / The NDID images come from a browser
+
+**TH** ภาพ 2.10–2.13 บันทึกเมื่อ 27 ตุลาคม 2569 จากบิลด์เว็บรุ่น 223 ของระบบ UAT โดยเปิดในเบราว์เซอร์ ไม่ใช่ในแอป จึงไม่มีข้อมูลส่วนบุคคล แต่มีสามจุดที่ต่างจากที่ลูกค้าเห็นในแอป คือ หน้า 2.11 แสดงรายชื่อธนาคารตัวอย่างแทนรายชื่อจริงจาก NDID หน้า 2.12 มีปุ่ม “จำลองยืนยันตัวตนสำเร็จ” ซึ่งในแอปคือปุ่ม “ตรวจสอบสถานะ” และ Transaction Ref แสดง 000000001 แทนเลขจริงจากระบบ ขั้นตอนนี้เปลี่ยนจากฉบับก่อนสามเรื่อง คือ มีหน้าข้อตกลง NDID (2.10) ก่อนเลือกผู้ให้บริการ เลือกผู้ให้บริการที่ยังไม่ลงทะเบียนได้แล้ว และข้อความผิดพลาดใช้ข้อความมาตรฐานของ NDID ส่วนหน้าเติมวงเงินของ LandAndHouseWeb (ข้อ 1.2 ในฉบับก่อน) ถูกนำออก เพราะตั้งแต่ 14 ตุลาคม 2569 ปุ่ม “เติมวงเงิน” เปิดบริการเติมวงเงินของแอปนี้ ซึ่งไม่มีทางไปยังวงเงินอเนกประสงค์  
+**EN** Images 2.10–2.13 were captured on 27 October 2026 from UAT web build 223, opened in a browser rather than in the app. They carry no personal data, but three things differ from what a customer sees: 2.11 shows sample banks instead of NDID's live list, 2.12 has a จำลองยืนยันตัวตนสำเร็จ button where the app has ตรวจสอบสถานะ, and its Transaction Ref reads 000000001 instead of a real one. This step changed in three ways since the last edition: an NDID agreement screen (2.10) now comes before the provider list, unregistered providers can be picked, and failures use NDID's standard messages. The LandAndHouseWeb top-up card (1.2 in the last edition) was removed: since 14 October 2026 the เติมวงเงิน button opens this app's own top-up service, which has no way into วงเงินอเนกประสงค์.
+
+
 ---
 
-*ภาพหน้าจอบันทึกจากเครื่องจริงบนระบบทดสอบ UAT · ข้อมูลที่ระบุตัวบุคคลถูกปิดบัง · 2026-08-04*
+*ภาพหน้าจอบันทึกจากเครื่องจริงบนระบบทดสอบ UAT · ข้อมูลที่ระบุตัวบุคคลถูกปิดบัง · 2026-10-27*
