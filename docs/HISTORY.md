@@ -701,3 +701,33 @@ clipboard. Both were non-prod-only; neither ever shipped to prod.
 **If one is wanted again**, the shape to keep: non-prod-only, opened from the
 `(UAT ver…)` tag's diagnostics sheet rather than on page load, so a tester has
 to ask for it.
+
+## <a id="prod-white-screen-2026-10-28"></a>Prod white screen on `/loanPayment` (iOS, 2026-10-28)
+
+A customer support video (iPhone, 20 s): PIN login → srisawad home → the
+motorcycle loan card's orange **ชำระเงิน** (200.00 บาท) → the host's grey
+loading logo at ~10 s → a **blank white page** with no AppBar from 10.6 s to the
+end of the clip. No dark "ระบบปิดหน้าเว็บเพื่อคืนหน่วยความจำ" strip appeared.
+
+Checked the same day:
+
+- Prod hosting healthy: `WEB_VERSION` 10, `last-modified` 19 Oct, every file 200.
+- `/loanPayment` opened in headless Chrome with an iPhone UA booted in ~1.8 s
+  and rendered **ชำระเงิน** + an `HTTP 401` error view (fake token). This build
+  paints its AppBar even when every call fails, so a blank page with no AppBar
+  means **Flutter never started**.
+- Cold payload on iOS: `canvaskit.wasm` 2.2 MB (compressed) from
+  `www.gstatic.com/flutter-canvaskit/<rev>/` (the build does not use local
+  CanvasKit) + `main.dart.js` 0.8 MB. `index.html` has no splash, so the whole
+  download renders as white.
+- The host's `_checkWebVersion` reloads only when `client < latest`, so
+  `sawad_loan_universal_version` below 10 does nothing; above 10 forces a
+  clear-cache + cold reload on every open (once per page session).
+- The host's content-process-termination notice exists in the local host repo;
+  its absence from the video means either the customer's app predates it or
+  this was not a process kill.
+
+Leading hypothesis: slow cold download on a weak signal. Not confirmed.
+Proposed fixes (web-only, none built yet): a loading splash in `index.html`,
+serve CanvasKit from our own hosting, fix the `/` + deep-link cache headers
+(Outstanding #16). Tracked as Outstanding #56.

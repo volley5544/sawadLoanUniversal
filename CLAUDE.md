@@ -4932,10 +4932,24 @@ on `pentest_resolved`. Confirm the commit, then strike them.
     call. The srisawad native app reads its **own** project's config, so it
     needs the same edit separately if wanted there.
 54. **Confirm `sawad_loan_universal_version` (srisawad prod appConfig) = 10.**
+    A value **below** the live number is harmless (the host only reloads
+    when `client < latest`); a value **above** it makes every open clear the
+    cache and re-download ~3 MB — see #56.
 55. **The picked ID-card expiry is not filed.** Step 6's calendar
     (`TopupFlow.pickedIdCardExpiry`) only clears the check; `POST /topup` has
     no field for it. If the backend wants it on record, it needs a field —
     then add it to `TopupSubmission` and its 37-key test.
+56. **Prod white-screen report (iOS, 2026-10-28) — cause not yet known.** A
+    customer tapped the home loan card's **ชำระเงิน**, saw the host's loading
+    logo, then a blank white page for 10+ s (no AppBar). Prod (ver 10) boots
+    in ~1.8 s and always paints its AppBar, even on an API error, so Flutter
+    never started: either a slow cold download (≈2.2 MB CanvasKit from
+    `www.gstatic.com` + 0.8 MB `main.dart.js`, with **no splash** in
+    `index.html`) or an iOS content-process kill. Waiting on the customer's
+    answers (does it load eventually / network / iOS + app version) and on
+    #54. Proposed, not built: a loading splash in `index.html`, self-hosted
+    CanvasKit, and #16's cache headers.
+    [History](docs/HISTORY.md#prod-white-screen-2026-10-28).
 
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
