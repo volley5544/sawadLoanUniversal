@@ -44,6 +44,7 @@ class LoanContract {
     this.requestStatusCode = '',
     this.carDetails = const CarDetails(),
     this.landDetails = const LandDetails(),
+    this.revolvingLoan = const RevolvingLoan(),
     this.topupSpecialFlag = false,
     this.rawJson = const {},
   });
@@ -85,6 +86,11 @@ class LoanContract {
   /// `land_details` — the land-title collateral, the land counterpart of
   /// [carDetails]. Parsed only (added 2026-09-24); nothing renders it yet.
   final LandDetails landDetails;
+
+  /// `revolving_loans` — the contract's revolving credit line (บัตรศรีสวัสดิ์).
+  /// A single object despite the plural key. Parsed only (added 2026-11-11);
+  /// nothing renders it yet.
+  final RevolvingLoan revolvingLoan;
 
   /// `topup_special_flag` — the customer has been granted `topup_specials` on
   /// top of this contract's ordinary limit.
@@ -158,6 +164,7 @@ class LoanContract {
         requestStatusCode: asString(json['request_status_code']),
         carDetails: CarDetails.fromJson(asMap(json['car_details'])),
         landDetails: LandDetails.fromJson(asMap(json['land_details'])),
+        revolvingLoan: RevolvingLoan.fromJson(asMap(json['revolving_loans'])),
         topupSpecialFlag: json['topup_special_flag'] == true,
         rawJson: json,
       );
@@ -601,8 +608,6 @@ class Insurance {
       );
 }
 
-/// `car_details` — vehicle collateral. Two keys are mixed-case on the wire
-/// (`car_chassisNo`, `car_engineNo`); that is not a typo on our side.
 /// `land_details` — the land-title collateral (โฉนด). Added 2026-09-24,
 /// **parsed only**: no screen reads it yet.
 class LandDetails {
@@ -639,6 +644,8 @@ class LandDetails {
       );
 }
 
+/// `car_details` — vehicle collateral. Two keys are mixed-case on the wire
+/// (`car_chassisNo`, `car_engineNo`); that is not a typo on our side.
 class CarDetails {
   const CarDetails({
     this.registrationPrefix = '',
@@ -681,5 +688,86 @@ class CarDetails {
         gear: asString(json['car_gear']),
         manufactureYear: asString(json['car_manufacture_year']),
         color: asString(json['car_color']),
+      );
+}
+
+/// `revolving_loans` — the revolving credit line (บัตรศรีสวัสดิ์) attached to a
+/// contract. Added 2026-11-11, **parsed only**: no screen reads it yet.
+///
+/// A contract without one still sends the object, zero-filled with
+/// `revolving_flag: false` — so [revolvingFlag] is the test, not presence.
+class RevolvingLoan {
+  const RevolvingLoan({
+    this.contractId = 0,
+    this.revolvingFlag = false,
+    this.revolvingLimit = 0,
+    this.utilizationAmount = 0,
+    this.revolvingStatus = '',
+    this.reservedLimit = 0,
+    this.utilizationPercentage = 0,
+    this.maximumWithdrawalAmount = 0,
+    this.minimumWithdrawalAmount = 0,
+    this.remainingRequestLimit = 0,
+    this.remainingDailyAvailableLimit = 0,
+    this.acceptanceFlag = '',
+    this.bankAccounts = const [],
+  });
+
+  /// `contract_id`.
+  final int contractId;
+
+  /// `revolving_flag` — whether this contract has a revolving line at all.
+  final bool revolvingFlag;
+
+  /// `revolving_limit` — the line's total limit.
+  final double revolvingLimit;
+
+  /// `utilization_amount` — how much of the limit is drawn.
+  final double utilizationAmount;
+
+  /// `revolving_status`.
+  final String revolvingStatus;
+
+  /// `reserved_limit`.
+  final double reservedLimit;
+
+  /// `utilization_percentage`.
+  final double utilizationPercentage;
+
+  /// `maximum_withdrawal_amount` — the largest single withdrawal allowed.
+  final double maximumWithdrawalAmount;
+
+  /// `minimum_withdrawal_amount` — the smallest single withdrawal allowed.
+  final double minimumWithdrawalAmount;
+
+  /// `remaining_request_limit` — a **count** of requests left, not money
+  /// (it is the one integer among the amounts on the wire).
+  final int remainingRequestLimit;
+
+  /// `remaining_daily_available_limit` — money still withdrawable today.
+  final double remainingDailyAvailableLimit;
+
+  /// `acceptance_flag`.
+  final String acceptanceFlag;
+
+  /// `bank_accounts` — `null` in every sample so far, so the element shape is
+  /// unknown. Kept as raw objects until it is; `null` parses to empty.
+  final List<Map<String, dynamic>> bankAccounts;
+
+  factory RevolvingLoan.fromJson(Map<String, dynamic> json) => RevolvingLoan(
+        contractId: asInt(json['contract_id']),
+        revolvingFlag: asBool(json['revolving_flag']),
+        revolvingLimit: asDouble(json['revolving_limit']),
+        utilizationAmount: asDouble(json['utilization_amount']),
+        revolvingStatus: asString(json['revolving_status']),
+        reservedLimit: asDouble(json['reserved_limit']),
+        utilizationPercentage: asDouble(json['utilization_percentage']),
+        maximumWithdrawalAmount: asDouble(json['maximum_withdrawal_amount']),
+        minimumWithdrawalAmount: asDouble(json['minimum_withdrawal_amount']),
+        remainingRequestLimit: asInt(json['remaining_request_limit']),
+        remainingDailyAvailableLimit:
+            asDouble(json['remaining_daily_available_limit']),
+        acceptanceFlag: asString(json['acceptance_flag']),
+        bankAccounts: asMapList(json['bank_accounts']),
       );
 }
