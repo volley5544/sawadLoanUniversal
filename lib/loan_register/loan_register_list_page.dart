@@ -19,7 +19,7 @@ class LoanRegisterListPage extends StatefulWidget {
   State<LoanRegisterListPage> createState() => _LoanRegisterListPageState();
 }
 
-enum _RegisterCategory { motorcycle, draft, pLoan, pLoanFlow, topup }
+enum _RegisterCategory { motorcycle, draft, pLoan, pLoanFlow, topup, revolving }
 
 class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
   _RegisterCategory _selected = _RegisterCategory.motorcycle;
@@ -140,9 +140,19 @@ class _LoanRegisterListPageState extends State<LoanRegisterListPage> {
                     },
                   ),
                 ),
-                // Empty slot keeps the cards the same width as the row above.
                 const SizedBox(width: 16),
-                const Expanded(child: SizedBox.shrink()),
+                Expanded(
+                  child: _CategoryCard(
+                    assetName: 'DocumentIcon.svg',
+                    // Revolving credit — UI only for now (2026-11-11).
+                    label: 'บัตรศรีสวัสดิ์',
+                    selected: _selected == _RegisterCategory.revolving,
+                    onTap: () {
+                      setState(() => _selected = _RegisterCategory.revolving);
+                      context.push(AppRoutes.revolving);
+                    },
+                  ),
+                ),
               ],
             ),
           ],

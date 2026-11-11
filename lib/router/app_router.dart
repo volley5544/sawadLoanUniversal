@@ -33,6 +33,11 @@ import '../p_loan/application/p_loan_success_page.dart';
 import '../p_loan/application/p_loan_topup_card_resume_page.dart';
 import '../p_loan/application/p_loan_vehicle_photos_page.dart';
 import '../p_loan/submit_form/p_loan_form_page.dart';
+import '../revolving/models/revolving_mock.dart';
+import '../revolving/revolving_contract_page.dart';
+import '../revolving/revolving_home_page.dart';
+import '../revolving/revolving_payment_pages.dart';
+import '../revolving/revolving_transfer_pages.dart';
 import '../services/diagnostics.dart';
 import '../topup/models/topup_flow.dart';
 import '../topup/topup_amount_page.dart';
@@ -163,6 +168,24 @@ abstract final class AppRoutes {
   static const String loanPaymentOld = '/loanPayment/old';
 
   static const String loanPaymentQr = '/loanPayment/qr';
+
+  // บัตรศรีสวัสดิ์ — revolving credit (lib/revolving/). ⚠ UI and navigation
+  // only (2026-11-11): every screen renders mock data and files nothing.
+
+  /// **สินเชื่อของฉัน**, the card's home. `?contNo=` (+ `&fromHost=true`;
+  /// `&bill=ready` shows ดูบิล's issued-statement branch). The one revolving
+  /// route a URL may enter — the rest take the card as `extra` and fall back
+  /// to the mock without it.
+  static const String revolving = '/revolving';
+  static const String revolvingTransfer = '/revolving/transfer';
+  static const String revolvingTransferAmount = '/revolving/transfer/amount';
+  static const String revolvingTransferConfirm = '/revolving/transfer/confirm';
+  static const String revolvingTransferSuccess = '/revolving/transfer/success';
+  static const String revolvingPayment = '/revolving/payment';
+  static const String revolvingPaymentConfirm = '/revolving/payment/confirm';
+  static const String revolvingPaymentSuccess = '/revolving/payment/success';
+  static const String revolvingQr = '/revolving/qr';
+  static const String revolvingContract = '/revolving/contract';
 }
 
 /// The app router.
@@ -326,6 +349,63 @@ final GoRouter appRouter = GoRouter(
               : null,
         );
       },
+    ),
+    // ── บัตรศรีสวัสดิ์ (revolving) ──────────────────────────────────────
+    GoRoute(
+      path: AppRoutes.revolving,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return RevolvingHomePage(
+          contractNo: q['contNo'] ?? '',
+          fromHost: q['fromHost'] == 'true',
+          billReady: q['bill'] == 'ready',
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingTransfer,
+      builder: (context, state) =>
+          RevolvingTransferPage(card: _extra<RevolvingCardView>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingTransferAmount,
+      builder: (context, state) => RevolvingTransferAmountPage(
+          draft: _extra<RevolvingTransferDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingTransferConfirm,
+      builder: (context, state) => RevolvingTransferConfirmPage(
+          draft: _extra<RevolvingTransferDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingTransferSuccess,
+      builder: (context, state) => RevolvingTransferSuccessPage(
+          draft: _extra<RevolvingTransferDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingPayment,
+      builder: (context, state) =>
+          RevolvingPaymentPage(card: _extra<RevolvingCardView>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingPaymentConfirm,
+      builder: (context, state) => RevolvingPaymentConfirmPage(
+          draft: _extra<RevolvingPaymentDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingPaymentSuccess,
+      builder: (context, state) => RevolvingPaymentSuccessPage(
+          draft: _extra<RevolvingPaymentDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingQr,
+      builder: (context, state) =>
+          RevolvingQrPage(draft: _extra<RevolvingPaymentDraft>(state)),
+    ),
+    GoRoute(
+      path: AppRoutes.revolvingContract,
+      builder: (context, state) =>
+          RevolvingContractPage(card: _extra<RevolvingCardView>(state)),
     ),
     // ── loan detail ────────────────────────────────────────────────────
     GoRoute(
@@ -522,3 +602,10 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
+
+/// `state.extra` as a [T], or null — a reload drops `extra`, and a wrong type
+/// must not throw on a screen that can fall back.
+T? _extra<T>(GoRouterState state) {
+  final extra = state.extra;
+  return extra is T ? extra : null;
+}

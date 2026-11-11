@@ -109,6 +109,17 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   functional change (two loan-detail debug dialogs, built and removed —
   [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs)).
 
+- **บัตรศรีสวัสดิ์ (revolving credit) is in development** (started 2026-11-11,
+  `lib/revolving/`). ⚠ **UI and navigation only**: every screen renders
+  `RevolvingCardView.mock()` (the BA design's own figures, design PDF in the
+  git-ignored `etc/revolving_feature/`) and no button files, debits or saves
+  anything. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
+  issued branch); the other nine routes take the card / a draft as `extra`
+  and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
+  `LoanContract.revolvingLoan` but nothing reads it yet. Payment branches as
+  the design's arrows draw: suggested amount → confirm → success, typed
+  amount → QR — **unconfirmed with the BA**. Logo, card art, bank and
+  PromptPay marks are drawn stand-ins (no assets supplied).
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan
