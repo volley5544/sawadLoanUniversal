@@ -725,13 +725,15 @@ class RevolvingLoan {
   /// `utilization_amount` — how much of the limit is drawn.
   final double utilizationAmount;
 
-  /// `revolving_status`.
+  /// `revolving_status` — `Active` in the LMS sample (2026-11-11); the full
+  /// set of values is not yet known.
   final String revolvingStatus;
 
   /// `reserved_limit`.
   final double reservedLimit;
 
-  /// `utilization_percentage`.
+  /// `utilization_percentage` — a **fraction**, not a percent: the LMS sample
+  /// has `0.55` for 27,500 drawn of 50,000. Multiply by 100 to display it.
   final double utilizationPercentage;
 
   /// `maximum_withdrawal_amount` — the largest single withdrawal allowed.
@@ -747,12 +749,27 @@ class RevolvingLoan {
   /// `remaining_daily_available_limit` — money still withdrawable today.
   final double remainingDailyAvailableLimit;
 
-  /// `acceptance_flag`.
+  /// `acceptance_flag` — whether the customer accepted the line's terms
+  /// (`Yes` in the LMS sample, `''` on a contract with no line).
+  ///
+  /// ⚠ **Nothing gates on it yet** (decided 2026-11-11): every revolving
+  /// request is treated as accepted for now, and the
+  /// `revolvingLoan/check|saveAcceptanceFlag` calls come in a later update.
   final String acceptanceFlag;
 
-  /// `bank_accounts` — `null` in every sample so far, so the element shape is
-  /// unknown. Kept as raw objects until it is; `null` parses to empty.
-  final List<Map<String, dynamic>> bankAccounts;
+  /// `bank_accounts` — the accounts a withdrawal can be paid into. `null`
+  /// (every contract without a line) parses to empty, and a non-object
+  /// element is dropped.
+  final List<RevolvingBankAccount> bankAccounts;
+
+  /// The account a withdrawal goes to unless the customer picks another: the
+  /// one marked `is_default`, else the first. `null` when there are none.
+  RevolvingBankAccount? get defaultBankAccount {
+    for (final a in bankAccounts) {
+      if (a.isDefault) return a;
+    }
+    return bankAccounts.isEmpty ? null : bankAccounts.first;
+  }
 
   factory RevolvingLoan.fromJson(Map<String, dynamic> json) => RevolvingLoan(
         contractId: asInt(json['contract_id']),
@@ -768,6 +785,56 @@ class RevolvingLoan {
         remainingDailyAvailableLimit:
             asDouble(json['remaining_daily_available_limit']),
         acceptanceFlag: asString(json['acceptance_flag']),
-        bankAccounts: asMapList(json['bank_accounts']),
+        bankAccounts: asMapList(json['bank_accounts'])
+            .map(RevolvingBankAccount.fromJson)
+            .toList(),
+      );
+}
+
+/// One `revolving_loans.bank_accounts[]` entry. Field names from the
+/// node-api guide (`revolving-frontend-api.md`); values from the LMS sample,
+/// whose own keys are camelCase (`bankName`, …) — this API's are snake_case.
+class RevolvingBankAccount {
+  const RevolvingBankAccount({
+    this.bankName = '',
+    this.bankCode = '',
+    this.transferType = '',
+    this.accountType = '',
+    this.accountNumber = '',
+    this.accountName = '',
+    this.isDefault = false,
+  });
+
+  /// `bank_name` — `Bangkok Bank` in the sample (English).
+  final String bankName;
+
+  /// `bank_code` — `BBL`; goes out as the withdrawal's `bank_code`.
+  final String bankCode;
+
+  /// `transfer_type` — `customer_bank` in the sample; one of the
+  /// withdrawal's `transfer_type` values.
+  final String transferType;
+
+  /// `account_type` — `SAVING ACCOUNT`.
+  final String accountType;
+
+  /// `account_number` — digits, unformatted (`1234567890`).
+  final String accountNumber;
+
+  /// `account_name` — required on every withdrawal (LMS validates it).
+  final String accountName;
+
+  /// `is_default`.
+  final bool isDefault;
+
+  factory RevolvingBankAccount.fromJson(Map<String, dynamic> json) =>
+      RevolvingBankAccount(
+        bankName: asString(json['bank_name']),
+        bankCode: asString(json['bank_code']),
+        transferType: asString(json['transfer_type']),
+        accountType: asString(json['account_type']),
+        accountNumber: asString(json['account_number']),
+        accountName: asString(json['account_name']),
+        isDefault: asBool(json['is_default']),
       );
 }

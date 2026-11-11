@@ -59,9 +59,55 @@ void main() {
     expect(r.remainingRequestLimit, 3);
     expect(r.remainingDailyAvailableLimit, 20000.25);
     expect(r.acceptanceFlag, 'Y');
-    expect(r.bankAccounts, [
-      {'bank_code': 'KTB'},
-    ]);
+    expect(r.bankAccounts.single.bankCode, 'KTB');
+    // No `is_default` anywhere → the first account.
+    expect(r.defaultBankAccount?.bankCode, 'KTB');
+  });
+
+  test('the LMS sample values, under this API\'s snake_case keys', () {
+    // Values from the LMS sample shown 2026-11-11 (its keys are camelCase).
+    final r = RevolvingLoan.fromJson({
+      'revolving_flag': true,
+      'revolving_limit': 50000,
+      'utilization_amount': 27500,
+      'revolving_status': 'Active',
+      'reserved_limit': 5000,
+      'utilization_percentage': 0.55,
+      'remaining_request_limit': 2,
+      'remaining_daily_available_limit': 50000,
+      'acceptance_flag': 'Yes',
+      'bank_accounts': [
+        {
+          'bank_name': 'Krungthai Bank',
+          'bank_code': 'KTB',
+          'transfer_type': 'customer_bank',
+          'account_type': 'SAVING ACCOUNT',
+          'account_number': '0000000000',
+          'account_name': 'Other',
+          'is_default': false,
+        },
+        {
+          'bank_name': 'Bangkok Bank',
+          'bank_code': 'BBL',
+          'transfer_type': 'customer_bank',
+          'account_type': 'SAVING ACCOUNT',
+          'account_number': '1234567890',
+          'account_name': 'John Doe',
+          'is_default': true,
+        },
+      ],
+    });
+    expect(r.utilizationPercentage, 0.55, reason: 'a fraction, not 55');
+    expect(r.revolvingStatus, 'Active');
+    expect(r.bankAccounts, hasLength(2));
+    final d = r.defaultBankAccount!;
+    expect(d.bankName, 'Bangkok Bank');
+    expect(d.bankCode, 'BBL');
+    expect(d.transferType, 'customer_bank');
+    expect(d.accountType, 'SAVING ACCOUNT');
+    expect(d.accountNumber, '1234567890');
+    expect(d.accountName, 'John Doe');
+    expect(d.isDefault, isTrue);
   });
 
   test('an absent block defaults to no revolving line', () {
@@ -69,5 +115,6 @@ void main() {
     expect(r.revolvingFlag, isFalse);
     expect(r.contractId, 0);
     expect(r.bankAccounts, isEmpty);
+    expect(r.defaultBankAccount, isNull);
   });
 }

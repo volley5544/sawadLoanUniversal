@@ -116,7 +116,15 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   anything. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
   issued branch); the other five routes take the card / a draft as `extra`
   and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
-  `LoanContract.revolvingLoan` but nothing reads it yet. **ชำระเงิน goes to
+  `LoanContract.revolvingLoan` (typed `bank_accounts` → `RevolvingBankAccount`,
+  `defaultBankAccount`) but nothing reads it yet. ⚠ `utilization_percentage`
+  is a **fraction** (`0.55`). API: node-api `revolvingLoan/*` on the mobile
+  base, bearer + `x-srisawad` (guide in git-ignored
+  `etc/revolving_feature/api-call/`; live on uat, **404 on prod** 2026-11-11).
+  **Acceptance is not gated** — treated as accepted for now; the
+  check/save acceptance calls come in a later update. Open with the user's
+  boss: how to tell a first withdrawal (`dayOneWithdrawal`) from later ones,
+  and whether `requesting_branch` is the row's `branch_code`. **ชำระเงิน goes to
   the loan payment screen** (`/loanPayment?contNo=`, `revolvingOpenPayment`;
   decided 2026-11-11): the revolving bill is added to the contract's normal
   installment, so the design's own payment screens (suggested/custom amount
