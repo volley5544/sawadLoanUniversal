@@ -4969,6 +4969,15 @@ on `pentest_resolved`. Confirm the commit, then strike them.
     CanvasKit, and #16's cache headers.
     [History](docs/HISTORY.md#prod-white-screen-2026-10-28).
 
+**บัตรศรีสวัสดิ์ (added 2026-11-11):**
+
+57. **Does `os_balance` include the revolving balance?** `/loanPayment`
+    silently clamps a typed amount to it, so if it doesn't, a revolving
+    customer can't pay in full. Asked of the backend by the user; the
+    revolving share of `total_due_amount` / `current_due_amount` is the
+    backend's to handle (confirmed). Revolving is tested end to end only once
+    its APIs are wired.
+
 ### Pentest 2026-08-11 → passed (`pentest_doc/`)
 
 **The retest passed; all findings are signed off** (2026-08-25). "Passed" is
