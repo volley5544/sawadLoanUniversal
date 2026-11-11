@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sawad_loan_universal/revolving/components/revolving_bill_dialogs.dart';
 import 'package:sawad_loan_universal/revolving/models/revolving_mock.dart';
 import 'package:sawad_loan_universal/revolving/revolving_contract_page.dart';
 import 'package:sawad_loan_universal/revolving/revolving_home_page.dart';
@@ -64,6 +65,34 @@ void main() {
     await tester.pump();
     expect(find.text('ยอดที่แนะนำชำระ'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  Future<void> openBill(WidgetTester tester, RevolvingCardView view) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showRevolvingBill(context, view),
+            child: const Text('bill'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('bill'));
+    await tester.pump();
+  }
+
+  testWidgets('ดูบิล before the statement date explains when it issues',
+      (tester) async {
+    await openBill(tester, card);
+    expect(find.text('ยังไม่สามารถออกใบแจ้งหนี้ได้'), findsOneWidget);
+  });
+
+  testWidgets('an issued bill with no URL yet says so rather than opening',
+      (tester) async {
+    await openBill(tester, card.copyWith(billReady: true));
+    expect(find.text('ยังไม่สามารถออกใบแจ้งหนี้ได้'), findsNothing);
+    expect(find.textContaining('ใบแจ้งหนี้ ยังไม่เปิดใช้งาน'), findsOneWidget);
   });
 
   test('used ratio is the drawn share of the line', () {

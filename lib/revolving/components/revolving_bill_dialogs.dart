@@ -4,24 +4,32 @@
 /// | | Shows |
 /// | --- | --- |
 /// | ยังไม่ถึงวันสรุปยอด | a "not yet" dialog naming the issue and due dates |
-/// | ถึงวันสรุปยอด | the statement (ใบแจ้งหนี้), zoomable, with ✕ |
+/// | ถึงวันสรุปยอด | the statement (ใบแจ้งหนี้), opened in the host's in-app browser |
 ///
-/// ⚠ The statement is a **drawn placeholder** — the real one is presumably a
-/// PDF or image from an endpoint that does not exist yet.
+/// The statement arrives from the API **as a URL** (confirmed 2026-11-11) and
+/// is opened through `openExternalUrl` — the same path the loan detail
+/// screen's documents take, since `window.open` is inert inside the host. The
+/// design draws it in a ✕ dialog; that frame is the in-app browser's.
+///
+/// ⚠ No URL exists yet (the API isn't built), so an issued bill with an empty
+/// [RevolvingCardView.billUrl] says so instead of opening nothing.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../services/external_url.dart';
 import '../models/revolving_mock.dart';
 import 'revolving_components.dart';
 
 Future<void> showRevolvingBill(BuildContext context, RevolvingCardView card) =>
-    showDialog<void>(
-      context: context,
-      builder: (_) => card.billReady
-          ? _StatementDialog(card: card)
-          : _NotIssuedDialog(card: card),
-    );
+    !card.billReady
+        ? showDialog<void>(
+            context: context,
+            builder: (_) => _NotIssuedDialog(card: card),
+          )
+        : card.billUrl.trim().isEmpty
+            ? Future.sync(() => showRevolvingNotYet(context, 'ใบแจ้งหนี้'))
+            : openExternalDocument(context, card.billUrl.trim());
 
 class _NotIssuedDialog extends StatelessWidget {
   const _NotIssuedDialog({required this.card});
@@ -91,107 +99,4 @@ class _NotIssuedDialog extends StatelessWidget {
           ),
         ),
       );
-}
-
-class _StatementDialog extends StatelessWidget {
-  const _StatementDialog({required this.card});
-
-  final RevolvingCardView card;
-
-  @override
-  Widget build(BuildContext context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, size: 28, color: Colors.black),
-                ),
-              ),
-              InteractiveViewer(
-                maxScale: 4,
-                child: _StatementPlaceholder(card: card),
-              ),
-            ],
-          ),
-        ),
-      );
-}
-
-/// A stand-in ใบแจ้งหนี้ laid out like the design's, so the dialog has the
-/// right proportions until the real document is wired.
-class _StatementPlaceholder extends StatelessWidget {
-  const _StatementPlaceholder({required this.card});
-
-  final RevolvingCardView card;
-
-  @override
-  Widget build(BuildContext context) {
-    TextStyle s(double size, [FontWeight w = FontWeight.w400]) =>
-        revolvingText(size, weight: w, color: Colors.black87);
-    Widget row(String label, String a, String b, String total,
-            {bool bold = false}) =>
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1.5),
-          child: Row(
-            children: [
-              Expanded(
-                  flex: 4,
-                  child: Text(label,
-                      style: s(7, bold ? FontWeight.w700 : FontWeight.w400))),
-              Expanded(flex: 2, child: Text(a, textAlign: TextAlign.right, style: s(7))),
-              Expanded(flex: 2, child: Text(b, textAlign: TextAlign.right, style: s(7))),
-              Expanded(
-                  flex: 2,
-                  child: Text(total,
-                      textAlign: TextAlign.right,
-                      style: s(7, bold ? FontWeight.w700 : FontWeight.w400))),
-            ],
-          ),
-        );
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(border: Border.all(color: Colors.black54)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const RevolvingLogo(),
-              const SizedBox(width: 6),
-              Expanded(child: Text('บริษัท เงินสดทันใจ จำกัด', style: s(9, FontWeight.w700))),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Center(child: Text('ใบแจ้งหนี้', style: s(13, FontWeight.w700))),
-          Center(child: Text('OFFICIAL INVOICE', style: s(7))),
-          const Divider(height: 12),
-          Text('เลขที่สัญญา: ${card.contractNo.isEmpty ? '-' : card.contractNo}',
-              style: s(7)),
-          Text('ประเภทสินเชื่อ: ${card.title}', style: s(7)),
-          Text('แจ้งยอดครบกำหนดชำระ: ${card.dueDateLabel}', style: s(7)),
-          const Divider(height: 12),
-          row('', 'เงินต้น', 'ดอกเบี้ย', 'ยอดรวม', bold: true),
-          row('ยอดยกมา', '0.00', '0.00', '0.00'),
-          row('ยอดใช้วงเงินในรอบ', '40,000.00', '0.00', '40,000.00'),
-          row('ดอกเบี้ยในรอบ', '0.00', '657.53', '657.53'),
-          row('จำนวนเงินที่ต้องชำระ', '40,000.00', '657.53', '40,657.53',
-              bold: true),
-          row('จำนวนเงินขั้นต่ำที่ต้องชำระ', '', '',
-              revolvingMoney(card.suggestedPayment),
-              bold: true),
-          const SizedBox(height: 8),
-          Text('* ตัวอย่างเอกสาร — ยังไม่เชื่อมต่อข้อมูลจริง',
-              style: revolvingText(7, color: RevolvingPalette.red)),
-        ],
-      ),
-    );
-  }
 }

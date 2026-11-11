@@ -106,6 +106,8 @@ flutter:
     # Icons for the P-Loan application flow. Kept in a subfolder because the
     # source project's MotorLoanIcon.svg is a different file from ours.
     - assets/p_loan/
+    # บัตรศรีสวัสดิ์ (revolving) artwork.
+    - assets/revolving/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

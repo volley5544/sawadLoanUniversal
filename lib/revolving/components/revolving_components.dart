@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -260,39 +261,20 @@ class RevolvingPeachPage extends StatelessWidget {
       );
 }
 
-/// The ศรีสวัสดิ์ mark.
-///
-/// ⚠ A text stand-in: the repo has no logo asset. Swap for the real SVG/PNG
-/// when one is supplied.
+/// The ศรีสวัสดิ์ mark — the supplied `srisawad-home-logo.svg`
+/// (`assets/revolving/srisawad_logo.svg`, 214×65).
 class RevolvingLogo extends StatelessWidget {
-  const RevolvingLogo({super.key});
+  const RevolvingLogo({super.key, this.height = 36});
+
+  final double height;
+
+  static const String asset = 'assets/revolving/srisawad_logo.svg';
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: RevolvingPalette.navy,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: RevolvingPalette.orange, width: 2),
-            ),
-            child: Text('ศ',
-                style: revolvingText(14,
-                    weight: FontWeight.w700, color: Colors.white)),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text('ศรีสวัสดิ์',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: revolvingText(20,
-                    weight: FontWeight.w800, color: RevolvingPalette.blue)),
-          ),
-        ],
+  Widget build(BuildContext context) => SvgPicture.asset(
+        asset,
+        height: height,
+        semanticsLabel: 'ศรีสวัสดิ์',
       );
 }
 

@@ -118,8 +118,13 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
   `LoanContract.revolvingLoan` but nothing reads it yet. Payment branches as
   the design's arrows draw: suggested amount → confirm → success, typed
-  amount → QR — **unconfirmed with the BA**. Logo, card art, bank and
-  PromptPay marks are drawn stand-ins (no assets supplied).
+  amount → QR — **unconfirmed; the user will settle it**. The logo is the
+  supplied `assets/revolving/srisawad_logo.svg`; card art, bank and
+  PromptPay marks are still drawn stand-ins (assets promised later). The
+  progress bar shows the **used** share (confirmed). ดูบิล's issued bill
+  comes from the API **as a URL**, opened in the host's in-app browser via
+  `openExternalDocument` (`RevolvingCardView.billUrl`, empty until the API
+  exists → a "not yet" snackbar).
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan

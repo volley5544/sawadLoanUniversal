@@ -72,6 +72,7 @@ class RevolvingCardView {
     required this.billReady,
     required this.billIssueDate,
     required this.billDueDate,
+    this.billUrl = '',
     required this.qrRef1,
     required this.qrRef2,
   });
@@ -132,6 +133,11 @@ class RevolvingCardView {
   final String billIssueDate;
   final String billDueDate;
 
+  /// Where the issued statement lives. The API will send it as a URL and the
+  /// app opens it in the host's in-app browser (`openExternalUrl`). Empty
+  /// until the API exists.
+  final String billUrl;
+
   final String qrRef1;
   final String qrRef2;
 
@@ -173,6 +179,7 @@ class RevolvingCardView {
         billReady: billReady ?? this.billReady,
         billIssueDate: billIssueDate,
         billDueDate: billDueDate,
+        billUrl: billUrl,
         qrRef1: qrRef1,
         qrRef2: qrRef2,
       );
