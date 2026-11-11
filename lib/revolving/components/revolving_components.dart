@@ -59,6 +59,19 @@ void showRevolvingNotYet(BuildContext context, [String what = '']) {
   ));
 }
 
+/// ชำระเงิน on the card → the **loan payment** screen (`/loanPayment`).
+///
+/// The revolving bill is added to the contract's normal installment, so a
+/// revolving payment is a loan payment (decided 2026-11-11). The design's own
+/// payment screens (suggested / custom amount → confirm / QR) were replaced
+/// by this and deleted. `/loanPayment` looks the contract up by `contNo`; its
+/// back pops to here.
+void revolvingOpenPayment(BuildContext context, RevolvingCardView card) =>
+    context.push(Uri(
+      path: AppRoutes.loanPayment,
+      queryParameters: {'contNo': card.contractNo},
+    ).toString());
+
 /// Back out of a revolving screen: pop when something is beneath it, else —
 /// the host opened this route directly — close the WebView (or go home in a
 /// plain browser).
@@ -398,8 +411,6 @@ enum RevolvingCardMode {
   /// Limits only — the withdrawal screens.
   limits,
 
-  /// Suggested payment and due date only — the QR screen.
-  qr,
 }
 
 /// The white summary card under every orange header.
@@ -418,25 +429,7 @@ class RevolvingSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[RevolvingCardTitle(card: card)];
-    if (mode == RevolvingCardMode.qr) {
-      children.addAll([
-        const SizedBox(height: 14),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Text('กำหนดชำระ ${card.dueDateLabel}',
-                  style: revolvingText(11, color: RevolvingPalette.label)),
-            ),
-            RevolvingFigure(
-              label: 'ยอดที่แนะนำให้ชำระ',
-              amount: card.suggestedPayment,
-              alignEnd: true,
-            ),
-          ],
-        ),
-      ]);
-    } else {
+    {
       children.addAll([
         const SizedBox(height: 16),
         Row(

@@ -36,7 +36,6 @@ import '../p_loan/submit_form/p_loan_form_page.dart';
 import '../revolving/models/revolving_mock.dart';
 import '../revolving/revolving_contract_page.dart';
 import '../revolving/revolving_home_page.dart';
-import '../revolving/revolving_payment_pages.dart';
 import '../revolving/revolving_transfer_pages.dart';
 import '../services/diagnostics.dart';
 import '../topup/models/topup_flow.dart';
@@ -181,10 +180,6 @@ abstract final class AppRoutes {
   static const String revolvingTransferAmount = '/revolving/transfer/amount';
   static const String revolvingTransferConfirm = '/revolving/transfer/confirm';
   static const String revolvingTransferSuccess = '/revolving/transfer/success';
-  static const String revolvingPayment = '/revolving/payment';
-  static const String revolvingPaymentConfirm = '/revolving/payment/confirm';
-  static const String revolvingPaymentSuccess = '/revolving/payment/success';
-  static const String revolvingQr = '/revolving/qr';
   static const String revolvingContract = '/revolving/contract';
 }
 
@@ -381,26 +376,6 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.revolvingTransferSuccess,
       builder: (context, state) => RevolvingTransferSuccessPage(
           draft: _extra<RevolvingTransferDraft>(state)),
-    ),
-    GoRoute(
-      path: AppRoutes.revolvingPayment,
-      builder: (context, state) =>
-          RevolvingPaymentPage(card: _extra<RevolvingCardView>(state)),
-    ),
-    GoRoute(
-      path: AppRoutes.revolvingPaymentConfirm,
-      builder: (context, state) => RevolvingPaymentConfirmPage(
-          draft: _extra<RevolvingPaymentDraft>(state)),
-    ),
-    GoRoute(
-      path: AppRoutes.revolvingPaymentSuccess,
-      builder: (context, state) => RevolvingPaymentSuccessPage(
-          draft: _extra<RevolvingPaymentDraft>(state)),
-    ),
-    GoRoute(
-      path: AppRoutes.revolvingQr,
-      builder: (context, state) =>
-          RevolvingQrPage(draft: _extra<RevolvingPaymentDraft>(state)),
     ),
     GoRoute(
       path: AppRoutes.revolvingContract,

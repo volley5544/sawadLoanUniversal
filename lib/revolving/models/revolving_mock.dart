@@ -57,7 +57,6 @@ class RevolvingCardView {
     required this.contractInfoDateLabel,
     required this.withdrawals,
     required this.payments,
-    required this.suggestedBreakdown,
     required this.contractInfo,
     required this.minimumWithdrawal,
     required this.transferFee,
@@ -66,15 +65,12 @@ class RevolvingCardView {
     required this.bankAccountNo,
     required this.bankAccountMasked,
     required this.accountHolderPlaceholder,
-    required this.payerPlaceholder,
     required this.promptPayPhone,
     required this.promptPayCitizenId,
     required this.billReady,
     required this.billIssueDate,
     required this.billDueDate,
     this.billUrl = '',
-    required this.qrRef1,
-    required this.qrRef2,
   });
 
   final String contractNo;
@@ -109,9 +105,6 @@ class RevolvingCardView {
   final List<RevolvingHistoryEntry> withdrawals;
   final List<RevolvingHistoryEntry> payments;
 
-  /// ยอดที่แนะนำชำระ breakdown (วันครบกำหนดชำระ … รวม).
-  final List<RevolvingRow> suggestedBreakdown;
-
   /// ข้อมูลสัญญา rows, in order. The last one, สัญญาเงินกู้, is a link and is
   /// rendered separately.
   final List<RevolvingRow> contractInfo;
@@ -124,7 +117,6 @@ class RevolvingCardView {
   final String bankAccountNo;
   final String bankAccountMasked;
   final String accountHolderPlaceholder;
-  final String payerPlaceholder;
   final String promptPayPhone;
   final String promptPayCitizenId;
 
@@ -137,9 +129,6 @@ class RevolvingCardView {
   /// app opens it in the host's in-app browser (`openExternalUrl`). Empty
   /// until the API exists.
   final String billUrl;
-
-  final String qrRef1;
-  final String qrRef2;
 
   /// How much of the line is drawn, 0–1, for the progress bar.
   double get usedRatio {
@@ -164,7 +153,6 @@ class RevolvingCardView {
         contractInfoDateLabel: contractInfoDateLabel,
         withdrawals: withdrawals,
         payments: payments,
-        suggestedBreakdown: suggestedBreakdown,
         contractInfo: contractInfo,
         minimumWithdrawal: minimumWithdrawal,
         transferFee: transferFee,
@@ -173,15 +161,12 @@ class RevolvingCardView {
         bankAccountNo: bankAccountNo,
         bankAccountMasked: bankAccountMasked,
         accountHolderPlaceholder: accountHolderPlaceholder,
-        payerPlaceholder: payerPlaceholder,
         promptPayPhone: promptPayPhone,
         promptPayCitizenId: promptPayCitizenId,
         billReady: billReady ?? this.billReady,
         billIssueDate: billIssueDate,
         billDueDate: billDueDate,
         billUrl: billUrl,
-        qrRef1: qrRef1,
-        qrRef2: qrRef2,
       );
 
   /// The design's own figures.
@@ -219,12 +204,6 @@ class RevolvingCardView {
               dateLabel: '18 ก.พ. 69',
               amount: 1438),
         ],
-        suggestedBreakdown: const [
-          RevolvingRow('วันครบกำหนดชำระ', '20/05/2569'),
-          RevolvingRow('ดอกเบี้ย+เงินต้น', '2,450.25 บาท'),
-          RevolvingRow('ค่าติดตาม', '50.00 บาท'),
-          RevolvingRow('รวม', '2,500.25 บาท'),
-        ],
         contractInfo: const [
           RevolvingRow('วงเงินอนุมัติ', '50,000 บาท'),
           RevolvingRow('ยอดชำระขั้นต่ำ', '500 บาท'),
@@ -243,14 +222,11 @@ class RevolvingCardView {
         bankAccountNo: '123-4-56789-0',
         bankAccountMasked: 'XXX-X-XXXXX-X',
         accountHolderPlaceholder: '[ชื่อ-นามสกุลผู้รับ]',
-        payerPlaceholder: '[ชื่อ-นามสกุลผู้จ่าย]',
         promptPayPhone: '088-888-8888',
         promptPayCitizenId: '1-2345-67890-12-3',
         billReady: false,
         billIssueDate: '2026-11-03',
         billDueDate: '2026-11-06',
-        qrRef1: '000000016677690401',
-        qrRef2: '00004787088057',
       );
 }
 
@@ -269,12 +245,4 @@ class RevolvingTransferDraft {
 
   /// พร้อมเพย์ only: phone number (true) or citizen id (false).
   final bool promptPayUsesPhone;
-}
-
-/// What the payment screen hands to its confirm / success screens.
-class RevolvingPaymentDraft {
-  const RevolvingPaymentDraft({required this.card, required this.amount});
-
-  final RevolvingCardView card;
-  final double amount;
 }

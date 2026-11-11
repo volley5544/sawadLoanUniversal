@@ -21,7 +21,7 @@ class RevolvingContractPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final view = card ?? RevolvingCardView.mock();
-    void pay() => context.push(AppRoutes.revolvingPayment, extra: view);
+    void pay() => revolvingOpenPayment(context, view);
     return RevolvingOrangePage(
       title: 'ข้อมูลสัญญา',
       subtitle: 'ข้อมูลวันที่ ${view.dataDateLabel}',

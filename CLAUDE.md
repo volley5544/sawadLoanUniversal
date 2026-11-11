@@ -114,11 +114,13 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `RevolvingCardView.mock()` (the BA design's own figures, design PDF in the
   git-ignored `etc/revolving_feature/`) and no button files, debits or saves
   anything. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
-  issued branch); the other nine routes take the card / a draft as `extra`
+  issued branch); the other five routes take the card / a draft as `extra`
   and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
-  `LoanContract.revolvingLoan` but nothing reads it yet. Payment branches as
-  the design's arrows draw: suggested amount → confirm → success, typed
-  amount → QR — **unconfirmed; the user will settle it**. The logo is the
+  `LoanContract.revolvingLoan` but nothing reads it yet. **ชำระเงิน goes to
+  the loan payment screen** (`/loanPayment?contNo=`, `revolvingOpenPayment`;
+  decided 2026-11-11): the revolving bill is added to the contract's normal
+  installment, so the design's own payment screens (suggested/custom amount
+  → confirm/success/QR) were deleted, not kept as a copy. The logo is the
   supplied `assets/revolving/srisawad_logo.svg`; card art, bank and
   PromptPay marks are still drawn stand-ins (assets promised later). The
   progress bar shows the **used** share (confirmed). ดูบิล's issued bill

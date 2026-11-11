@@ -45,8 +45,7 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
   /// 0 = ประวัติการถอน/โอน, 1 = ประวัติการชำระ.
   int _tab = 0;
 
-  void _openPayment() =>
-      context.push(AppRoutes.revolvingPayment, extra: _card);
+  void _openPayment() => revolvingOpenPayment(context, _card);
 
   @override
   Widget build(BuildContext context) {
