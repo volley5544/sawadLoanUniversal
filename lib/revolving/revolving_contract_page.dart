@@ -1,53 +1,91 @@
 /// **ข้อมูลสัญญา — บัตรศรีสวัสดิ์**, design page 10.
 ///
 /// Rows mapped per the BA's *Contract detail* spec — see
-/// `RevolvingCardView._contractRows`. **สัญญาเงินกู้** opens the same
-/// document the loan detail screen does, by the same `comcode_config` rule
-/// ([revolvingContractDocumentUrl]); a contract the rule doesn't offer it for
-/// says so.
+/// `RevolvingCardView._contractRows`.
+///
+/// **สัญญาเงินกู้ is the loan detail screen's row, rule for rule** (on
+/// request, 2026-11-12): the same `contract_url` link, shown only when
+/// `comcode_config.showsContractButton` allows it (otherwise the row is
+/// absent, as there), labelled with the config's `button_name` for the
+/// comcode (`สัญญาเงินกู้` when none), and loan type `O` asks
+/// [confirmBranchIssuedDocument] first. The demo card keeps the row and says
+/// "not yet".
 library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../loan_detail/loan_detail_page.dart';
+import '../models/comcode_config.dart';
 import '../router/app_router.dart';
+import '../services/diagnostics.dart';
 import '../services/app_config_api.dart';
 import '../services/external_url.dart';
 import 'components/revolving_bill_dialogs.dart';
 import 'components/revolving_components.dart';
 import 'models/revolving_mock.dart';
 
-Future<void> _openContractDocument(
-    BuildContext context, RevolvingCardView card) async {
-  if (card.isDemo) return showRevolvingNotYet(context, 'สัญญาเงินกู้');
-  // Memoised and never throws: an outage leaves the rule false.
-  final config = await AppConfigApi.ensureLoaded();
-  if (!context.mounted) return;
-  final url = revolvingContractDocumentUrl(
-    card: card,
-    contractUrl: config.contractUrl,
-    allowed: config.comcodeConfig.showsContractButton(
-      comcode: card.contractComcode,
-      loanTypeCode: card.loanTypeCode,
-    ),
-  );
-  if (url == null) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('ไม่มีเอกสารสัญญาเงินกู้สำหรับสัญญานี้ในแอป '
-            'กรุณาติดต่อสาขา')));
-    return;
-  }
-  await openExternalDocument(context, url);
-}
-
-class RevolvingContractPage extends StatelessWidget {
+class RevolvingContractPage extends StatefulWidget {
   const RevolvingContractPage({super.key, this.card});
 
   final RevolvingCardView? card;
 
   @override
+  State<RevolvingContractPage> createState() => _RevolvingContractPageState();
+}
+
+class _RevolvingContractPageState extends State<RevolvingContractPage> {
+  late final RevolvingCardView view = widget.card ?? RevolvingCardView.mock();
+
+  String? _contractUrl;
+  ComcodeConfig _comcodeConfig = const ComcodeConfig();
+
+  @override
+  void initState() {
+    super.initState();
+    if (!view.isDemo) _loadConfig();
+  }
+
+  /// Memoised and never throws: an outage leaves the rule false, so the row
+  /// is withheld — the loan detail screen's behaviour.
+  Future<void> _loadConfig() async {
+    final config = await AppConfigApi.ensureLoaded();
+    if (!mounted) return;
+    setState(() {
+      _contractUrl = config.contractUrl;
+      _comcodeConfig = config.comcodeConfig;
+    });
+  }
+
+  String? get _documentUrl => revolvingContractDocumentUrl(
+        card: view,
+        contractUrl: _contractUrl,
+        allowed: _comcodeConfig.showsContractButton(
+          comcode: view.contractComcode,
+          loanTypeCode: view.loanTypeCode,
+        ),
+      );
+
+  bool get _showsDocument => view.isDemo || _documentUrl != null;
+
+  String get _documentLabel =>
+      _comcodeConfig.contractButtonLabel(view.contractComcode) ?? 'สัญญาเงินกู้';
+
+  Future<void> _onDocument() async {
+    if (view.isDemo) return showRevolvingNotYet(context, 'สัญญาเงินกู้');
+    final url = _documentUrl;
+    if (url == null) return;
+    if (view.loanTypeCode == kBranchIssuedLoanTypeCode) {
+      final ok = await confirmBranchIssuedDocument(context);
+      if (ok != true || !mounted) return;
+      Diagnostics.log('contract party acknowledged ${view.contractNo}');
+    }
+    if (!mounted) return;
+    await openExternalDocument(context, url);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final view = card ?? RevolvingCardView.mock();
     void pay() => revolvingOpenPayment(context, view);
     return RevolvingOrangePage(
       title: 'ข้อมูลสัญญา',
@@ -84,15 +122,16 @@ class RevolvingContractPage extends StatelessWidget {
                   ),
                   const Divider(height: 1, color: RevolvingPalette.divider),
                 ],
+                if (_showsDocument)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('สัญญาเงินกู้', style: revolvingText(13)),
+                        child: Text(_documentLabel, style: revolvingText(13)),
                       ),
                       GestureDetector(
-                        onTap: () => _openContractDocument(context, view),
+                        onTap: _onDocument,
                         child: Text(
                           'ดูรายละเอียด',
                           style: revolvingText(13,

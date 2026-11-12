@@ -93,11 +93,12 @@ class LoanDetailPage extends StatefulWidget {
   State<LoanDetailPage> createState() => _LoanDetailPageState();
 }
 
+/// `loan_type_code` of a contract whose คู่สัญญา document is issued only at
+/// the branch that owns the account, never in the app. Pressing the button
+/// for one of these asks the customer to confirm they already hold it.
+const String kBranchIssuedLoanTypeCode = 'O';
+
 class _LoanDetailPageState extends State<LoanDetailPage> {
-  /// `loan_type_code` of a contract whose คู่สัญญา document is issued only at
-  /// the branch that owns the account, never in the app. Pressing the button
-  /// for one of these asks the customer to confirm they already hold it.
-  static const String kBranchIssuedLoanTypeCode = 'O';
 
   LoanContract? _contract;
   ComcodeConfig _comcodeConfig = const ComcodeConfig();
@@ -256,7 +257,7 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     if (contract == null) return;
     if (contract.contractDetails.loanTypeCode.trim() ==
         kBranchIssuedLoanTypeCode) {
-      final acknowledged = await _confirmBranchIssuedDocument();
+      final acknowledged = await confirmBranchIssuedDocument(context);
       if (acknowledged != true) return;
       // ⚠ The source writes a Firestore audit record here (who acknowledged,
       // when, and a best-effort GPS fix). This build has no write path — its
@@ -268,56 +269,6 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     }
     await _openContractDocument();
   }
-
-  Future<bool?> _confirmBranchIssuedDocument() => showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'คู่สัญญา',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansThai(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: LoanDetailPalette.navy,
-            ),
-          ),
-          content: Text(
-            'กรุณาขอคู่สัญญาที่สาขาเจ้าของบัญชี หรือหากได้รับแล้วกรุณากด ตกลง',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansThai(
-              fontSize: 14,
-              height: 1.5,
-              color: LoanDetailPalette.label,
-            ),
-          ),
-          actionsAlignment: MainAxisAlignment.spaceEvenly,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(
-                'ยกเลิก',
-                style: GoogleFonts.notoSansThai(
-                  fontWeight: FontWeight.w600,
-                  color: LoanDetailPalette.label,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(
-                'ตกลง',
-                style: GoogleFonts.notoSansThai(
-                  fontWeight: FontWeight.w600,
-                  color: LoanDetailPalette.contractButtonText,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
 
   Future<void> _openContractDocument() async {
     final url = _contractDocumentUrl;
@@ -848,3 +799,58 @@ Widget _dataDateFooter(LoanContract contract) => LoanDetailDataDateFooter(
       date: formatThaiDate(contract.dataDate),
       time: formatLoanDetailTime(contract.dataDate),
     );
+
+/// The loan-type-`O` acknowledgement before the contract document opens:
+/// those contracts' document is issued only at the owning branch, so ตกลง
+/// confirms the customer already holds it. Shared by the loan detail screen
+/// and บัตรศรีสวัสดิ์'s ข้อมูลสัญญา, whose สัญญาเงินกู้ is the same link.
+Future<bool?> confirmBranchIssuedDocument(BuildContext context) =>
+    showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'คู่สัญญา',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansThai(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: LoanDetailPalette.navy,
+            ),
+          ),
+          content: Text(
+            'กรุณาขอคู่สัญญาที่สาขาเจ้าของบัญชี หรือหากได้รับแล้วกรุณากด ตกลง',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansThai(
+              fontSize: 14,
+              height: 1.5,
+              color: LoanDetailPalette.label,
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'ยกเลิก',
+                style: GoogleFonts.notoSansThai(
+                  fontWeight: FontWeight.w600,
+                  color: LoanDetailPalette.label,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                'ตกลง',
+                style: GoogleFonts.notoSansThai(
+                  fontWeight: FontWeight.w600,
+                  color: LoanDetailPalette.contractButtonText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );

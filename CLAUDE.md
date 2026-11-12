@@ -126,9 +126,11 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   and the two contract-info rows from the payment schedule (ยอดชำระขั้นต่ำ,
   วันครบกำหนดชำระ — BA sample `2026-03-20` renders `ทุกวันที่ 20`). ข้อมูลสัญญา
   follows the *Contract detail* spec (จำนวนครั้งที่ถอนได้/วัน =
-  `remaining_request_limit`); its **สัญญาเงินกู้** reuses the loan detail
-  screen's document link and `comcode_config` rule
-  (`revolvingContractDocumentUrl`), a snackbar when not offered. ⚠ **ดูบิล** needs
+  `remaining_request_limit`); its **สัญญาเงินกู้** is the loan detail
+  screen's row rule for rule (on request): same link
+  (`revolvingContractDocumentUrl`), **absent** when `comcode_config` doesn't
+  offer it, labelled with the config's `button_name`, and loan type `O` asks
+  the shared `confirmBranchIssuedDocument` first. ⚠ **ดูบิล** needs
   `createFileRequest` (`BILLING_STATEMENT`) — also no node-api route — so a
   real card says "not yet"; request/response are mapped in
   `revolving_bill.dart` (200 `data.url`, 400 `message` verbatim) and
