@@ -98,7 +98,15 @@ class RevolvingCardView {
     this.serverNow = '',
     this.withdrawalInfoLoaded = false,
     this.isDemo = false,
+    this.contractComcode = '',
+    this.loanTypeCode = '',
   });
+
+  /// `barcode_details.comcode` and `contract_details.loan_type_code` — what
+  /// the loan detail screen's สัญญาเงินกู้ rule keys on, reused for this
+  /// screen's link ([revolvingContractDocumentUrl]).
+  final String contractComcode;
+  final String loanTypeCode;
 
   /// The design's figures ([RevolvingCardView.mock]) rather than a customer's
   /// contract — only a demo card shows ดูบิล's mock statement.
@@ -314,6 +322,8 @@ class RevolvingCardView {
         withdrawalExpiryDate: withdrawalExpiryDate ?? this.withdrawalExpiryDate,
         withdrawalInfoLoaded: withdrawalInfoLoaded ?? this.withdrawalInfoLoaded,
         isDemo: isDemo,
+        contractComcode: contractComcode,
+        loanTypeCode: loanTypeCode,
         serverNow: serverNow,
         transferFee: transferFee,
         bankAccounts: bankAccounts ?? this.bankAccounts,
@@ -358,6 +368,8 @@ class RevolvingCardView {
       remainingRequestLimit: r.remainingRequestLimit,
       revolvingStatus: r.revolvingStatus,
       serverNow: contract.paymentDetails.currentDateTime,
+      contractComcode: contract.barcodeDetails.comcode.trim(),
+      loanTypeCode: contract.contractDetails.loanTypeCode.trim(),
       transferFee: null,
       bankAccounts: r.bankAccounts,
       billReady: mock.billReady,
@@ -389,20 +401,21 @@ class RevolvingCardView {
     );
   }
 
-  /// ข้อมูลสัญญา for a real card. Neither spec maps this screen, so a row
-  /// gets a value only where it plainly *is* one `revolving_loans` field;
-  /// the rest are `-`:
+  /// ข้อมูลสัญญา for a real card — the BA's *Contract detail* spec
+  /// (2026-11-12):
   ///
-  /// | Row | Field |
-  /// | --- | --- |
-  /// | วงเงินอนุมัติ | withdrawal summary `maximum_revolving_limit` |
-  /// | ยอดชำระขั้นต่ำ, วันครบกำหนดชำระ | payment schedule — no route → `-` |
-  /// | วันที่ทำสัญญา | `/loan/list` `contract_date` |
-  /// | ถอนได้สูงสุด/ครั้ง | `maximum_withdrawal_amount` |
-  /// | ถอนขั้นต่ำ/ครั้ง | `minimum_withdrawal_amount` |
-  /// | จำนวนครั้งที่ถอนได้/วัน | no field (`remaining_request_limit` is what is *left* today) → `-` |
-  /// | วงเงินคงเหลือ | `revolving_limit` |
-  /// | ยอดเงินที่ถอนไป | `utilization_amount` |
+  /// | Row | BA field | Here |
+  /// | --- | --- | --- |
+  /// | วงเงินอนุมัติ | `getRevolvingInfo.maximumRevolvingLimit` | withdrawal summary `maximum_revolving_limit` |
+  /// | ยอดชำระขั้นต่ำ | `getRevolvingPaymentSchedule.revolvingMinPay` | ⏳ route pending → `-` |
+  /// | วันครบกำหนดชำระ | `getRevolvingPaymentSchedule.dueDate` (`2026-03-20` → `ทุกวันที่ 20`) | ⏳ route pending → `-` |
+  /// | วันที่ทำสัญญา | existing API | `/loan/list` `contract_date` |
+  /// | ถอนได้สูงสุด/ครั้ง | `maximumWithdrawal` | `maximum_withdrawal_amount` |
+  /// | ถอนขั้นต่ำ/ครั้ง | `minimumWithdrawal` | `minimum_withdrawal_amount` |
+  /// | จำนวนครั้งที่ถอนได้/วัน | `remainingRequestLimit` | `remaining_request_limit` |
+  /// | วงเงินคงเหลือ | `revolvingLimit` | `revolving_limit` |
+  /// | ยอดเงินที่ถอนไป | `utilizationAmount` | `utilization_amount` |
+  /// | สัญญาเงินกู้ | existing API | the loan detail screen's document link ([revolvingContractDocumentUrl]) |
   static List<RevolvingRow> _contractRows(LoanContract c,
       {required double? approvedLimit}) {
     final r = c.revolvingLoan;
@@ -413,7 +426,7 @@ class RevolvingCardView {
       RevolvingRow('วันที่ทำสัญญา', thaiDateOrDash(c.contractDate)),
       RevolvingRow('ถอนได้สูงสุด/ครั้ง', _amountRow(r.maximumWithdrawalAmount)),
       RevolvingRow('ถอนขั้นต่ำ/ครั้ง', _amountRow(r.minimumWithdrawalAmount)),
-      const RevolvingRow('จำนวนครั้งที่ถอนได้/วัน', '-'),
+      RevolvingRow('จำนวนครั้งที่ถอนได้/วัน', '${r.remainingRequestLimit} ครั้ง'),
       RevolvingRow('วงเงินคงเหลือ', _amountRow(r.revolvingLimit)),
       RevolvingRow('ยอดเงินที่ถอนไป', _amountRow(r.utilizationAmount)),
     ];
@@ -526,6 +539,23 @@ class RevolvingCardView {
         billIssueDate: '2026-11-03',
         billDueDate: '2026-11-06',
       );
+}
+
+/// สัญญาเงินกู้ for a revolving contract — the loan detail screen's own rule
+/// ("existing API" in the Contract detail spec): the `contract_url` portal's
+/// `/contract?contno=…&comcode=…` with the **barcode** comcode, offered only
+/// when `comcode_config.showsContractButton` allows that comcode and loan
+/// type. `null` = not offered (no portal configured, or the rule says no).
+String? revolvingContractDocumentUrl({
+  required RevolvingCardView card,
+  required String? contractUrl,
+  required bool allowed,
+}) {
+  final base = contractUrl?.trim() ?? '';
+  if (card.isDemo || base.isEmpty || !allowed) return null;
+  return '$base/contract'
+      '?contno=${Uri.encodeQueryComponent(card.contractNo.trim())}'
+      '&comcode=${Uri.encodeQueryComponent(card.contractComcode)}';
 }
 
 String _whole(double v) => formatMoney(v).replaceAll('.00', '');

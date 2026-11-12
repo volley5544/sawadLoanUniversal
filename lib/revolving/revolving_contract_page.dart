@@ -1,17 +1,44 @@
 /// **ข้อมูลสัญญา — บัตรศรีสวัสดิ์**, design page 10.
 ///
-/// ⚠ **UI and navigation only** (2026-11-11). The สัญญาเงินกู้ link opens
-/// nothing yet; when wired it should go through `openExternalUrl`, the way the
-/// loan detail screen's document link does.
+/// Rows mapped per the BA's *Contract detail* spec — see
+/// `RevolvingCardView._contractRows`. **สัญญาเงินกู้** opens the same
+/// document the loan detail screen does, by the same `comcode_config` rule
+/// ([revolvingContractDocumentUrl]); a contract the rule doesn't offer it for
+/// says so.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
+import '../services/app_config_api.dart';
+import '../services/external_url.dart';
 import 'components/revolving_bill_dialogs.dart';
 import 'components/revolving_components.dart';
 import 'models/revolving_mock.dart';
+
+Future<void> _openContractDocument(
+    BuildContext context, RevolvingCardView card) async {
+  if (card.isDemo) return showRevolvingNotYet(context, 'สัญญาเงินกู้');
+  // Memoised and never throws: an outage leaves the rule false.
+  final config = await AppConfigApi.ensureLoaded();
+  if (!context.mounted) return;
+  final url = revolvingContractDocumentUrl(
+    card: card,
+    contractUrl: config.contractUrl,
+    allowed: config.comcodeConfig.showsContractButton(
+      comcode: card.contractComcode,
+      loanTypeCode: card.loanTypeCode,
+    ),
+  );
+  if (url == null) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('ไม่มีเอกสารสัญญาเงินกู้สำหรับสัญญานี้ในแอป '
+            'กรุณาติดต่อสาขา')));
+    return;
+  }
+  await openExternalDocument(context, url);
+}
 
 class RevolvingContractPage extends StatelessWidget {
   const RevolvingContractPage({super.key, this.card});
@@ -65,8 +92,7 @@ class RevolvingContractPage extends StatelessWidget {
                         child: Text('สัญญาเงินกู้', style: revolvingText(13)),
                       ),
                       GestureDetector(
-                        onTap: () =>
-                            showRevolvingNotYet(context, 'สัญญาเงินกู้'),
+                        onTap: () => _openContractDocument(context, view),
                         child: Text(
                           'ดูรายละเอียด',
                           style: revolvingText(13,

@@ -123,7 +123,12 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `/loan/list`), history `withdrawal_date` + `withdrawal_amount`.
   ⚠ **Rendered `-` for want of a source**: ยอดที่แนะนำให้ชำระ / กำหนดชำระ
   (`getRevolvingPaymentSchedule` — no node-api route), ค่าธรรมเนียม, ประวัติการชำระ,
-  and contract-info rows with no field. ⚠ **ดูบิล** needs
+  and the two contract-info rows from the payment schedule (ยอดชำระขั้นต่ำ,
+  วันครบกำหนดชำระ — BA sample `2026-03-20` renders `ทุกวันที่ 20`). ข้อมูลสัญญา
+  follows the *Contract detail* spec (จำนวนครั้งที่ถอนได้/วัน =
+  `remaining_request_limit`); its **สัญญาเงินกู้** reuses the loan detail
+  screen's document link and `comcode_config` rule
+  (`revolvingContractDocumentUrl`), a snackbar when not offered. ⚠ **ดูบิล** needs
   `createFileRequest` (`BILLING_STATEMENT`) — also no node-api route — so a
   real card says "not yet"; request/response are mapped in
   `revolving_bill.dart` (200 `data.url`, 400 `message` verbatim) and

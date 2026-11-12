@@ -14,10 +14,12 @@ void main() {
         'contract_date': '2026-03-01',
         'data_date': '2026-11-12 10:08:00',
         'contract_details': {
+          'loan_type_code': 'M',
           'loan_type_name': 'รถมอเตอร์ไซค์',
           'collateral_information': 'กพ 5161',
         },
         'payment_details': {'current_date_time': '2026-11-12T10:08:00'},
+        'barcode_details': {'comcode': 'S22'},
         'revolving_loans': {
           'contract_id': 2881,
           'revolving_flag': true,
@@ -145,9 +147,32 @@ void main() {
       expect(rows['ยอดชำระขั้นต่ำ'], '-');
       expect(rows['วันครบกำหนดชำระ'], '-');
       expect(rows['วันที่ทำสัญญา'], '01/03/2569');
-      expect(rows['จำนวนครั้งที่ถอนได้/วัน'], '-');
+      expect(rows['จำนวนครั้งที่ถอนได้/วัน'], '0 ครั้ง'); // remaining_request_limit
       expect(rows['ยอดเงินที่ถอนไป'], '60,000 บาท');
     });
+  });
+
+  test('สัญญาเงินกู้ reuses the loan detail document link and rule', () {
+    final card = RevolvingCardView.fromContract(qaContract());
+    expect(card.contractComcode, 'S22');
+    expect(card.loanTypeCode, 'M');
+    expect(
+        revolvingContractDocumentUrl(
+            card: card, contractUrl: 'https://pt.swpfin.com/portal', allowed: true),
+        'https://pt.swpfin.com/portal/contract'
+        '?contno=000ICM691005S0004NFX&comcode=S22');
+    expect(
+        revolvingContractDocumentUrl(
+            card: card, contractUrl: 'https://pt.swpfin.com/portal', allowed: false),
+        isNull);
+    expect(revolvingContractDocumentUrl(card: card, contractUrl: '', allowed: true),
+        isNull);
+    expect(
+        revolvingContractDocumentUrl(
+            card: RevolvingCardView.mock(),
+            contractUrl: 'https://pt.swpfin.com/portal',
+            allowed: true),
+        isNull);
   });
 
   group('withdrawal amount validation (spec\'s seven rules)', () {
