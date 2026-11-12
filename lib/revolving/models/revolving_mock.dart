@@ -125,14 +125,18 @@ class RevolvingCardView {
   static const List<double> quickAmounts = [500, 1000, 1500, 2000];
 
   RevolvingCardView copyWith({
+    String? contractNo,
+    String? title,
+    String? plate,
+    String? plateLong,
     bool? billReady,
     List<RevolvingBankAccount>? bankAccounts,
   }) =>
       RevolvingCardView(
-        contractNo: contractNo,
-        title: title,
-        plate: plate,
-        plateLong: plateLong,
+        contractNo: contractNo ?? this.contractNo,
+        title: title ?? this.title,
+        plate: plate ?? this.plate,
+        plateLong: plateLong ?? this.plateLong,
         availableLimit: availableLimit,
         approvedLimit: approvedLimit,
         suggestedPayment: suggestedPayment,
@@ -150,6 +154,54 @@ class RevolvingCardView {
         billDueDate: billDueDate,
         billUrl: billUrl,
       );
+
+  /// One card per `/loan/list` contract whose `revolving_loans.revolving_flag`
+  /// is true (2026-11-12).
+  ///
+  /// ⚠ **Only the identity is real**: contract number, title (from
+  /// `loan_type_name`), plate (`collateral_information`) and
+  /// `bank_accounts`. Every figure, the history and the contract-info rows
+  /// are still the design's [RevolvingCardView.mock] values, the same on
+  /// every card, until the revolving data is wired. A missing value is `-`.
+  factory RevolvingCardView.fromContract(LoanContract contract) {
+    final type = contract.contractDetails.loanTypeName.trim();
+    final plate = contract.contractDetails.collateralInformation.trim();
+    return RevolvingCardView.mock().copyWith(
+      contractNo: contract.contractNo.trim(),
+      title: type.isEmpty ? 'บัตรศรีสวัสดิ์' : 'บัตรศรีสวัสดิ์ $type',
+      plate: plate.isEmpty ? '-' : plate,
+      plateLong: plate.isEmpty ? '-' : plate,
+      bankAccounts: contract.revolvingLoan.bankAccounts,
+    );
+  }
+
+  /// The customer's revolving contracts, in `/loan/list` order, as cards.
+  static List<RevolvingCardView> listFrom(List<LoanContract> contracts) => [
+        for (final c in contracts)
+          if (c.revolvingLoan.revolvingFlag) RevolvingCardView.fromContract(c),
+      ];
+
+  /// Which card to open on: the one whose contract the host passed in
+  /// `?contNo=` (a loan card's ถอนเงิน), else the first (the home-menu
+  /// บัตรศรีสวัสดิ์ tile). Both sides trimmed, like the top-up card's
+  /// preselect.
+  static int initialIndex(List<RevolvingCardView> cards, String contractNo) {
+    final wanted = contractNo.trim();
+    if (wanted.isEmpty) return 0;
+    final i = cards.indexWhere((c) => c.contractNo.trim() == wanted);
+    return i < 0 ? 0 : i;
+  }
+
+  /// Plain-browser demo (no `hashThaiId`): two design cards, so switching
+  /// can be seen without a customer.
+  static List<RevolvingCardView> demo({String contractNo = ''}) => [
+        RevolvingCardView.mock(contractNo: contractNo),
+        RevolvingCardView.mock(contractNo: 'DEMO-2').copyWith(
+          title: 'บัตรศรีสวัสดิ์ รถยนต์',
+          plate: 'ขก 1234',
+          plateLong: '1ขก 1234',
+        ),
+      ];
 
   /// The design's own figures.
   factory RevolvingCardView.mock({String contractNo = ''}) =>

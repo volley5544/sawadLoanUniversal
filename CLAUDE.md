@@ -113,7 +113,16 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `lib/revolving/`). ⚠ **UI and navigation only**: every screen renders
   `RevolvingCardView.mock()` (the BA design's own figures, design PDF in the
   git-ignored `etc/revolving_feature/`) and no button files, debits or saves
-  anything. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
+  anything. **The home screen holds one card per revolving
+  contract** (2026-11-12): it reads `/loan/list`, keeps rows with
+  `revolving_flag` true (`RevolvingCardView.listFrom`), opens on `?contNo=`
+  (else the first) and switches by swipe or the `‹ ● ○ ›` pager under the
+  card. The host opens it from the home-menu บัตรศรีสวัสดิ์ tile (first
+  revolving contract) and, later, a loan card's ถอนเงิน (that contract).
+  ⚠ Only a card's identity is real — contract no., title
+  (`loan_type_name`), plate (`collateral_information`), `bank_accounts`;
+  figures and history are still the mock's. No `hashThaiId` → two demo
+  cards. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
   issued branch); the other five routes take the card / a draft as `extra`
   and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
   `LoanContract.revolvingLoan` (typed `bank_accounts` → `RevolvingBankAccount`,

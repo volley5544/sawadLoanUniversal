@@ -3,16 +3,32 @@
 /// The summary card, the four actions (โอน/ถอนเงิน · ดูบิล · ชำระเงิน ·
 /// ข้อมูลสัญญา) and the two history tabs. Design pages 2–6, 10.
 ///
-/// ⚠ **UI and navigation only** (2026-11-11): renders
-/// [RevolvingCardView.mock]. `?contNo=` is carried for when the data is wired;
-/// `?bill=ready` shows the issued-statement branch of ดูบิล, which the mock
-/// otherwise answers with "not yet".
+/// **One card per revolving contract** (2026-11-12). The cards are the
+/// customer's `/loan/list` rows with `revolving_loans.revolving_flag` true;
+/// with more than one, the customer switches by swiping the card or with the
+/// arrows/dots under it. The srisawad app opens this route two ways:
+///
+/// | Tapped in the app | `?contNo=` | Opens on |
+/// | --- | --- | --- |
+/// | home menu **บัตรศรีสวัสดิ์** | its first revolving contract | that card |
+/// | a loan card's **ถอนเงิน** (host side not built yet) | that card's contract | that card |
+///
+/// An unmatched or empty `contNo` opens the first card.
+///
+/// ⚠ **UI and navigation only**: only each card's identity is real (see
+/// [RevolvingCardView.fromContract]); figures and history are the design's.
+/// In a plain browser (no `hashThaiId`) it shows [RevolvingCardView.demo].
+/// `?bill=ready` shows the issued-statement branch of ดูบิล.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../app_state.dart';
+import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
+import '../services/p_loan_api.dart';
+import '../services/srisawad_api.dart';
 import 'components/revolving_bill_dialogs.dart';
 import 'components/revolving_components.dart';
 import 'models/revolving_mock.dart';
@@ -23,8 +39,10 @@ class RevolvingHomePage extends StatefulWidget {
     this.contractNo = '',
     this.fromHost = false,
     this.billReady = false,
+    this.cards,
   });
 
+  /// The contract to open on — see the table above.
   final String contractNo;
 
   /// The host opened this route directly, so back closes the WebView.
@@ -33,36 +51,117 @@ class RevolvingHomePage extends StatefulWidget {
   /// Demo switch for ดูบิล's two branches (ยังไม่ถึง / ถึงวันสรุปยอด).
   final bool billReady;
 
+  /// Cards to show instead of loading them (tests).
+  final List<RevolvingCardView>? cards;
+
   @override
   State<RevolvingHomePage> createState() => _RevolvingHomePageState();
 }
 
 class _RevolvingHomePageState extends State<RevolvingHomePage> {
-  late final RevolvingCardView _card =
-      RevolvingCardView.mock(contractNo: widget.contractNo)
-          .copyWith(billReady: widget.billReady);
+  List<RevolvingCardView>? _cards;
+  String? _error;
+  int _index = 0;
 
   /// 0 = ประวัติการถอน/โอน, 1 = ประวัติการชำระ.
   int _tab = 0;
 
-  void _openPayment() => revolvingOpenPayment(context, _card);
+  RevolvingCardView get _card => _cards![_index];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _show(List<RevolvingCardView> cards) {
+    setState(() {
+      _cards = [for (final c in cards) c.copyWith(billReady: widget.billReady)];
+      _index = RevolvingCardView.initialIndex(_cards!, widget.contractNo);
+    });
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _cards = null;
+      _error = null;
+    });
+    final given = widget.cards;
+    if (given != null) return _show(given);
+    final appState = AppState();
+    if (appState.hashThaiId.isEmpty) {
+      return _show(RevolvingCardView.demo(contractNo: widget.contractNo));
+    }
+    try {
+      final contracts = await PLoanApi.listContracts(
+        hashThaiId: appState.hashThaiId,
+        token: appState.authToken,
+      );
+      if (!mounted) return;
+      final cards = RevolvingCardView.listFrom(contracts);
+      if (cards.isEmpty) {
+        setState(() => _error = 'ไม่พบบัตรศรีสวัสดิ์');
+        return;
+      }
+      _show(cards);
+    } on SrisawadApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  void _select(int index) {
+    final cards = _cards;
+    if (cards == null || index < 0 || index >= cards.length) return;
+    setState(() => _index = index);
+  }
+
+  void _back() => revolvingBack(context, fromHost: widget.fromHost);
 
   @override
   Widget build(BuildContext context) {
-    final history = _tab == 0 ? _card.withdrawals : _card.payments;
+    if (_cards == null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: _back),
+          title: const Text('สินเชื่อของฉัน'),
+        ),
+        body: _error == null
+            ? const PLoanLoadingView()
+            : PLoanErrorView(message: _error!, onRetry: _load),
+      );
+    }
+    final card = _card;
+    final cards = _cards!;
+    final history = _tab == 0 ? card.withdrawals : card.payments;
+    void openPayment() => revolvingOpenPayment(context, card);
     return RevolvingOrangePage(
       title: 'สินเชื่อของฉัน',
-      subtitle: 'ข้อมูลวันที่ ${_card.dataDateLabel}',
-      onBack: () => revolvingBack(context, fromHost: widget.fromHost),
-      card: RevolvingSummaryCard(card: _card, onPay: _openPayment),
+      subtitle: 'ข้อมูลวันที่ ${card.dataDateLabel}',
+      onBack: _back,
+      card: GestureDetector(
+        // Swipe left → next card, right → previous.
+        onHorizontalDragEnd: (d) {
+          final v = d.primaryVelocity ?? 0;
+          if (v < -200) _select(_index + 1);
+          if (v > 200) _select(_index - 1);
+        },
+        child: RevolvingSummaryCard(
+            key: ValueKey(card.contractNo), card: card, onPay: openPayment),
+      ),
       children: [
+        if (cards.length > 1)
+          RevolvingCardPager(
+            count: cards.length,
+            index: _index,
+            onChanged: _select,
+          ),
         RevolvingActionRow(
           onTransfer: () =>
-              context.push(AppRoutes.revolvingTransfer, extra: _card),
-          onBill: () => showRevolvingBill(context, _card),
-          onPay: _openPayment,
+              context.push(AppRoutes.revolvingTransfer, extra: card),
+          onBill: () => showRevolvingBill(context, card),
+          onPay: openPayment,
           onContract: () =>
-              context.push(AppRoutes.revolvingContract, extra: _card),
+              context.push(AppRoutes.revolvingContract, extra: card),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -81,6 +180,60 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
         ),
         RevolvingHistoryList(entries: history),
       ],
+    );
+  }
+}
+
+/// `‹ ● ○ ○ ›` under the summary card when the customer has more than one
+/// บัตรศรีสวัสดิ์. Dots are tappable; the arrows dim at either end.
+class RevolvingCardPager extends StatelessWidget {
+  const RevolvingCardPager({
+    super.key,
+    required this.count,
+    required this.index,
+    required this.onChanged,
+  });
+
+  final int count;
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget arrow(IconData icon, String tip, int target, bool enabled) =>
+        IconButton(
+          tooltip: tip,
+          visualDensity: VisualDensity.compact,
+          onPressed: enabled ? () => onChanged(target) : null,
+          icon: Icon(icon, size: 22),
+          color: RevolvingPalette.navy,
+          disabledColor: RevolvingPalette.divider,
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          arrow(Icons.chevron_left, 'บัตรก่อนหน้า', index - 1, index > 0),
+          for (var i = 0; i < count; i++)
+            GestureDetector(
+              onTap: () => onChanged(i),
+              child: Container(
+                key: ValueKey('revolving-dot-$i'),
+                width: i == index ? 18 : 8,
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: i == index
+                      ? RevolvingPalette.orange
+                      : RevolvingPalette.divider,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          arrow(Icons.chevron_right, 'บัตรถัดไป', index + 1, index < count - 1),
+        ],
+      ),
     );
   }
 }

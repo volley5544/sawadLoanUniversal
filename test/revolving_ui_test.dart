@@ -163,4 +163,75 @@ void main() {
   test('used ratio is the drawn share of the line', () {
     expect(card.usedRatio, closeTo(0.8, 1e-9));
   });
+
+  group('several บัตรศรีสวัสดิ์', () {
+    LoanContract row(String no, {bool revolving = true, String plate = ''}) =>
+        LoanContract.fromJson({
+          'contract_no': no,
+          'contract_details': {
+            'loan_type_name': 'รถจักรยานยนต์',
+            'collateral_information': plate,
+          },
+          'revolving_loans': {
+            'revolving_flag': revolving,
+            'bank_accounts': [
+              {'bank_code': 'KBANK', 'transfer_type': 'CUSTOMER_BANK',
+               'account_number': '1142425676', 'is_default': true},
+            ],
+          },
+        });
+
+    test('one card per revolving_flag contract, in list order', () {
+      final cards = RevolvingCardView.listFrom([
+        row('A', plate: 'กพ 1'),
+        row('B', revolving: false),
+        row('C'),
+      ]);
+      expect(cards.map((c) => c.contractNo), ['A', 'C']);
+      expect(cards[0].title, 'บัตรศรีสวัสดิ์ รถจักรยานยนต์');
+      expect(cards[0].plate, 'กพ 1');
+      expect(cards[1].plate, '-', reason: 'missing plate is -, not the mock');
+      expect(cards[0].bankAccounts.single.bankCode, 'KBANK');
+    });
+
+    test('opens on the tapped contract, else the first', () {
+      final cards = RevolvingCardView.listFrom([row('A'), row('C')]);
+      expect(RevolvingCardView.initialIndex(cards, 'C'), 1);
+      expect(RevolvingCardView.initialIndex(cards, ' C '), 1);
+      expect(RevolvingCardView.initialIndex(cards, ''), 0);
+      expect(RevolvingCardView.initialIndex(cards, 'ZZZ'), 0);
+    });
+
+    testWidgets('ถอนเงิน contNo preselects; the pager switches cards',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final cards = RevolvingCardView.listFrom(
+          [row('A', plate: 'กพ 1'), row('B', plate: 'ขก 2'), row('C', plate: 'คค 3')]);
+      await tester.pumpWidget(MaterialApp(
+          home: RevolvingHomePage(contractNo: 'B', cards: cards)));
+      await tester.pump();
+      expect(find.text('ขก 2'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('บัตรถัดไป'));
+      await tester.pump();
+      expect(find.text('คค 3'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('revolving-dot-0')));
+      await tester.pump();
+      expect(find.text('กพ 1'), findsOneWidget);
+    });
+
+    testWidgets('a single card shows no pager', (tester) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+          home: RevolvingHomePage(
+              cards: RevolvingCardView.listFrom([row('A')]))));
+      await tester.pump();
+      expect(find.byType(RevolvingCardPager), findsNothing);
+    });
+  });
 }
