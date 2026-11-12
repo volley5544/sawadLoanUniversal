@@ -117,7 +117,12 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   issued branch); the other five routes take the card / a draft as `extra`
   and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
   `LoanContract.revolvingLoan` (typed `bank_accounts` → `RevolvingBankAccount`,
-  `defaultBankAccount`) but nothing reads it yet. ⚠ `utilization_percentage`
+  `defaultBankAccount`) but nothing reads it yet. **The withdrawal
+  destinations are generated from `bank_accounts`** (2026-11-12): one tile per
+  entry in the backend's order — one account, one tile; none, a
+  ไม่พบบัญชีรับเงิน note. A PromptPay entry (`transfer_type` `promptpay_*`)
+  already says phone or citizen id, so the amount screen has no radio. The
+  mock's two entries reproduce the design's two tiles. ⚠ `utilization_percentage`
   is a **fraction** (`0.55`). API: node-api `revolvingLoan/*` on the mobile
   base, bearer + `x-srisawad` (guide in git-ignored
   `etc/revolving_feature/api-call/`; live on uat, **404 on prod** 2026-11-11).

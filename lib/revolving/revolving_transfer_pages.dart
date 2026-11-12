@@ -2,9 +2,15 @@
 /// an amount, confirm, done.
 ///
 /// ```
-/// destination ─┬─ พร้อมเพย์ ──────────┐
-///              └─ บัญชีธนาคารที่ผูกไว้ ─┴─ amount → confirm → success
+/// destination (one tile per bank_accounts entry) → amount → confirm → success
 /// ```
+///
+/// The destinations are **generated from `revolving_loans.bank_accounts`**
+/// (decided 2026-11-12): one tile per entry, in the backend's order, so a
+/// single account is a single tile. The design's two fixed tiles —
+/// พร้อมเพย์ and บัญชีธนาคารที่ผูกไว้ — are just what two entries look like.
+/// A PromptPay entry already says whether it is a phone or a citizen id
+/// (`transfer_type`), so the amount screen no longer asks.
 ///
 /// ⚠ **UI and navigation only** (2026-11-11). ยืนยัน files nothing; the
 /// success screen shows what was entered.
@@ -13,6 +19,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../p_loan/application/models/loan_contract.dart';
 import '../router/app_router.dart';
 import 'components/revolving_components.dart';
 import 'models/revolving_mock.dart';
@@ -27,9 +34,10 @@ class RevolvingTransferPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final view = card ?? RevolvingCardView.mock();
-    void open(RevolvingTransferTarget target) => context.push(
+    void open(RevolvingBankAccount account) => context.push(
           AppRoutes.revolvingTransferAmount,
-          extra: RevolvingTransferDraft(card: view, target: target, amount: 0),
+          extra:
+              RevolvingTransferDraft(card: view, account: account, amount: 0),
         );
     return RevolvingOrangePage(
       title: 'โอน / ถอนเงินสินเชื่อ',
@@ -45,22 +53,26 @@ class RevolvingTransferPage extends StatelessWidget {
               style: revolvingText(16,
                   weight: FontWeight.w700, color: RevolvingPalette.navy)),
         ),
-        _DestinationTile(
-          badge: const RevolvingPromptPayBadge(),
-          label: 'พร้อมเพย์',
-          onTap: () => open(RevolvingTransferTarget.promptPay),
-        ),
-        _DestinationTile(
-          badge: Container(
-            width: 36,
-            height: 36,
-            decoration: const BoxDecoration(
-                color: RevolvingPalette.blue, shape: BoxShape.circle),
-            child: const Icon(Icons.credit_card, color: Colors.white, size: 20),
+        if (view.bankAccounts.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: RevolvingPanel(
+              child: Text('ไม่พบบัญชีรับเงินของสัญญานี้',
+                  textAlign: TextAlign.center,
+                  style: revolvingText(13, color: RevolvingPalette.text)),
+            ),
           ),
-          label: 'บัญชีธนาคารที่ผูกไว้',
-          onTap: () => open(RevolvingTransferTarget.bankAccount),
-        ),
+        for (final account in view.bankAccounts)
+          _DestinationTile(
+            badge: RevolvingAccountBadge(account: account),
+            label: revolvingAccountTitle(account),
+            detail: [
+              if (account.accountType.trim().isNotEmpty)
+                account.accountType.trim(),
+              revolvingFormatAccountNumber(account),
+            ].join(' · '),
+            onTap: () => open(account),
+          ),
       ],
     );
   }
@@ -70,11 +82,13 @@ class _DestinationTile extends StatelessWidget {
   const _DestinationTile({
     required this.badge,
     required this.label,
+    required this.detail,
     required this.onTap,
   });
 
   final Widget badge;
   final String label;
+  final String detail;
   final VoidCallback onTap;
 
   @override
@@ -93,10 +107,22 @@ class _DestinationTile extends StatelessWidget {
                   badge,
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Text(label,
-                        style: revolvingText(14,
-                            weight: FontWeight.w700,
-                            color: RevolvingPalette.navy)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: revolvingText(14,
+                                weight: FontWeight.w700,
+                                color: RevolvingPalette.navy)),
+                        Text(detail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: revolvingText(12,
+                                color: RevolvingPalette.text)),
+                      ],
+                    ),
                   ),
                   const Icon(Icons.chevron_right,
                       color: RevolvingPalette.navy),
@@ -122,15 +148,10 @@ class RevolvingTransferAmountPage extends StatefulWidget {
 
 class _RevolvingTransferAmountPageState
     extends State<RevolvingTransferAmountPage> {
-  late final RevolvingTransferDraft _draft = widget.draft ??
-      RevolvingTransferDraft(
-        card: RevolvingCardView.mock(),
-        target: RevolvingTransferTarget.promptPay,
-        amount: 0,
-      );
+  late final RevolvingTransferDraft _draft =
+      widget.draft ?? _mockDraft(amount: 0);
   final TextEditingController _amount = TextEditingController();
   double _value = 0;
-  bool _usePhone = true;
 
   RevolvingCardView get _card => _draft.card;
 
@@ -146,15 +167,13 @@ class _RevolvingTransferAmountPageState
         AppRoutes.revolvingTransferConfirm,
         extra: RevolvingTransferDraft(
           card: _card,
-          target: _draft.target,
+          account: _draft.account,
           amount: _value,
-          promptPayUsesPhone: _usePhone,
         ),
       );
 
   @override
   Widget build(BuildContext context) {
-    final isPromptPay = _draft.target == RevolvingTransferTarget.promptPay;
     return RevolvingOrangePage(
       title: 'โอน / ถอนเงินสินเชื่อ',
       subtitle: 'จาก',
@@ -178,7 +197,7 @@ class _RevolvingTransferAmountPageState
                         weight: FontWeight.w700,
                         color: RevolvingPalette.navy)),
                 const SizedBox(height: 12),
-                if (isPromptPay) ..._promptPay() else ..._bankAccount(),
+                ..._account(),
                 const SizedBox(height: 12),
                 _amountBox(),
               ],
@@ -189,40 +208,19 @@ class _RevolvingTransferAmountPageState
     );
   }
 
-  List<Widget> _promptPay() => [
+  List<Widget> _account() => [
         Row(
           children: [
-            const RevolvingPromptPayBadge(size: 32),
+            RevolvingAccountBadge(account: _draft.account, size: 32),
             const SizedBox(width: 10),
-            Text('พร้อมเพย์',
-                style: revolvingText(14,
-                    weight: FontWeight.w700, color: RevolvingPalette.navy)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _IdChoice(
-          label: 'เบอร์โทรศัพท์',
-          value: _card.promptPayPhone,
-          selected: _usePhone,
-          onTap: () => setState(() => _usePhone = true),
-        ),
-        const SizedBox(height: 8),
-        _IdChoice(
-          label: 'เลขบัตรประชาชน',
-          value: _card.promptPayCitizenId,
-          selected: !_usePhone,
-          onTap: () => setState(() => _usePhone = false),
-        ),
-      ];
-
-  List<Widget> _bankAccount() => [
-        Row(
-          children: [
-            RevolvingBankBadge(code: _card.bankShortCode, size: 32),
-            const SizedBox(width: 10),
-            Text(_card.bankName,
-                style: revolvingText(14,
-                    weight: FontWeight.w700, color: RevolvingPalette.navy)),
+            Expanded(
+              child: Text(revolvingAccountTitle(_draft.account),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: revolvingText(14,
+                      weight: FontWeight.w700,
+                      color: RevolvingPalette.navy)),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -235,9 +233,9 @@ class _RevolvingTransferAmountPageState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('เลขที่บัญชี',
+              Text(revolvingAccountNumberLabel(_draft.account),
                   style: revolvingText(11, color: RevolvingPalette.text)),
-              Text(_card.bankAccountNo,
+              Text(revolvingFormatAccountNumber(_draft.account),
                   style: revolvingText(17,
                       weight: FontWeight.w600, color: RevolvingPalette.navy)),
             ],
@@ -271,78 +269,30 @@ class _RevolvingTransferAmountPageState
 String formatWholeAmount(double value) =>
     revolvingMoney(value).replaceAll('.00', '');
 
-class _IdChoice extends StatelessWidget {
-  const _IdChoice({
-    required this.label,
-    required this.value,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Row(
-          children: [
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? RevolvingPalette.blue : RevolvingPalette.label,
-              size: 22,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                decoration: BoxDecoration(
-                  color: selected ? Colors.white : const Color(0xFFF7F3EF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: revolvingText(11, color: RevolvingPalette.text)),
-                    Text(value,
-                        style: revolvingText(14,
-                            weight: FontWeight.w500,
-                            color: RevolvingPalette.navy)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
 // ── 3. confirm + 4. success ───────────────────────────────────────────
 
-/// The pale-blue ไปยัง box for a withdrawal: the bound bank account, or the
-/// PromptPay id the customer picked.
+/// The pale-blue ไปยัง box for a withdrawal: the chosen destination, its
+/// holder, and its number masked to the last four digits.
 Widget _destinationBox(RevolvingTransferDraft draft) {
-  final card = draft.card;
-  if (draft.target == RevolvingTransferTarget.promptPay) {
-    return RevolvingAccountPartyBox(
-      label: 'ไปยัง',
-      badge: const RevolvingPromptPayBadge(size: 20),
-      name: 'พร้อมเพย์',
-      lines: [
-        card.accountHolderPlaceholder,
-        draft.promptPayUsesPhone ? card.promptPayPhone : card.promptPayCitizenId,
-      ],
-    );
-  }
+  final a = draft.account;
+  final holder = a.accountName.trim();
   return RevolvingAccountPartyBox(
     label: 'ไปยัง',
-    badge: RevolvingBankBadge(code: card.bankShortCode, size: 20),
-    name: card.bankName,
-    lines: [card.accountHolderPlaceholder, card.bankAccountMasked],
+    badge: RevolvingAccountBadge(account: a, size: 20),
+    name: revolvingAccountTitle(a),
+    lines: [holder.isEmpty ? '-' : holder, revolvingMaskAccountNumber(a)],
+  );
+}
+
+/// The draft a screen opened without one falls back to: the mock card's
+/// default account.
+RevolvingTransferDraft _mockDraft({required double amount}) {
+  final card = RevolvingCardView.mock();
+  return RevolvingTransferDraft(
+    card: card,
+    account: card.bankAccounts.firstWhere((a) => a.isDefault,
+        orElse: () => card.bankAccounts.first),
+    amount: amount,
   );
 }
 
@@ -353,12 +303,7 @@ class RevolvingTransferConfirmPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = draft ??
-        RevolvingTransferDraft(
-          card: RevolvingCardView.mock(),
-          target: RevolvingTransferTarget.bankAccount,
-          amount: 2000,
-        );
+    final d = draft ?? _mockDraft(amount: 2000);
     return RevolvingPeachPage(
       onBack: () => revolvingBack(context),
       bottom: RevolvingButton(
@@ -401,12 +346,7 @@ class RevolvingTransferSuccessPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = draft ??
-        RevolvingTransferDraft(
-          card: RevolvingCardView.mock(),
-          target: RevolvingTransferTarget.bankAccount,
-          amount: 2000,
-        );
+    final d = draft ?? _mockDraft(amount: 2000);
     return RevolvingPeachPage(
       bottom: const RevolvingHomeButton(),
       children: [

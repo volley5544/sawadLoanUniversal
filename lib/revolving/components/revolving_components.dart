@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../loan_register/components/env_version_tag.dart';
+import '../../p_loan/application/models/loan_contract.dart';
 import '../../p_loan/application/components/p_loan_components.dart';
 import '../../router/app_router.dart';
 import '../../services/native_bridge.dart';
@@ -742,6 +743,78 @@ class RevolvingBankBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── one `bank_accounts` entry ─────────────────────────────────────────
+
+/// The badge for a withdrawal destination: PromptPay's, or the bank's.
+class RevolvingAccountBadge extends StatelessWidget {
+  const RevolvingAccountBadge({super.key, required this.account, this.size = 36});
+
+  final RevolvingBankAccount account;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => account.isPromptPay
+      ? RevolvingPromptPayBadge(size: size)
+      : RevolvingBankBadge(code: account.bankCode, size: size);
+}
+
+/// A destination's heading: `พร้อมเพย์`, else the bank's name (`-` when the
+/// backend sent none).
+String revolvingAccountTitle(RevolvingBankAccount a) {
+  if (a.isPromptPay) return 'พร้อมเพย์';
+  final name = a.bankName.trim();
+  return name.isEmpty ? '-' : name;
+}
+
+/// What [RevolvingBankAccount.accountNumber] is, for the label above it.
+String revolvingAccountNumberLabel(RevolvingBankAccount a) =>
+    switch (a.transferType) {
+      'promptpay_phone' => 'เบอร์โทรศัพท์',
+      'promptpay_citizen' => 'เลขบัตรประชาชน',
+      _ => 'เลขที่บัญชี',
+    };
+
+/// The destination number grouped the way Thai customers read it — phone
+/// `088-888-8888`, citizen id `1-2345-67890-12-3`, a 10-digit account
+/// `123-4-56789-0`. Any other shape is shown as sent; empty is `-`.
+String revolvingFormatAccountNumber(RevolvingBankAccount a) {
+  final raw = a.accountNumber.trim();
+  if (raw.isEmpty) return '-';
+  final d = raw.replaceAll(RegExp(r'\D'), '');
+  if (d != raw.replaceAll('-', '').replaceAll(' ', '')) return raw;
+  String group(List<int> sizes) {
+    final out = <String>[];
+    var i = 0;
+    for (final n in sizes) {
+      out.add(d.substring(i, i + n));
+      i += n;
+    }
+    return out.join('-');
+  }
+
+  if (a.transferType == 'promptpay_phone' && d.length == 10) {
+    return group([3, 3, 4]);
+  }
+  if (a.transferType == 'promptpay_citizen' && d.length == 13) {
+    return group([1, 4, 5, 2, 1]);
+  }
+  if (!a.isPromptPay && d.length == 10) return group([3, 1, 5, 1]);
+  return raw;
+}
+
+/// [revolvingFormatAccountNumber] with every digit but the last four shown
+/// as `X` — for the confirm and success screens.
+String revolvingMaskAccountNumber(RevolvingBankAccount a) {
+  final shown = revolvingFormatAccountNumber(a);
+  if (shown == '-') return shown;
+  final digits = RegExp(r'\d').allMatches(shown).length;
+  var seen = 0;
+  return shown.replaceAllMapped(RegExp(r'\d'), (m) {
+    seen++;
+    return seen > digits - 4 ? m[0]! : 'X';
+  });
 }
 
 /// The พร้อมเพย์ badge (a text stand-in for the PromptPay mark).

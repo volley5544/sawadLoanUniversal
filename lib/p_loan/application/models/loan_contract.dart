@@ -827,6 +827,10 @@ class RevolvingBankAccount {
   /// `is_default`.
   final bool isDefault;
 
+  /// A PromptPay destination (`promptpay_phone` / `promptpay_citizen`), whose
+  /// [accountNumber] is a phone number or citizen id rather than an account.
+  bool get isPromptPay => transferType.startsWith('promptpay');
+
   factory RevolvingBankAccount.fromJson(Map<String, dynamic> json) =>
       RevolvingBankAccount(
         bankName: asString(json['bank_name']),

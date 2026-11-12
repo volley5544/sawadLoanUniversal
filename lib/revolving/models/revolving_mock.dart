@@ -9,6 +9,8 @@
 /// history / bill / transfer endpoints return) and no screen changes.
 library;
 
+import '../../p_loan/application/models/loan_contract.dart';
+
 /// One withdrawal or payment row in a history tab.
 class RevolvingHistoryEntry {
   const RevolvingHistoryEntry({
@@ -33,15 +35,6 @@ class RevolvingRow {
   final String value;
 }
 
-/// Where a withdrawal is sent.
-enum RevolvingTransferTarget {
-  /// พร้อมเพย์ — to the customer's phone number or citizen id.
-  promptPay,
-
-  /// บัญชีธนาคารที่ผูกไว้ — to the bank account bound to the contract.
-  bankAccount,
-}
-
 /// Everything the revolving screens show about one card.
 class RevolvingCardView {
   const RevolvingCardView({
@@ -60,13 +53,7 @@ class RevolvingCardView {
     required this.contractInfo,
     required this.minimumWithdrawal,
     required this.transferFee,
-    required this.bankName,
-    required this.bankShortCode,
-    required this.bankAccountNo,
-    required this.bankAccountMasked,
-    required this.accountHolderPlaceholder,
-    required this.promptPayPhone,
-    required this.promptPayCitizenId,
+    required this.bankAccounts,
     required this.billReady,
     required this.billIssueDate,
     required this.billDueDate,
@@ -112,13 +99,10 @@ class RevolvingCardView {
   final double minimumWithdrawal;
   final double transferFee;
 
-  final String bankName;
-  final String bankShortCode;
-  final String bankAccountNo;
-  final String bankAccountMasked;
-  final String accountHolderPlaceholder;
-  final String promptPayPhone;
-  final String promptPayCitizenId;
+  /// Where a withdrawal can go — `revolving_loans.bank_accounts`, one
+  /// selector tile per entry, in the order the backend sends them. A single
+  /// entry means a single tile; none means no destination to offer.
+  final List<RevolvingBankAccount> bankAccounts;
 
   /// Whether this cycle's statement has been issued (ถึงวันสรุปยอด).
   final bool billReady;
@@ -140,7 +124,11 @@ class RevolvingCardView {
   /// The amount chips under a withdrawal amount field.
   static const List<double> quickAmounts = [500, 1000, 1500, 2000];
 
-  RevolvingCardView copyWith({bool? billReady}) => RevolvingCardView(
+  RevolvingCardView copyWith({
+    bool? billReady,
+    List<RevolvingBankAccount>? bankAccounts,
+  }) =>
+      RevolvingCardView(
         contractNo: contractNo,
         title: title,
         plate: plate,
@@ -156,13 +144,7 @@ class RevolvingCardView {
         contractInfo: contractInfo,
         minimumWithdrawal: minimumWithdrawal,
         transferFee: transferFee,
-        bankName: bankName,
-        bankShortCode: bankShortCode,
-        bankAccountNo: bankAccountNo,
-        bankAccountMasked: bankAccountMasked,
-        accountHolderPlaceholder: accountHolderPlaceholder,
-        promptPayPhone: promptPayPhone,
-        promptPayCitizenId: promptPayCitizenId,
+        bankAccounts: bankAccounts ?? this.bankAccounts,
         billReady: billReady ?? this.billReady,
         billIssueDate: billIssueDate,
         billDueDate: billDueDate,
@@ -217,13 +199,24 @@ class RevolvingCardView {
         ],
         minimumWithdrawal: 500,
         transferFee: 3,
-        bankName: 'กรุงศรี',
-        bankShortCode: 'BAY',
-        bankAccountNo: '123-4-56789-0',
-        bankAccountMasked: 'XXX-X-XXXXX-X',
-        accountHolderPlaceholder: '[ชื่อ-นามสกุลผู้รับ]',
-        promptPayPhone: '088-888-8888',
-        promptPayCitizenId: '1-2345-67890-12-3',
+        // The design's two destinations, as `bank_accounts` entries.
+        bankAccounts: const [
+          RevolvingBankAccount(
+            bankName: 'พร้อมเพย์',
+            transferType: 'promptpay_phone',
+            accountNumber: '0888888888',
+            accountName: '[ชื่อ-นามสกุลผู้รับ]',
+          ),
+          RevolvingBankAccount(
+            bankName: 'กรุงศรี',
+            bankCode: 'BAY',
+            transferType: 'customer_bank',
+            accountType: 'SAVING ACCOUNT',
+            accountNumber: '1234567890',
+            accountName: '[ชื่อ-นามสกุลผู้รับ]',
+            isDefault: true,
+          ),
+        ],
         billReady: false,
         billIssueDate: '2026-11-03',
         billDueDate: '2026-11-06',
@@ -234,15 +227,13 @@ class RevolvingCardView {
 class RevolvingTransferDraft {
   const RevolvingTransferDraft({
     required this.card,
-    required this.target,
+    required this.account,
     required this.amount,
-    this.promptPayUsesPhone = true,
   });
 
   final RevolvingCardView card;
-  final RevolvingTransferTarget target;
-  final double amount;
 
-  /// พร้อมเพย์ only: phone number (true) or citizen id (false).
-  final bool promptPayUsesPhone;
+  /// The `bank_accounts` entry the customer picked.
+  final RevolvingBankAccount account;
+  final double amount;
 }
