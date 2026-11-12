@@ -97,7 +97,7 @@ void main() {
         },
       ],
     });
-    expect(r.utilizationPercentage, 0.55, reason: 'a fraction, not 55');
+    expect(r.utilizationPercentage, 0.55);
     expect(r.revolvingStatus, 'Active');
     expect(r.bankAccounts, hasLength(2));
     final d = r.defaultBankAccount!;
@@ -116,5 +116,45 @@ void main() {
     expect(r.contractId, 0);
     expect(r.bankAccounts, isEmpty);
     expect(r.defaultBankAccount, isNull);
+  });
+
+  test('QA /loan/list sample (contract 2881, 2026-11-12)', () {
+    final r = RevolvingLoan.fromJson({
+      'contract_id': 2881,
+      'revolving_flag': true,
+      'revolving_limit': 0,
+      'utilization_amount': 60000,
+      'revolving_status': 'Hard block',
+      'utilization_percentage': 52.02,
+      'acceptance_flag': 'Skip',
+      'bank_accounts': [
+        {
+          'bank_name': '',
+          'bank_code': 'KBANK',
+          'transfer_type': 'CUSTOMER_BANK',
+          'account_type': 'OTHERS',
+          'account_number': '1142425676',
+          'account_name': '20052026',
+          'is_default': true,
+        },
+      ],
+    });
+    expect(r.contractId, 2881);
+    expect(r.revolvingFlag, isTrue);
+    expect(r.revolvingStatus, 'Hard block');
+    expect(r.utilizationPercentage, 52.02);
+    final a = r.defaultBankAccount!;
+    expect(a.bankName, '');
+    expect(a.bankCode, 'KBANK');
+    expect(a.isPromptPay, isFalse);
+  });
+
+  test('PromptPay is detected whatever the case of transfer_type', () {
+    for (final t in ['promptpay_phone', 'PROMPTPAY_PHONE', 'PromptPay_Citizen']) {
+      expect(RevolvingBankAccount.fromJson({'transfer_type': t}).isPromptPay,
+          isTrue, reason: t);
+    }
+    expect(RevolvingBankAccount.fromJson({'transfer_type': 'CUSTOMER_BANK'})
+        .isPromptPay, isFalse);
   });
 }

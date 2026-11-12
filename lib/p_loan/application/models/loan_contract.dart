@@ -725,15 +725,17 @@ class RevolvingLoan {
   /// `utilization_amount` — how much of the limit is drawn.
   final double utilizationAmount;
 
-  /// `revolving_status` — `Active` in the LMS sample (2026-11-11); the full
-  /// set of values is not yet known.
+  /// `revolving_status` — `Active` in the LMS sample (2026-11-11), `Hard block`
+  /// on QA contract 2881 (2026-11-12); the full set is not yet known.
   final String revolvingStatus;
 
   /// `reserved_limit`.
   final double reservedLimit;
 
-  /// `utilization_percentage` — a **fraction**, not a percent: the LMS sample
-  /// has `0.55` for 27,500 drawn of 50,000. Multiply by 100 to display it.
+  /// `utilization_percentage` — ⚠ **scale unconfirmed**. The LMS sample
+  /// (2026-11-11) has `0.55` for 27,500 of 50,000 (a fraction); the QA
+  /// `/loan/list` (2026-11-12, contract 2881) has `52.02` (a percent). Ask
+  /// the API owner before rendering it.
   final double utilizationPercentage;
 
   /// `maximum_withdrawal_amount` — the largest single withdrawal allowed.
@@ -829,7 +831,9 @@ class RevolvingBankAccount {
 
   /// A PromptPay destination (`promptpay_phone` / `promptpay_citizen`), whose
   /// [accountNumber] is a phone number or citizen id rather than an account.
-  bool get isPromptPay => transferType.startsWith('promptpay');
+  /// Case-insensitive: QA's `/loan/list` sends `CUSTOMER_BANK` while the
+  /// node-api guide and the withdrawal history spell it `customer_bank`.
+  bool get isPromptPay => transferType.toLowerCase().startsWith('promptpay');
 
   factory RevolvingBankAccount.fromJson(Map<String, dynamic> json) =>
       RevolvingBankAccount(

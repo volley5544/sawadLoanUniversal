@@ -122,8 +122,11 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   entry in the backend's order — one account, one tile; none, a
   ไม่พบบัญชีรับเงิน note. A PromptPay entry (`transfer_type` `promptpay_*`)
   already says phone or citizen id, so the amount screen has no radio. The
-  mock's two entries reproduce the design's two tiles. ⚠ `utilization_percentage`
-  is a **fraction** (`0.55`). API: node-api `revolvingLoan/*` on the mobile
+  mock's two entries reproduce the design's two tiles. ⚠ `utilization_percentage`'s
+  scale is **unconfirmed** — `0.55` in the LMS sample, `52.02` on QA
+  `/loan/list` (2026-11-12); `transfer_type` arrives upper-case on QA
+  (`CUSTOMER_BANK`), so PromptPay detection ignores case. QA contract 2881
+  is `Hard block` with an all-zero `withdrawal/{id}` summary. API: node-api `revolvingLoan/*` on the mobile
   base, bearer + `x-srisawad` (guide in git-ignored
   `etc/revolving_feature/api-call/`; live on uat, **404 on prod** 2026-11-11).
   **Acceptance is not gated** — treated as accepted for now; the
