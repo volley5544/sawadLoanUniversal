@@ -15,9 +15,11 @@
 ///
 /// An unmatched or empty `contNo` opens the first card.
 ///
-/// ⚠ **UI and navigation only**: only each card's identity is real (see
-/// [RevolvingCardView.fromContract]); figures and history are the design's.
-/// In a plain browser (no `hashThaiId`) it shows [RevolvingCardView.demo].
+/// **Figures** come from `revolving_loans` (see [RevolvingCardView.fromContract]
+/// for the field mapping). วงเงินอนุมัติ and ประวัติการถอน/โอน come from
+/// `GET revolvingLoan/withdrawal/{contract_id}`, read once per card the
+/// first time it is shown. In a plain browser (no `hashThaiId`) it shows
+/// [RevolvingCardView.demo].
 /// `?bill=ready` shows the issued-statement branch of ดูบิล.
 library;
 
@@ -28,6 +30,7 @@ import '../app_state.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
 import '../services/p_loan_api.dart';
+import '../services/revolving_api.dart';
 import '../services/srisawad_api.dart';
 import 'components/revolving_bill_dialogs.dart';
 import 'components/revolving_components.dart';
@@ -63,6 +66,10 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
   String? _error;
   int _index = 0;
 
+  /// Per contract no.: the withdrawal-summary read in flight, or its error.
+  final Set<String> _historyLoading = {};
+  final Map<String, String> _historyErrors = {};
+
   /// 0 = ประวัติการถอน/โอน, 1 = ประวัติการชำระ.
   int _tab = 0;
 
@@ -79,6 +86,44 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
       _cards = [for (final c in cards) c.copyWith(billReady: widget.billReady)];
       _index = RevolvingCardView.initialIndex(_cards!, widget.contractNo);
     });
+    _ensureWithdrawalInfo();
+  }
+
+  /// Reads `revolvingLoan/withdrawal/{id}` for the card on screen, once.
+  void _ensureWithdrawalInfo() {
+    final cards = _cards;
+    if (cards == null) return;
+    final card = cards[_index];
+    if (card.withdrawalInfoLoaded ||
+        _historyLoading.contains(card.contractNo) ||
+        _historyErrors.containsKey(card.contractNo)) {
+      return;
+    }
+    _fetchWithdrawalInfo(card);
+  }
+
+  Future<void> _fetchWithdrawalInfo(RevolvingCardView card) async {
+    final key = card.contractNo;
+    setState(() {
+      _historyLoading.add(key);
+      _historyErrors.remove(key);
+    });
+    try {
+      final info = await RevolvingApi.fetchWithdrawal(
+        contractId: card.contractId,
+        token: AppState().authToken,
+      );
+      if (!mounted) return;
+      final cards = _cards;
+      final i = cards?.indexWhere((c) => c.contractNo == key) ?? -1;
+      if (cards != null && i >= 0) {
+        setState(() => cards[i] = cards[i].withWithdrawalInfo(info));
+      }
+    } on SrisawadApiException catch (e) {
+      if (mounted) setState(() => _historyErrors[key] = e.message);
+    } finally {
+      if (mounted) setState(() => _historyLoading.remove(key));
+    }
   }
 
   Future<void> _load() async {
@@ -113,6 +158,7 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
     final cards = _cards;
     if (cards == null || index < 0 || index >= cards.length) return;
     setState(() => _index = index);
+    _ensureWithdrawalInfo();
   }
 
   void _back() => revolvingBack(context, fromHost: widget.fromHost);
@@ -178,7 +224,21 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
                 weight: FontWeight.w700, color: RevolvingPalette.navy),
           ),
         ),
-        RevolvingHistoryList(entries: history),
+        if (history != null)
+          RevolvingHistoryList(entries: history)
+        else if (_tab == 0 && _historyLoading.contains(card.contractNo))
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_tab == 0 && _historyErrors.containsKey(card.contractNo))
+          _HistoryError(
+            message: _historyErrors[card.contractNo]!,
+            onRetry: () => _fetchWithdrawalInfo(card),
+          )
+        else
+          // ประวัติการชำระ has no source in either spec.
+          const RevolvingHistoryList.unavailable(),
       ],
     );
   }
@@ -291,17 +351,24 @@ class RevolvingHistoryTabs extends StatelessWidget {
 
 /// History rows grouped under their month heading, in the order given.
 class RevolvingHistoryList extends StatelessWidget {
-  const RevolvingHistoryList({super.key, required this.entries});
+  const RevolvingHistoryList({super.key, required this.entries})
+      : unavailable = false;
+
+  /// A history with no source yet: a centred `-`, not "no rows".
+  const RevolvingHistoryList.unavailable({super.key})
+      : entries = const [],
+        unavailable = true;
 
   final List<RevolvingHistoryEntry> entries;
+  final bool unavailable;
 
   @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty) {
+    if (unavailable || entries.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: Center(
-          child: Text('ไม่มีรายการ',
+          child: Text(unavailable ? '-' : 'ไม่มีรายการ',
               style: revolvingText(13, color: RevolvingPalette.label)),
         ),
       );
@@ -353,4 +420,25 @@ class RevolvingHistoryList extends StatelessWidget {
       ),
     );
   }
+}
+
+/// ประวัติการถอน/โอน failed to load: the reason and a retry.
+class _HistoryError extends StatelessWidget {
+  const _HistoryError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Text(message,
+                textAlign: TextAlign.center,
+                style: revolvingText(13, color: RevolvingPalette.text)),
+            TextButton(onPressed: onRetry, child: const Text('ลองใหม่')),
+          ],
+        ),
+      );
 }

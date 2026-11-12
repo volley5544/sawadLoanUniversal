@@ -51,6 +51,10 @@ TextStyle revolvingText(
 /// `2500.25` → `2,500.25`.
 String revolvingMoney(num value) => formatMoney(value);
 
+/// `1,234.00 บาท`, or `-` when the figure has no source.
+String revolvingMoneyOrDash(num? value) =>
+    value == null ? '-' : '${formatMoney(value)} บาท';
+
 /// "Not wired yet" — every action button in this feature is navigation-only
 /// for now (2026-11-11), so the ones that would *do* something say so.
 void showRevolvingNotYet(BuildContext context, [String what = '']) {
@@ -382,7 +386,9 @@ class RevolvingFigure extends StatelessWidget {
   });
 
   final String label;
-  final double amount;
+
+  /// `null` (no source yet) renders `-`, without the unit.
+  final double? amount;
   final bool alignEnd;
   final double size;
 
@@ -394,12 +400,13 @@ class RevolvingFigure extends StatelessWidget {
           Text(label, style: revolvingText(11, color: RevolvingPalette.label)),
           Text.rich(TextSpan(children: [
             TextSpan(
-                text: revolvingMoney(amount),
+                text: amount == null ? '-' : revolvingMoney(amount!),
                 style: revolvingText(size,
                     weight: FontWeight.w700, color: RevolvingPalette.navy)),
-            TextSpan(
-                text: ' บาท',
-                style: revolvingText(12, color: RevolvingPalette.navy)),
+            if (amount != null)
+              TextSpan(
+                  text: ' บาท',
+                  style: revolvingText(12, color: RevolvingPalette.navy)),
           ])),
         ],
       );
@@ -770,7 +777,7 @@ String revolvingAccountTitle(RevolvingBankAccount a) {
 
 /// What [RevolvingBankAccount.accountNumber] is, for the label above it.
 String revolvingAccountNumberLabel(RevolvingBankAccount a) =>
-    switch (a.transferType) {
+    switch (a.withdrawalTransferType) {
       'promptpay_phone' => 'เบอร์โทรศัพท์',
       'promptpay_citizen' => 'เลขบัตรประชาชน',
       _ => 'เลขที่บัญชี',
@@ -794,10 +801,10 @@ String revolvingFormatAccountNumber(RevolvingBankAccount a) {
     return out.join('-');
   }
 
-  if (a.transferType == 'promptpay_phone' && d.length == 10) {
+  if (a.withdrawalTransferType == 'promptpay_phone' && d.length == 10) {
     return group([3, 3, 4]);
   }
-  if (a.transferType == 'promptpay_citizen' && d.length == 13) {
+  if (a.withdrawalTransferType == 'promptpay_citizen' && d.length == 13) {
     return group([1, 4, 5, 2, 1]);
   }
   if (!a.isPromptPay && d.length == 10) return group([3, 1, 5, 1]);

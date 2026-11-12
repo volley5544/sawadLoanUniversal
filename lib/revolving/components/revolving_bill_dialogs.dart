@@ -13,16 +13,24 @@
 ///
 /// ⚠ No URL exists yet (the API isn't built), so an issued bill with an empty
 /// [RevolvingCardView.billUrl] says so instead of opening nothing.
+///
+/// **A real card** (one built from `/loan/list`) does not show the demo
+/// dates: its ดูบิล needs `createFileRequest`, which node-api has no route
+/// for yet, so it says "not yet". [showRevolvingBillStatement] is what that
+/// call's mapped response ([RevolvingBillStatement]) will drive.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../services/external_url.dart';
+import '../models/revolving_bill.dart';
 import '../models/revolving_mock.dart';
 import 'revolving_components.dart';
 
 Future<void> showRevolvingBill(BuildContext context, RevolvingCardView card) =>
-    !card.billReady
+    !card.isDemo
+        ? Future.sync(() => showRevolvingNotYet(context, 'ใบแจ้งหนี้'))
+        : !card.billReady
         ? showDialog<void>(
             context: context,
             builder: (_) => _NotIssuedDialog(card: card),
@@ -31,10 +39,25 @@ Future<void> showRevolvingBill(BuildContext context, RevolvingCardView card) =>
             ? Future.sync(() => showRevolvingNotYet(context, 'ใบแจ้งหนี้'))
             : openExternalDocument(context, card.billUrl.trim());
 
-class _NotIssuedDialog extends StatelessWidget {
-  const _NotIssuedDialog({required this.card});
+/// `createFileRequest`'s answer on screen: 200 opens `data.url`, anything
+/// else shows the API's `message` verbatim in the not-issued popup.
+Future<void> showRevolvingBillStatement(
+        BuildContext context, RevolvingBillStatement statement) =>
+    statement.hasFile
+        ? openExternalDocument(context, statement.url)
+        : showDialog<void>(
+            context: context,
+            builder: (_) => _NotIssuedDialog(message: statement.message),
+          );
 
-  final RevolvingCardView card;
+class _NotIssuedDialog extends StatelessWidget {
+  const _NotIssuedDialog({this.card, this.message});
+
+  /// The demo: title + the design's composed sentence with its dates.
+  final RevolvingCardView? card;
+
+  /// The API's `message`, shown alone.
+  final String? message;
 
   @override
   Widget build(BuildContext context) => Dialog(
@@ -45,15 +68,19 @@ class _NotIssuedDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('ยังไม่สามารถออกใบแจ้งหนี้ได้',
-                  textAlign: TextAlign.center,
-                  style: revolvingText(15,
-                      weight: FontWeight.w700, color: RevolvingPalette.navy)),
-              const SizedBox(height: 4),
+              if (message == null) ...[
+                Text('ยังไม่สามารถออกใบแจ้งหนี้ได้',
+                    textAlign: TextAlign.center,
+                    style: revolvingText(15,
+                        weight: FontWeight.w700,
+                        color: RevolvingPalette.navy)),
+                const SizedBox(height: 4),
+              ],
               Text(
-                'ระบบออกใบแจ้งหนี้ตั้งแต่วันที่ ${card.billIssueDate}\n'
-                '(กำหนดออกใบแจ้งหนี้ล่วงหน้า 5 วัน\n'
-                'ก่อนวันครบกำหนดชำระ ${card.billDueDate})',
+                message ??
+                    'ระบบออกใบแจ้งหนี้ตั้งแต่วันที่ ${card!.billIssueDate}\n'
+                        '(กำหนดออกใบแจ้งหนี้ล่วงหน้า 5 วัน\n'
+                        'ก่อนวันครบกำหนดชำระ ${card!.billDueDate})',
                 textAlign: TextAlign.center,
                 style: revolvingText(13,
                     color: RevolvingPalette.navy, height: 1.5),

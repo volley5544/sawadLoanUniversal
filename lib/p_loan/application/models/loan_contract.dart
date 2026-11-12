@@ -692,7 +692,8 @@ class CarDetails {
 }
 
 /// `revolving_loans` — the revolving credit line (บัตรศรีสวัสดิ์) attached to a
-/// contract. Added 2026-11-11, **parsed only**: no screen reads it yet.
+/// contract. Added 2026-11-11; the BA calls it `getRevolvingInfo`. Read by
+/// `RevolvingCardView.fromContract` (2026-11-12).
 ///
 /// A contract without one still sends the object, zero-filled with
 /// `revolving_flag: false` — so [revolvingFlag] is the test, not presence.
@@ -829,11 +830,33 @@ class RevolvingBankAccount {
   /// `is_default`.
   final bool isDefault;
 
-  /// A PromptPay destination (`promptpay_phone` / `promptpay_citizen`), whose
-  /// [accountNumber] is a phone number or citizen id rather than an account.
-  /// Case-insensitive: QA's `/loan/list` sends `CUSTOMER_BANK` while the
-  /// node-api guide and the withdrawal history spell it `customer_bank`.
-  bool get isPromptPay => transferType.toLowerCase().startsWith('promptpay');
+  /// [transferType] as the withdrawal request spells it — the mapping in the
+  /// BA's *Withdrawal process* spec (2026-11-12):
+  ///
+  /// | `bank_accounts[].transfer_type` | withdrawal `transfer_type` |
+  /// | --- | --- |
+  /// | `PROMPT_PAY_MOBILE_NUMBER` | `promptpay_phone` |
+  /// | `PROMPT_PAY_CITIZEN_ID` | `promptpay_citizen` |
+  /// | `CUSTOMER_BANK` | `customer_bank` |
+  ///
+  /// Case- and underscore-insensitive, and the already-mapped spellings
+  /// (`promptpay_phone`, …, from the node-api guide) map to themselves. Any
+  /// other value is passed through lower-cased rather than guessed at.
+  String get withdrawalTransferType {
+    final key = transferType.trim().toLowerCase().replaceAll('_', '');
+    return switch (key) {
+      'promptpaymobilenumber' || 'promptpayphone' => 'promptpay_phone',
+      'promptpaycitizenid' || 'promptpaycitizen' => 'promptpay_citizen',
+      'customerbank' => 'customer_bank',
+      _ => transferType.trim().toLowerCase(),
+    };
+  }
+
+  /// A PromptPay destination (phone or citizen id), whose [accountNumber] is
+  /// a phone number or citizen id rather than an account. Reads
+  /// [withdrawalTransferType], so `PROMPT_PAY_MOBILE_NUMBER` (the spec) and
+  /// `promptpay_phone` (the guide) both count.
+  bool get isPromptPay => withdrawalTransferType.startsWith('promptpay');
 
   factory RevolvingBankAccount.fromJson(Map<String, dynamic> json) =>
       RevolvingBankAccount(

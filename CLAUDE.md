@@ -110,48 +110,52 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   [docs/HISTORY.md](docs/HISTORY.md#loan-detail-debug-dialogs)).
 
 - **บัตรศรีสวัสดิ์ (revolving credit) is in development** (started 2026-11-11,
-  `lib/revolving/`). ⚠ **UI and navigation only**: every screen renders
-  `RevolvingCardView.mock()` (the BA design's own figures, design PDF in the
-  git-ignored `etc/revolving_feature/`) and no button files, debits or saves
-  anything. **The home screen holds one card per revolving
-  contract** (2026-11-12): it reads `/loan/list`, keeps rows with
-  `revolving_flag` true (`RevolvingCardView.listFrom`), opens on `?contNo=`
-  (else the first) and switches by swipe or the `‹ ● ○ ›` pager under the
-  card. The host opens it from the home-menu บัตรศรีสวัสดิ์ tile (first
-  revolving contract) and, later, a loan card's ถอนเงิน (that contract).
-  ⚠ Only a card's identity is real — contract no., title
-  (`loan_type_name`), plate (`collateral_information`), `bank_accounts`;
-  figures and history are still the mock's. No `hashThaiId` → two demo
-  cards. Entry `/revolving?contNo=&fromHost=` (`&bill=ready` demos ดูบิล's
-  issued branch); the other five routes take the card / a draft as `extra`
-  and fall back to the mock. `/loan/list`'s `revolving_loans` is parsed onto
-  `LoanContract.revolvingLoan` (typed `bank_accounts` → `RevolvingBankAccount`,
-  `defaultBankAccount`) but nothing reads it yet. **The withdrawal
-  destinations are generated from `bank_accounts`** (2026-11-12): one tile per
-  entry in the backend's order — one account, one tile; none, a
-  ไม่พบบัญชีรับเงิน note. A PromptPay entry (`transfer_type` `promptpay_*`)
-  already says phone or citizen id, so the amount screen has no radio. The
-  mock's two entries reproduce the design's two tiles. ⚠ `utilization_percentage`'s
-  scale is **unconfirmed** — `0.55` in the LMS sample, `52.02` on QA
-  `/loan/list` (2026-11-12); `transfer_type` arrives upper-case on QA
-  (`CUSTOMER_BANK`), so PromptPay detection ignores case. QA contract 2881
-  is `Hard block` with an all-zero `withdrawal/{id}` summary. API: node-api `revolvingLoan/*` on the mobile
-  base, bearer + `x-srisawad` (guide in git-ignored
-  `etc/revolving_feature/api-call/`; live on uat, **404 on prod** 2026-11-11).
-  **Acceptance is not gated** — treated as accepted for now; the
-  check/save acceptance calls come in a later update. Open with the user's
-  boss: how to tell a first withdrawal (`dayOneWithdrawal`) from later ones,
-  and whether `requesting_branch` is the row's `branch_code`. **ชำระเงิน goes to
-  the loan payment screen** (`/loanPayment?contNo=`, `revolvingOpenPayment`;
-  decided 2026-11-11): the revolving bill is added to the contract's normal
-  installment, so the design's own payment screens (suggested/custom amount
-  → confirm/success/QR) were deleted, not kept as a copy. The logo is the
-  supplied `assets/revolving/srisawad_logo.svg`; card art, bank and
-  PromptPay marks are still drawn stand-ins (assets promised later). The
-  progress bar shows the **used** share (confirmed). ดูบิล's issued bill
-  comes from the API **as a URL**, opened in the host's in-app browser via
-  `openExternalDocument` (`RevolvingCardView.billUrl`, empty until the API
-  exists → a "not yet" snackbar).
+  `lib/revolving/`). ⚠ **No money moves**: no button files, debits or saves
+  anything. **Fields are mapped from the BA's three specs** (2026-11-12,
+  git-ignored `etc/revolving_feature/screen-mapping/`: Loan details,
+  Withdrawal process, Billing statement). The BA names LMS APIs; this app
+  reads node-api's equivalents — `getRevolvingInfo` = `/loan/list`
+  `revolving_loans`, `getMobileWithdrawal` = **`GET
+  revolvingLoan/withdrawal/{contract_id}`** (`RevolvingApi`, a read, once per
+  card shown). Mapping lives on `RevolvingCardView.fromContract` /
+  `withWithdrawalInfo` (doc tables there): วงเงินคงเหลือ `revolving_limit`,
+  วงเงินอนุมัติ the summary's `maximum_revolving_limit` (not on
+  `/loan/list`), history `withdrawal_date` + `withdrawal_amount`.
+  ⚠ **Rendered `-` for want of a source**: ยอดที่แนะนำให้ชำระ / กำหนดชำระ
+  (`getRevolvingPaymentSchedule` — no node-api route), ค่าธรรมเนียม, ประวัติการชำระ,
+  and contract-info rows with no field. ⚠ **ดูบิล** needs
+  `createFileRequest` (`BILLING_STATEMENT`) — also no node-api route — so a
+  real card says "not yet"; request/response are mapped in
+  `revolving_bill.dart` (200 `data.url`, 400 `message` verbatim) and
+  `showRevolvingBillStatement` renders them. The amount screen applies the
+  spec's seven rules (`withdrawalRefusal`: min, max, `revolving_limit`,
+  daily remaining, `remaining_request_limit > 0`, status `Active`, today ≤
+  `withdrawal_expiry_date` — an empty expiry **refuses**; today = the
+  `/loan/list` server clock). `transfer_type` arrives as
+  `PROMPT_PAY_MOBILE_NUMBER` / `PROMPT_PAY_CITIZEN_ID` / `CUSTOMER_BANK`;
+  `withdrawalTransferType` maps it to `promptpay_phone` / `promptpay_citizen` /
+  `customer_bank`. The `applyForWithdrawal` body is **built, never sent**
+  (`RevolvingTransferDraft.withdrawalRequest`; `requesting_branch` empty —
+  open). **The home screen holds one card per revolving contract**: it reads
+  `/loan/list`, keeps `revolving_flag` rows (`listFrom`), opens on
+  `?contNo=` (else the first) and switches by swipe or the `‹ ● ○ ›` pager.
+  ⚠ The BA's Loan details spec has the host open its own *รายการสินเชื่อของฉัน*
+  list when the customer has more than one revolving loan, and this screen
+  for one — host side. No `hashThaiId` → two demo cards (`isDemo`, the
+  design's figures, ดูบิล demo via `&bill=ready`). Entry
+  `/revolving?contNo=&fromHost=`; the other five routes take the card / a
+  draft as `extra` and fall back to the mock. ⚠ `utilization_percentage`'s
+  scale is **unconfirmed** (`0.55` LMS sample, `52.02` QA; the BA table says
+  percent) and nothing renders it. QA data is placeholder — check presence,
+  not values (contract 2881 is `Hard block`, so it refuses every amount).
+  API guide in git-ignored `etc/revolving_feature/api-call/` (live on uat,
+  **404 on prod** 2026-11-11). **Acceptance is not gated** for now. Open
+  with the user's boss: `dayOneWithdrawal` vs later withdrawals, and
+  `requesting_branch`. **ชำระเงิน goes to the loan payment screen**
+  (`/loanPayment?contNo=`, `revolvingOpenPayment`; decided 2026-11-11). The
+  logo is `assets/revolving/srisawad_logo.svg`; card art, bank and PromptPay
+  marks are still drawn stand-ins. The progress bar shows the **used** share
+  (confirmed), 0 until วงเงินอนุมัติ loads.
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan

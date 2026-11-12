@@ -12,8 +12,12 @@
 /// A PromptPay entry already says whether it is a phone or a citizen id
 /// (`transfer_type`), so the amount screen no longer asks.
 ///
-/// ⚠ **UI and navigation only** (2026-11-11). ยืนยัน files nothing; the
-/// success screen shows what was entered.
+/// The amount screen applies the *Withdrawal process* spec's validation
+/// (`RevolvingCardView.withdrawalRefusal`) and says which rule failed.
+///
+/// ⚠ **No money moves** (2026-11-11). ยืนยัน files nothing — the
+/// `applyForWithdrawal` body is only *built* (`RevolvingWithdrawalRequest`) —
+/// and the success screen shows what was entered.
 library;
 
 import 'package:flutter/material.dart';
@@ -161,7 +165,9 @@ class _RevolvingTransferAmountPageState
     super.dispose();
   }
 
-  bool get _canContinue => _value >= _card.minimumWithdrawal;
+  bool get _canContinue => _card.canWithdraw(_value);
+
+  String? get _refusal => _card.withdrawalRefusal(_value);
 
   void _continue() => context.push(
         AppRoutes.revolvingTransferConfirm,
@@ -261,6 +267,12 @@ class _RevolvingTransferAmountPageState
               controller: _amount,
               onChanged: (v) => setState(() => _value = v),
             ),
+            if (_refusal != null) ...[
+              const SizedBox(height: 10),
+              Text(_refusal!,
+                  key: const ValueKey('revolving-amount-refusal'),
+                  style: revolvingText(12, color: RevolvingPalette.red)),
+            ],
           ],
         ),
       );
@@ -328,7 +340,7 @@ class RevolvingTransferConfirmPage extends StatelessWidget {
               const Divider(color: RevolvingPalette.divider),
               RevolvingKeyValue(
                 label: 'ค่าธรรมเนียม',
-                value: '${revolvingMoney(d.card.transferFee)} บาท',
+                value: revolvingMoneyOrDash(d.card.transferFee),
               ),
             ],
           ),
@@ -367,7 +379,7 @@ class RevolvingTransferSuccessPage extends StatelessWidget {
               const Divider(color: RevolvingPalette.divider),
               RevolvingKeyValue(
                 label: 'ค่าธรรมเนียม',
-                value: '${revolvingMoney(d.card.transferFee)} บาท',
+                value: revolvingMoneyOrDash(d.card.transferFee),
               ),
             ],
           ),
