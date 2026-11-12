@@ -127,7 +127,11 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `createFileRequest` (`BILLING_STATEMENT`) — also no node-api route — so a
   real card says "not yet"; request/response are mapped in
   `revolving_bill.dart` (200 `data.url`, 400 `message` verbatim) and
-  `showRevolvingBillStatement` renders them. The amount screen applies the
+  `showRevolvingBillStatement` renders them. ⚠ The BA specs spell LMS's
+  camelCase (`contractId`, `revolvingLimit`…); **this app's wire is
+  snake_case** (`contract_id`, …) — node-api and the srisawad backend both
+  use `_` (confirmed 2026-11-12). Both missing routes are promised by the
+  node-api owner "soon" (2026-11-12). The amount screen applies the
   spec's seven rules (`withdrawalRefusal`: min, max, `revolving_limit`,
   daily remaining, `remaining_request_limit > 0`, status `Active`, today ≤
   `withdrawal_expiry_date` — an empty expiry **refuses**; today = the

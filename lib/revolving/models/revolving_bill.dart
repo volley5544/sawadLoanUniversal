@@ -10,8 +10,9 @@
 /// ⚠ **node-api has no route for it yet** — its revolving guide lists only
 /// the acceptance, withdrawal and history calls — so nothing calls this. The
 /// request and response are mapped here so wiring the call is one function
-/// in `RevolvingApi`. The wire key for the contract (`contract_id`, the
-/// guide's spelling elsewhere, vs the spec's `contractId`) is unconfirmed.
+/// in `RevolvingApi`. The contract goes out as **`contract_id`**: the BA's
+/// spec spells LMS's camelCase, but node-api and the srisawad backend use
+/// snake_case (confirmed 2026-11-12).
 library;
 
 import '../../p_loan/application/models/json_coerce.dart';
