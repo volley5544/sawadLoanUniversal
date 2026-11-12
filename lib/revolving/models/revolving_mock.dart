@@ -100,7 +100,12 @@ class RevolvingCardView {
     this.isDemo = false,
     this.contractComcode = '',
     this.loanTypeCode = '',
+    this.branchCode = '',
   });
+
+  /// `/loan/list` `branch_code` — sent as the withdrawal's
+  /// `requesting_branch` (decided 2026-11-12).
+  final String branchCode;
 
   /// `barcode_details.comcode` and `contract_details.loan_type_code` — what
   /// the loan detail screen's สัญญาเงินกู้ rule keys on, reused for this
@@ -324,6 +329,7 @@ class RevolvingCardView {
         isDemo: isDemo,
         contractComcode: contractComcode,
         loanTypeCode: loanTypeCode,
+        branchCode: branchCode,
         serverNow: serverNow,
         transferFee: transferFee,
         bankAccounts: bankAccounts ?? this.bankAccounts,
@@ -370,6 +376,7 @@ class RevolvingCardView {
       serverNow: contract.paymentDetails.currentDateTime,
       contractComcode: contract.barcodeDetails.comcode.trim(),
       loanTypeCode: contract.contractDetails.loanTypeCode.trim(),
+      branchCode: contract.branchCode.trim(),
       transferFee: null,
       bankAccounts: r.bankAccounts,
       billReady: mock.billReady,
@@ -623,7 +630,7 @@ class RevolvingTransferDraft {
   /// | `contract_id` | `revolving_loans.contract_id` |
   /// | `channel` | `Mobile` (what the QA history records) |
   /// | `transaction_date` | now, ISO-8601 UTC |
-  /// | `requesting_branch` | ⚠ **open** — empty until the backend says (the row's `branch_code`?) |
+  /// | `requesting_branch` | `/loan/list` `branch_code` (decided 2026-11-12) |
   /// | `transfer_type` | `bank_accounts[].transfer_type` → `promptpay_phone` / `promptpay_citizen` / `customer_bank` |
   /// | `bank_code` | `bank_accounts[].bank_code`, **`customer_bank` only** |
   /// | `bank_account_number` | `bank_accounts[].account_number` — the phone / citizen id for PromptPay |
@@ -640,7 +647,7 @@ class RevolvingTransferDraft {
       'withdrawal': {
         'channel': 'Mobile',
         'transaction_date': (now ?? DateTime.now()).toUtc().toIso8601String(),
-        'requesting_branch': '',
+        'requesting_branch': card.branchCode,
         'transfer_type': type,
         'bank_code': type == 'customer_bank' ? account.bankCode.trim() : '',
         'bank_account_number': account.accountNumber.trim(),

@@ -11,6 +11,7 @@ void main() {
   // QA /loan/list row, contract 2881 (revolving-api-test-result.md).
   LoanContract qaContract() => LoanContract.fromJson({
         'contract_no': '000ICM691005S0004NFX',
+        'branch_code': 'B042',
         'contract_date': '2026-03-01',
         'data_date': '2026-11-12 10:08:00',
         'contract_details': {
@@ -231,7 +232,7 @@ void main() {
     expect(bank['withdrawal'], {
       'channel': 'Mobile',
       'transaction_date': '2026-11-12T03:00:00.000Z',
-      'requesting_branch': '',
+      'requesting_branch': 'B042', // /loan/list branch_code
       'transfer_type': 'customer_bank',
       'bank_code': 'KBANK',
       'bank_account_number': '1142425676',

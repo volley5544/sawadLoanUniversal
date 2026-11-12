@@ -146,8 +146,8 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   `PROMPT_PAY_MOBILE_NUMBER` / `PROMPT_PAY_CITIZEN_ID` / `CUSTOMER_BANK`;
   `withdrawalTransferType` maps it to `promptpay_phone` / `promptpay_citizen` /
   `customer_bank`. The `applyForWithdrawal` body is **built, never sent**
-  (`RevolvingTransferDraft.withdrawalRequest`; `requesting_branch` empty —
-  open). **The home screen holds one card per revolving contract**: it reads
+  (`RevolvingTransferDraft.withdrawalRequest`; `requesting_branch` =
+  `/loan/list` `branch_code`, decided 2026-11-12). **The home screen holds one card per revolving contract**: it reads
   `/loan/list`, keeps `revolving_flag` rows (`listFrom`), opens on
   `?contNo=` (else the first) and switches by swipe or the `‹ ● ○ ›` pager.
   ⚠ The BA's Loan details spec has the host open its own *รายการสินเชื่อของฉัน*
@@ -161,8 +161,7 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   not values (contract 2881 is `Hard block`, so it refuses every amount).
   API guide in git-ignored `etc/revolving_feature/api-call/` (live on uat,
   **404 on prod** 2026-11-11). **Acceptance is not gated** for now. Open
-  with the user's boss: `dayOneWithdrawal` vs later withdrawals, and
-  `requesting_branch`. **ชำระเงิน goes to the loan payment screen**
+  with the user's boss: `dayOneWithdrawal` vs later withdrawals. **ชำระเงิน goes to the loan payment screen**
   (`/loanPayment?contNo=`, `revolvingOpenPayment`; decided 2026-11-11). The
   logo is `assets/revolving/srisawad_logo.svg`; card art, bank and PromptPay
   marks are still drawn stand-ins. The progress bar shows the **used** share
