@@ -75,6 +75,7 @@ class LoanDocuments {
     this.request = '',
     this.receipt = '',
     this.agreement = '',
+    this.agreementPLoan = '',
   });
 
   /// ใบคำขอสินเชื่อใหม่ — the loan application form.
@@ -83,8 +84,26 @@ class LoanDocuments {
   /// ใบรับเงิน — the receipt.
   final String receipt;
 
-  /// เอกสารสัญญา — the contract itself.
+  /// เอกสารสัญญา — the contract itself. **The top-up flow's**; a P-Loan
+  /// reads [agreementPLoan] instead, via [forPLoan].
   final String agreement;
+
+  /// `agreement_ploan` — the P-Loan contract (instructed 2026-11-12: P-Loan
+  /// Extra's เอกสารสัญญา uses this field instead of `agreement`).
+  final String agreementPLoan;
+
+  /// This response as the P-Loan flow sees it: [agreement] **is**
+  /// `agreement_ploan`, so the เอกสารสัญญา row, its consent, the download
+  /// and `/ploan`'s `agreement.pdf` part all carry the P-Loan contract with no
+  /// screen knowing about the second field. ⚠ No fallback to `agreement` —
+  /// an absent `agreement_ploan` fails [isComplete] and shows the error
+  /// rather than quietly filing the top-up contract.
+  LoanDocuments forPLoan() => LoanDocuments(
+        request: request,
+        receipt: receipt,
+        agreement: agreementPLoan,
+        agreementPLoan: agreementPLoan,
+      );
 
   bool get isComplete =>
       request.isNotEmpty && receipt.isNotEmpty && agreement.isNotEmpty;
@@ -93,6 +112,7 @@ class LoanDocuments {
         request: asString(json['request']),
         receipt: asString(json['receipt']),
         agreement: asString(json['agreement']),
+        agreementPLoan: asString(json['agreement_ploan']),
       );
 }
 

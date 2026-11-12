@@ -525,7 +525,7 @@ class TopupApi {
     required String hashThaiId,
     required String token,
   }) =>
-      PLoanApi.generateDocuments(
+      PLoanApi.generateTopupDocuments(
         request: request,
         hashThaiId: hashThaiId,
         token: token,

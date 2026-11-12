@@ -176,16 +176,43 @@ class PLoanApi {
 
   // ── P-Loan only ──────────────────────────────────────────────────────
 
-  /// Step 6 — generates the three contract PDFs (base64).
-  ///
-  /// **`x-srisawad` is per-environment here**, unlike everywhere else on this
-  /// base — both are `x1` today (prod "for now", 2026-09-29; it was
-  /// `x1_c3Jpc2F3YWQ`). See [AppEnvironment.pdfLoanSrisawadHeader].
+  /// Step 6 — generates the three contract PDFs (base64), **for a P-Loan**:
+  /// the เอกสารสัญญา is `agreement_ploan`, not `agreement`
+  /// ([LoanDocuments.forPLoan], instructed 2026-11-12). The top-up flow calls
+  /// [generateTopupDocuments] instead and keeps `agreement`.
   static Future<LoanDocuments> generateDocuments({
     required ContractPdfRequest request,
     required String hashThaiId,
     required String token,
-  }) async {
+  }) async =>
+      _complete((await _pdfLoan(request, hashThaiId, token)).forPLoan());
+
+  /// `POST /pdf/loan` for the **top-up** flow — the same call, with the
+  /// response's own `agreement` as its เอกสารสัญญา.
+  static Future<LoanDocuments> generateTopupDocuments({
+    required ContractPdfRequest request,
+    required String hashThaiId,
+    required String token,
+  }) async =>
+      _complete(await _pdfLoan(request, hashThaiId, token));
+
+  static LoanDocuments _complete(LoanDocuments docs) {
+    if (!docs.isComplete) {
+      throw SrisawadApiException('ไม่สามารถสร้างเอกสารสัญญาได้ กรุณาลองใหม่');
+    }
+    return docs;
+  }
+
+  /// The raw `POST /pdf/loan` response.
+  ///
+  /// **`x-srisawad` is per-environment here**, unlike everywhere else on this
+  /// base — both are `x1` today (prod "for now", 2026-09-29; it was
+  /// `x1_c3Jpc2F3YWQ`). See [AppEnvironment.pdfLoanSrisawadHeader].
+  static Future<LoanDocuments> _pdfLoan(
+    ContractPdfRequest request,
+    String hashThaiId,
+    String token,
+  ) async {
     if (kPLoanUseMockData) return _mock(mockDocuments());
     final base = await SrisawadApi.baseUrl();
     final json = await SrisawadApi.send(
@@ -203,11 +230,7 @@ class PLoanApi {
     if (json is! Map<String, dynamic>) {
       throw SrisawadApiException('Unexpected /pdf/loan response: $json');
     }
-    final docs = LoanDocuments.fromJson(json);
-    if (!docs.isComplete) {
-      throw SrisawadApiException('ไม่สามารถสร้างเอกสารสัญญาได้ กรุณาลองใหม่');
-    }
-    return docs;
+    return LoanDocuments.fromJson(json);
   }
 
   /// Step 6 — reads and validates a Thai ID card photo.

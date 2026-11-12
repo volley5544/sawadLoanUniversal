@@ -1402,6 +1402,15 @@ as the heading on step 3 (จำนวนงวด). A new P-Loan keeps `ยอ�
 `ยอดจัดสินเชื่อใหม่`, and gets neither new row — its own
 `สรุปยอดสินเชื่อใหม่` section already carries the duty and the payout.
 
+⚠ **A P-Loan's เอกสารสัญญา is `agreement_ploan`, not `agreement`**
+(2026-11-12, on request). `/pdf/loan` returns both; `PLoanApi.generateDocuments`
+maps the response through `LoanDocuments.forPLoan()`, so the row, its
+consent, the download and `/ploan`'s `agreement.pdf` part all carry it. The
+**top-up** flow calls `PLoanApi.generateTopupDocuments` and keeps
+`agreement`. No fallback: a response without `agreement_ploan` fails the
+completeness check and shows the error rather than filing the top-up
+contract.
+
 **Document viewer.** The three contract PDFs arrive base64 from `POST /pdf/loan`
 (as `data:application/pdf;base64,…`, prefix stripped on our side) and are
 rendered **inline**: tapping a document row opens a near-full-height sheet with

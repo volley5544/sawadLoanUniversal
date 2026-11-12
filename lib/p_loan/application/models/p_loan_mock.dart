@@ -266,6 +266,7 @@ LoanDocuments mockDocuments() => LoanDocuments(
       request: _mockPdf('MOCK - loan request form'),
       receipt: _mockPdf('MOCK - receipt'),
       agreement: _mockPdf('MOCK - loan agreement'),
+      agreementPLoan: _mockPdf('MOCK - P-Loan agreement'),
     );
 
 /// Builds a minimal one-page PDF containing [caption] and returns it base64

@@ -793,4 +793,33 @@ void main() {
       expect(parseAmount('abc'), 0);
     });
   });
+
+  group('/pdf/loan agreement_ploan (2026-11-12)', () {
+    final json = {
+      'request': 'UkVR',
+      'receipt': 'UkVD',
+      'agreement': 'VE9QVVA=',
+      'agreement_ploan': 'UExPQU4=',
+    };
+
+    test('a P-Loan\'s เอกสารสัญญา is agreement_ploan', () {
+      final docs = LoanDocuments.fromJson(json).forPLoan();
+      expect(docs.agreement, 'UExPQU4=');
+      expect(LoanDocumentKind.agreement.base64From(docs), 'UExPQU4=');
+      expect(docs.isComplete, isTrue);
+    });
+
+    test('the top-up flow keeps agreement', () {
+      final docs = LoanDocuments.fromJson(json);
+      expect(docs.agreement, 'VE9QVVA=');
+      expect(LoanDocumentKind.agreement.base64From(docs), 'VE9QVVA=');
+    });
+
+    test('no agreement_ploan is incomplete, never the top-up contract', () {
+      final docs =
+          LoanDocuments.fromJson({...json}..remove('agreement_ploan')).forPLoan();
+      expect(docs.agreement, isEmpty);
+      expect(docs.isComplete, isFalse);
+    });
+  });
 }
