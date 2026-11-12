@@ -133,7 +133,8 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   the shared `confirmBranchIssuedDocument` first. ⚠ **ดูบิล** needs
   `createFileRequest` (`BILLING_STATEMENT`) — also no node-api route — so a
   real card says "not yet"; request/response are mapped in
-  `revolving_bill.dart` (200 `data.url`, 400 `message` verbatim) and
+  `revolving_bill.dart` (spec v02: header `Accept-Language: th`; 200
+  `data.url`, 400 **`detail`** verbatim — v01 said `message`) and
   `showRevolvingBillStatement` renders them. ⚠ The BA specs spell LMS's
   camelCase (`contractId`, `revolvingLimit`…); **this app's wire is
   snake_case** (`contract_id`, …) — node-api and the srisawad backend both

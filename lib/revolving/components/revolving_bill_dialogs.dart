@@ -40,7 +40,7 @@ Future<void> showRevolvingBill(BuildContext context, RevolvingCardView card) =>
             : openExternalDocument(context, card.billUrl.trim());
 
 /// `createFileRequest`'s answer on screen: 200 opens `data.url`, anything
-/// else shows the API's `message` verbatim in the not-issued popup.
+/// else shows the API's `detail` verbatim in the not-issued popup.
 Future<void> showRevolvingBillStatement(
         BuildContext context, RevolvingBillStatement statement) =>
     statement.hasFile
@@ -56,7 +56,7 @@ class _NotIssuedDialog extends StatelessWidget {
   /// The demo: title + the design's composed sentence with its dates.
   final RevolvingCardView? card;
 
-  /// The API's `message`, shown alone.
+  /// The API's `detail`, shown alone.
   final String? message;
 
   @override

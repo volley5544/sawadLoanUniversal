@@ -264,9 +264,18 @@ void main() {
       expect(ok.hasFile, isTrue);
       expect(ok.url, 'https://s.swpfin.com/x/files/3336');
       final early = RevolvingBillStatement.fromResponse(
-          400, {'message': 'ยังไม่ถึงรอบออกใบแจ้งหนี้'});
+          400, {'detail': 'ยังไม่ถึงรอบออกใบแจ้งหนี้'});
       expect(early.hasFile, isFalse);
       expect(early.message, 'ยังไม่ถึงรอบออกใบแจ้งหนี้');
+    });
+
+    test('v02: popup text is detail, not message; Thai header', () {
+      expect(RevolvingBillStatement.requestHeaders, {'Accept-Language': 'th'});
+      final r = RevolvingBillStatement.fromResponse(
+          400, {'message': 'Bad Request', 'detail': 'ยังไม่ออกใบแจ้งหนี้'});
+      expect(r.message, 'ยังไม่ออกใบแจ้งหนี้');
+      expect(RevolvingBillStatement.fromResponse(400, {'message': 'x'}).message,
+          '-');
     });
 
     test('a 200 without a url is not a file', () {
