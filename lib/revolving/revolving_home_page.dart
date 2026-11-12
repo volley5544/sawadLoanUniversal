@@ -27,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app_state.dart';
+import '../components/api_failure_dialog.dart';
 import '../p_loan/application/components/p_loan_components.dart';
 import '../router/app_router.dart';
 import '../services/p_loan_api.dart';
@@ -120,7 +121,9 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
         setState(() => cards[i] = cards[i].withWithdrawalInfo(info));
       }
     } on SrisawadApiException catch (e) {
-      if (mounted) setState(() => _historyErrors[key] = e.message);
+      if (!mounted) return;
+      setState(() => _historyErrors[key] = e.message);
+      showApiFailureDialog(context, e, title: 'โหลดประวัติการถอน/โอนไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _historyLoading.remove(key));
     }
@@ -150,7 +153,10 @@ class _RevolvingHomePageState extends State<RevolvingHomePage> {
       }
       _show(cards);
     } on SrisawadApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (!mounted) return;
+      setState(() => _error = e.message);
+      // uat: the request + response; prod: the error view's message only.
+      showApiFailureDialog(context, e, title: 'โหลดรายการสินเชื่อไม่สำเร็จ');
     }
   }
 

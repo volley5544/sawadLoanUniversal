@@ -166,7 +166,15 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   (`/loanPayment?contNo=`, `revolvingOpenPayment`; decided 2026-11-11). The
   logo is `assets/revolving/srisawad_logo.svg`; card art, bank and PromptPay
   marks are still drawn stand-ins. The progress bar shows the **used** share
-  (confirmed), 0 until วงเงินอนุมัติ loads.
+  (confirmed), 0 until วงเงินอนุมัติ loads. ⚠ **Every revolving API failure
+  shows a report dialog on uat** (2026-11-12, `showApiFailureDialog` in
+  `lib/components/api_failure_dialog.dart`, same shape as the top-up submit's:
+  request line with the hash masked, status, request body, **whole** response
+  body, คัดลอก); prod shows only the screen's message, as before. The report
+  comes from `SrisawadApi.send` itself (`callReport` →
+  `SrisawadApiException.details`), so any call through `send` carries one —
+  new revolving calls get it for free; call `showApiFailureDialog` in their
+  catch.
 - **The loan payment screen is live** (added 2026-09-14, `lib/loan_payment/`).
   `/loanPayment?contNo=` → **ชำระเงิน** → a QR the customer pays at their bank.
   It **files nothing** and makes no call of its own. Reached from the loan

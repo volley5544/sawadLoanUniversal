@@ -107,7 +107,9 @@ class SrisawadApi {
         body: body == null ? null : jsonEncode(body),
       );
     } on ApiTransportException catch (e) {
-      throw SrisawadApiException('mobile API ${e.message}');
+      throw SrisawadApiException('mobile API ${e.message}',
+          details: callReport(method, url,
+              body: body, transportError: e.message));
     }
 
     final json = decode(res.body);
@@ -115,10 +117,52 @@ class SrisawadApi {
       final message = (json is Map && json['message'] != null)
           ? json['message'].toString()
           : 'HTTP ${res.statusCode}';
-      throw SrisawadApiException(message, statusCode: res.statusCode);
+      throw SrisawadApiException(message,
+          statusCode: res.statusCode,
+          details: callReport(method, url, body: body, res: res));
     }
     return json;
   }
+
+  /// The tester's account of one call — the request line, the status (or
+  /// transport error), the request body and the **whole response body,
+  /// untruncated** — carried on [SrisawadApiException.details] by [send]
+  /// (2026-11-12) so any screen can offer it.
+  ///
+  /// ⚠ **Shown on non-prod only, by the screen** (`showApiFailureDialog`);
+  /// prod shows only the message. The hash in the URL is masked; the bearer
+  /// never appears (it is a header, not printed).
+  static String callReport(
+    String method,
+    Uri url, {
+    Map<String, dynamic>? body,
+    ApiHttpResult? res,
+    String? transportError,
+  }) {
+    final out = StringBuffer()..writeln('$method ${maskApiUrl(url)}');
+    if (transportError != null) out.writeln('transport error: $transportError');
+    if (res != null) out.writeln('HTTP ${res.statusCode}');
+    if (body != null) {
+      out
+        ..writeln('')
+        ..writeln('--- request body ---')
+        ..writeln(const JsonEncoder.withIndent('  ').convert(body));
+    }
+    if (res != null) {
+      out
+        ..writeln('')
+        ..writeln('--- response body ---')
+        ..writeln(res.body.isEmpty ? '(empty)' : res.body);
+    }
+    return out.toString();
+  }
+
+  /// [url] with the customer's hash masked (length kept), for a report a
+  /// tester will paste into a chat.
+  static String maskApiUrl(Uri url) => url.toString().replaceAllMapped(
+        RegExp(r'([?&](?:hash_thai_id|hashThaiId)=)([^&#]*)'),
+        (m) => '${m[1]}<redacted:${m[2]!.length} chars>',
+      );
 
   static dynamic decode(String body) {
     try {
