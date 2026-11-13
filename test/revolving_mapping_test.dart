@@ -176,7 +176,17 @@ void main() {
         isNull);
   });
 
-  group('withdrawal amount validation (spec\'s seven rules)', () {
+  test('ชำระเงิน hands the loaded /loan/list row on as the payment seed', () {
+    final row = qaContract();
+    final card = RevolvingCardView.fromContract(row);
+    expect(identical(card.contract, row), isTrue);
+    // Survives the withdrawal-summary merge.
+    expect(identical(card.withWithdrawalInfo(qaWithdrawal).contract, row),
+        isTrue);
+    expect(RevolvingCardView.mock().contract, isNull); // demo fetches
+  });
+
+    group('withdrawal amount validation (spec\'s seven rules)', () {
     final today = DateTime(2026, 11, 12);
     final mock = RevolvingCardView.mock(); // min 500, max 5,000, limit 10,000
 

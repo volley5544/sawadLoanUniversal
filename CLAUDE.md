@@ -163,7 +163,9 @@ so it has not been done unilaterally. Until then, keep putting *new* history in
   API guide in git-ignored `etc/revolving_feature/api-call/` (live on uat,
   **404 on prod** 2026-11-11). **Acceptance is not gated** for now. Open
   with the user's boss: `dayOneWithdrawal` vs later withdrawals. **ชำระเงิน goes to the loan payment screen**
-  (`/loanPayment?contNo=`, `revolvingOpenPayment`; decided 2026-11-11). The
+  (`/loanPayment?contNo=&dbName=`, `revolvingOpenPayment`; decided
+  2026-11-11) and hands over the card's `/loan/list` row as a
+  `LoanPaymentSeed` (2026-11-13), so it does **not** fetch the list again. The
   logo is `assets/revolving/srisawad_logo.svg`; card art, bank and PromptPay
   marks are still drawn stand-ins. The progress bar shows the **used** share
   (confirmed), 0 until วงเงินอนุมัติ loads. ⚠ **Every revolving API failure

@@ -101,7 +101,12 @@ class RevolvingCardView {
     this.contractComcode = '',
     this.loanTypeCode = '',
     this.branchCode = '',
+    this.contract,
   });
+
+  /// The `/loan/list` row this card was built from — handed to `/loanPayment`
+  /// as its seed so ชำระเงิน doesn't fetch the list again. `null` on the demo.
+  final LoanContract? contract;
 
   /// `/loan/list` `branch_code` — sent as the withdrawal's
   /// `requesting_branch` (decided 2026-11-12).
@@ -330,6 +335,7 @@ class RevolvingCardView {
         contractComcode: contractComcode,
         loanTypeCode: loanTypeCode,
         branchCode: branchCode,
+        contract: contract,
         serverNow: serverNow,
         transferFee: transferFee,
         bankAccounts: bankAccounts ?? this.bankAccounts,
@@ -377,6 +383,7 @@ class RevolvingCardView {
       contractComcode: contract.barcodeDetails.comcode.trim(),
       loanTypeCode: contract.contractDetails.loanTypeCode.trim(),
       branchCode: contract.branchCode.trim(),
+      contract: contract,
       transferFee: null,
       bankAccounts: r.bankAccounts,
       billReady: mock.billReady,

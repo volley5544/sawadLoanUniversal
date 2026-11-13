@@ -12,6 +12,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../loan_payment/models/loan_payment_seed.dart';
 import '../../loan_register/components/env_version_tag.dart';
 import '../../p_loan/application/models/loan_contract.dart';
 import '../../p_loan/application/components/p_loan_components.dart';
@@ -69,13 +70,27 @@ void showRevolvingNotYet(BuildContext context, [String what = '']) {
 /// The revolving bill is added to the contract's normal installment, so a
 /// revolving payment is a loan payment (decided 2026-11-11). The design's own
 /// payment screens (suggested / custom amount → confirm / QR) were replaced
-/// by this and deleted. `/loanPayment` looks the contract up by `contNo`; its
-/// back pops to here.
-void revolvingOpenPayment(BuildContext context, RevolvingCardView card) =>
-    context.push(Uri(
+/// by this and deleted. Its back pops to here.
+///
+/// **No second `/loan/list`** (2026-11-13): the card carries the row the
+/// home page already loaded, and it rides along as a [LoanPaymentSeed] — the
+/// loan detail screen's hand-off. The URL (`contNo` + `dbName`) stays the
+/// authority: the payment screen uses the seed only when it matches, and a
+/// reload or the demo card (no row) fetches as before.
+void revolvingOpenPayment(BuildContext context, RevolvingCardView card) {
+  final contract = card.contract;
+  context.push(
+    Uri(
       path: AppRoutes.loanPayment,
-      queryParameters: {'contNo': card.contractNo},
-    ).toString());
+      queryParameters: {
+        'contNo': card.contractNo,
+        if (contract != null && contract.dbName.trim().isNotEmpty)
+          'dbName': contract.dbName.trim(),
+      },
+    ).toString(),
+    extra: contract == null ? null : LoanPaymentSeed(contract: contract),
+  );
+}
 
 /// Back out of a revolving screen: pop when something is beneath it, else —
 /// the host opened this route directly — close the WebView (or go home in a
